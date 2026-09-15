@@ -9,6 +9,10 @@
  * Compare object types directly instead of assigning the component to a function type: function
  * parameters are contravariant, so component assignment can accept a view that declares less than
  * the contract requires.
+ *
+ * The standalone panel needs both checks for the same reason the gallery does: assignability pins
+ * the value types, key containment pins that the fields are declared at all. A panel that omitted
+ * `options` would still accept an object carrying one, so assignability alone would pass it.
  */
 import { BrandPurchasePanel, PurchasePanelView } from "@/components/brand/purchase-panel";
 import type {
@@ -27,7 +31,16 @@ const takesTheHooksController: VariantSelectionController extends ViewProps["con
   ? true
   : never = true;
 
-/** The standalone panel must remain compatible with the hook's full input contract. */
+/** The standalone panel must declare every field of the hook's input… */
+type MissingFromStandalone = Exclude<keyof UseVariantSelectionInput, keyof StandaloneProps>;
+const declaresHookInput: [MissingFromStandalone] extends [never] ? true : never = true;
+
+/** …and declare them compatibly. */
 const acceptsHookInput: UseVariantSelectionInput extends StandaloneProps ? true : never = true;
 
-export const contract = [takesAController, takesTheHooksController, acceptsHookInput];
+export const contract = [
+  takesAController,
+  takesTheHooksController,
+  declaresHookInput,
+  acceptsHookInput,
+];
