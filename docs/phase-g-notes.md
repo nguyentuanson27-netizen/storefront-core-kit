@@ -75,9 +75,9 @@ type: the first attempt did the latter and was vacuous, because function paramet
 contravariant and a gallery declaring only `{ media }` is assignable to a type taking the full
 input. The negative case is what caught it.
 
-Negative fixtures now cover each breach — a gallery that drops the resolved selection, one that
-demands the `manualSelection` it would overwrite, and a panel view that owns its own hook — and the
-exact formatting the old regex rejected now passes.
+The compiled gallery contract now checks the required resolved-selection keys directly and rejects
+`manualSelection` as an input. A dedicated negative fixture covers the separate panel failure mode
+where the view owns its own hook. The exact formatting the old regex rejected now passes.
 
 One assertion stays a source check and says why: "this module imports nothing from `@/commerce`" is
 an absence no type can express, and it constrains where a brand imports from rather than how it
