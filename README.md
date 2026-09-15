@@ -100,15 +100,16 @@ template, so an operator deploying from it gets their defaults without being tol
 
 ### Approved spec and runbook
 
-The contracts above are owned by the spec repository, not by this one. Implementation may be
-narrower than a spec only after the spec says so — never by widening a contract in a code comment.
+The contracts above are owned by the `webtemplate` spec repository, not by this one. Implementation
+may be narrower than a spec only after the spec says so — never by widening a contract in a code
+comment.
 
-- Route shell and page boundary — `docs/04-lop-2-route-shell.md` (§6.3 policy, §8.1 gate scope)
-- Brand Config — `docs/05-lop-3-brand-config.md`
-- Headless UI — `docs/06-lop-4-headless-ui.md`
-- Buyer-language tests — `docs/07-lop-5-test-ngon-ngu.md`
-- Out of scope — `docs/10-ranh-gioi-khong-lam.md`
-- New-shop runbook — `docs/08-runbook-shop-moi.md`
+- Route shell and page boundary — [spec 04](https://github.com/nguyentuanson27-netizen/webtemplate/blob/main/docs/04-lop-2-route-shell.md) (§6.3 policy, §8.1 gate scope)
+- Brand Config — [spec 05](https://github.com/nguyentuanson27-netizen/webtemplate/blob/main/docs/05-lop-3-brand-config.md)
+- Headless UI — [spec 06](https://github.com/nguyentuanson27-netizen/webtemplate/blob/main/docs/06-lop-4-headless-ui.md)
+- Buyer-language tests — [spec 07](https://github.com/nguyentuanson27-netizen/webtemplate/blob/main/docs/07-lop-5-test-ngon-ngu.md)
+- Out of scope — [spec 10](https://github.com/nguyentuanson27-netizen/webtemplate/blob/main/docs/10-ranh-gioi-khong-lam.md)
+- New-shop runbook — [runbook 08](https://github.com/nguyentuanson27-netizen/webtemplate/blob/main/docs/08-runbook-shop-moi.md)
 
 Phase notes in `docs/phase-*-notes.md` record what each phase decided and what it left open.
 
