@@ -8,6 +8,10 @@ import { TrackingPageView } from "@/components/analytics/tracking-page-view";
 import { SiteDocument } from "@/components/brand/site-document";
 import { SiteFooter } from "@/components/brand/site-footer";
 import { SiteMasthead } from "@/components/brand/site-masthead";
+import {
+  buildSiteChromeContent,
+  type SiteChromeContent,
+} from "@/components/headless/site-chrome-model";
 import { readSearchExposure } from "@/seo/search-exposure";
 import { buildSiteStructuredData, serializeJsonLd } from "@/seo/structured-data";
 
@@ -32,6 +36,11 @@ export type SiteChromeModel = Readonly<{
    * the shell serialises it the same way routes are serialised: one `<script>` per document.
    */
   structuredData: readonly JsonLdEntity[];
+  /**
+   * What the masthead and footer render. Derived in `@/components/headless`, because the brand
+   * layer takes props and does not reach into `@/commerce/*` (spec 06).
+   */
+  content: SiteChromeContent;
 }>;
 
 /**
@@ -44,6 +53,7 @@ export async function loadSiteChrome(): Promise<SiteChromeModel> {
 
   return {
     structuredData: [buildSiteStructuredData({ origin: exposure.origin })],
+    content: buildSiteChromeContent(),
   };
 }
 
@@ -72,9 +82,9 @@ export function SiteChrome({
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(document) }}
         />
       ))}
-      <SiteMasthead />
+      <SiteMasthead promotion={model.content.promotion} />
       <main id="main-content">{children}</main>
-      <SiteFooter />
+      <SiteFooter model={model.content.footer} />
       <TrackingPageView />
       <FacebookPixel />
     </SiteDocument>

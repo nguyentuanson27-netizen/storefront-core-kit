@@ -1,4 +1,4 @@
-import { ShippingPromotionBar } from "@/components/commerce/shipping-promotion-bar";
+import type { SitePromotionModel } from "@/components/headless/site-chrome-model";
 import { SiteHeader } from "@/components/brand/site-header";
 
 /**
@@ -8,10 +8,13 @@ import { SiteHeader } from "@/components/brand/site-header";
  * under them. Sticky rather than fixed, so they still occupy layout space and nothing has to be
  * offset to sit below them.
  */
-export function SiteMasthead() {
+export function SiteMasthead({ promotion }: Readonly<{ promotion: SitePromotionModel }>) {
   return (
     <div className="site-masthead">
-      <ShippingPromotionBar />
+      {/* The landmark keeps the short, stable name; the headline is the content it introduces. */}
+      <aside aria-label={promotion.label} className="promotion-shell">
+        {promotion.headline}
+      </aside>
       <SiteHeader />
     </div>
   );
