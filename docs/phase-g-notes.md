@@ -47,7 +47,7 @@ forgetting — no redrawn page mentions any of them.
 
 ## 3. Findings
 
-### 3.1 Required — shared tests regex-match brand source
+### 3.1 Required — shared tests regex-matched brand source (fixed)
 
 `tests/domain/selection-gallery-seam.test.ts` asserts the **source text** of
 `src/components/brand/purchase-panel.tsx` and `src/components/brand/product-gallery.tsx`:
@@ -68,11 +68,20 @@ gallery must not accept a `manualSelection` it immediately overwrites. What is w
 enforcement: a text match on a file the architecture promises a brand may rewrite freely turns a
 formatting choice into a test failure, and the next brand hits it exactly as this exercise did.
 
-The fix belongs in the shared tree, not in a brand: express both as **type-level** obligations that
-a redraw satisfies by compiling — for example a `satisfies` check that `PurchasePanelView` accepts
-`{ controller: VariantSelectionController }`, and typing the brand gallery's props as the `Omit<…>`
-in the headless module so the constraint is inherited rather than re-spelled. Reported rather than
-changed here: Phase G merges no code, and this is a seam fix, not an exercise workaround.
+**Fixed** in response to review. The obligations moved to compiled fixtures under
+`tests/fixtures/brand-seam/`, using the same type-fixture pattern as the route factory and handle
+tests. They are checked on the props type's **keys**, not by assigning each component to a function
+type: the first attempt did the latter and was vacuous, because function parameters are
+contravariant and a gallery declaring only `{ media }` is assignable to a type taking the full
+input. The negative case is what caught it.
+
+Negative fixtures now cover each breach — a gallery that drops the resolved selection, one that
+demands the `manualSelection` it would overwrite, and a panel view that owns its own hook — and the
+exact formatting the old regex rejected now passes.
+
+One assertion stays a source check and says why: "this module imports nothing from `@/commerce`" is
+an absence no type can express, and it constrains where a brand imports from rather than how it
+writes anything, so a redraw cannot trip it on formatting.
 
 ### 3.2 Minor — one route exports no props type
 
@@ -120,15 +129,38 @@ Run on a dropped-and-remigrated database, with the environment each suite expect
 | `pnpm sitemap:capacity:audit` | exit 0 |
 
 Playwright, the full 91-test configuration (both projects, admin desktop and mobile) against the
-environment the CI admin job uses: **89 passed, 2 failed**.
+environment the CI admin job uses. This is the one gate that did **not** come back clean locally,
+and the story is worth recording precisely because my first explanation of it was wrong.
 
-Both failures were `evergreen-pages.spec.ts` — the footer-reachability walk and the size-guide
-render — and both were 120-second timeouts (`waitForURL` never resolving, then
-`net::ERR_ABORTED; maybe frame was detached?`), not assertion failures. The cause was mine: the
-exercise's typecheck and its 1629-test domain suite were running on the same container at the same
-time, and each Playwright spec boots its own Next dev server. Re-run alone, the spec is **6/6 in
-25 seconds**. Recorded rather than quietly re-run: a suite that is this sensitive to a loaded
-machine will produce the same two failures for the next person who runs something alongside it.
+| where | result |
+| --- | --- |
+| CI, `74058ce` and `58c560e` | **91/91** |
+| CI, `5db832c` | 90/91 — `flash-sale-freshness` |
+| CI, `76f0710` | 90/91 — `facebook-pixel-disabled` |
+| local, full suite, other work running | 89/91 — `evergreen-pages` ×2 |
+| local, full suite, **nothing else running** | 89/91 — the same `evergreen-pages` ×2 |
+| local, `evergreen-pages` alone | 6/6 in 25s |
+| local, `editorial` then `evergreen-pages` | 10/10 |
+
+I first attributed the two local failures to load I had created by running the discardability
+exercise's suites concurrently. **That was wrong.** Re-run with nothing else on the container, the
+same two specs fail the same way. The load explanation was a plausible story I told before testing
+it, and testing it disproved it.
+
+What the table actually shows is two separate things:
+
+- **The two `evergreen-pages` failures are local-only and full-suite-only.** They reproduce in the
+  91-spec run on this Linux container and disappear when the spec runs alone or after its immediate
+  predecessor. They have never occurred on the macOS CI runner. I did not find the root cause; every
+  spec boots its own dev server, so ~45 server starts precede this point, and something about that
+  accumulation is the remaining suspect. Stated as unexplained rather than guessed at.
+- **CI has its own intermittent single-spec failures**, and a *different* spec each time — a
+  120-second timeout waiting for UI that normally appears in seconds. Three distinct specs have now
+  each failed exactly once across runs, while the same suite has also gone 91/91 three times.
+
+That second pattern is the one that should worry a reviewer: it is not one flaky test to fix but a
+suite that is occasionally, non-deterministically slow somewhere. The fixed `delay(500)` in
+`flash-sale-freshness.spec.ts` (§5) is one instance of the shape; it is unlikely to be the only one.
 
 `release:check` needs the release environment to be complete — `PANCAKE_API_KEY`, and an
 `APP_DOMAIN` matching the production domain in `project.config.json`. Two runs failed on a partial
@@ -141,7 +173,13 @@ They are not claimed here.
 
 ## 5. Still open
 
-- **3.1, 3.2 and 3.3 above**, all deliberately unfixed.
+- **3.2 and 3.3 above**, both deliberately unfixed. **3.1 is now fixed** — the brand-seam
+  obligations moved to compiled type fixtures under `tests/fixtures/brand-seam/`, so a redraw
+  satisfies them by typechecking rather than by matching source text.
+- **The Playwright suite is intermittently, non-deterministically slow.** Three distinct specs have
+  each failed once on CI with a 120-second timeout while the same suite passed 91/91 three times,
+  and two more fail reproducibly in the full local run on this container but nowhere else. No root
+  cause found. This is the one item I would not close Core Kit v1 on without a decision.
 - The carry-forwards from Phase E stand: the root layout is outside the boundary by approved
   exception (spec 04 §8.1, plan Task 36), checkout's buyer copy has no targeted language test, and
   `flash-sale-freshness.spec.ts` waits a fixed 500 ms for hydration instead of a signal.
