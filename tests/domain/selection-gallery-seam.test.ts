@@ -10,6 +10,7 @@ import type { StorefrontProductMedia, TrustedProductImage } from "../../src/comm
 import type { StorefrontProjectionOption } from "../../src/commerce/storefront-projection.ts";
 import { resolveGalleryModel } from "../../src/components/headless/resolve-gallery-model.ts";
 import { resolveVariantSelectionView } from "../../src/components/headless/variant-selection-model.ts";
+import { collectModuleEdges } from "../support/boundary-verifier.ts";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -164,17 +165,31 @@ test("the gallery accepts the selection the panel resolves, and owns its own man
 });
 
 test("the brand panel speaks the hook's types, not commerce's", async () => {
-  // This one stays a source check on purpose: it is an *absence*, and no type can express "this
-  // module imports nothing from @/commerce". It constrains where a brand may import from, not how
-  // it writes anything, so a redraw cannot trip it on formatting.
-  const source = await readFile(
-    new URL("../../src/components/brand/purchase-panel.tsx", import.meta.url),
-    "utf8",
+  // Checked on the module graph, not on the file's text.
+  //
+  // A raw `source.includes("@/commerce/")` is wrong in both directions on a file a brand rewrites
+  // freely: it fails a redraw that merely mentions the path in a comment or a string, and it misses
+  // an exact `@/commerce` specifier with no trailing slash. `collectModuleEdges` is the same AST
+  // machinery the boundary gate uses, and it sees specifiers rather than characters.
+  const file = new URL("../../src/components/brand/purchase-panel.tsx", import.meta.url);
+  const sourceFile = ts.createSourceFile(
+    fileURLToPath(file),
+    await readFile(file, "utf8"),
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
   );
 
-  assert.equal(
-    source.includes("@/commerce/"),
-    false,
+  const commerceEdges = collectModuleEdges(sourceFile)
+    .map((edge) => edge.specifier)
+    .filter(
+      (specifier): specifier is string =>
+        specifier === "@/commerce" || (specifier?.startsWith("@/commerce/") ?? false),
+    );
+
+  assert.deepEqual(
+    commerceEdges,
+    [],
     "brand markup reaches commerce only through the headless hook's public surface",
   );
 });
