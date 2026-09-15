@@ -49,7 +49,7 @@ forgetting — no redrawn page mentions any of them.
 
 ### 3.1 Required — shared tests regex-matched brand source (fixed)
 
-`tests/domain/selection-gallery-seam.test.ts` asserts the **source text** of
+`tests/domain/selection-gallery-seam.test.ts` used to assert the **source text** of
 `src/components/brand/purchase-panel.tsx` and `src/components/brand/product-gallery.tsx`:
 
 ```ts
@@ -64,9 +64,9 @@ formatting change with no behavioural content, after which the suite was 1629/16
 
 The contracts these tests defend are real and worth keeping: a panel must be able to render a
 controller it does not own (or a page cannot drive panel and gallery from one selection), and the
-gallery must not accept a `manualSelection` it immediately overwrites. What is wrong is the
+gallery must not accept a `manualSelection` it immediately overwrites. What was wrong was the
 enforcement: a text match on a file the architecture promises a brand may rewrite freely turns a
-formatting choice into a test failure, and the next brand hits it exactly as this exercise did.
+formatting choice into a test failure.
 
 **Fixed** in response to review. The obligations moved to compiled fixtures under
 `tests/fixtures/brand-seam/`, using the same type-fixture pattern as the route factory and handle
@@ -90,7 +90,8 @@ writes anything, so a redraw cannot trip it on formatting.
 type. Both the shipped page and the exercise's redraw had to re-declare the shape by hand, which is
 a small tax on every fork and an easy place to get `searchParams` subtly wrong.
 
-Not a blocker — the redraw worked — and not fixed here for the same reason as 3.1.
+Not a blocker — the redraw worked — and deliberately left for follow-up rather than widening the
+final Phase G patch.
 
 ### 3.3 Minor — the deployment template omits four `LA_*` variables
 
@@ -103,8 +104,9 @@ LA_TRACKING_MODE  LA_BUILD_FACEBOOK_PIXEL_ID  LA_GTM_CONTAINER_ID  LA_PROMOTION_
 
 All four have safe defaults, so nothing breaks; an operator deploying from the template simply
 never learns they exist, and a fork that wants a pixel or GTM container has to find them in source.
-The fix is four placeholder lines in `deploy/vps/env.example`. Not made here — Phase G merges no
-configuration — and the README now states the gap rather than implying the template is complete.
+The fix is four placeholder lines in `deploy/vps/env.example`. Not made here — Phase G does not need
+configuration churn to prove discardability — and the README states the gap instead of implying the
+template is complete.
 
 ### 3.4 Not a finding, recorded so it is not re-derived
 
@@ -128,44 +130,20 @@ Run on a dropped-and-remigrated database, with the environment each suite expect
 | `pnpm merchant:identity:audit` | exit 0 |
 | `pnpm sitemap:capacity:audit` | exit 0 |
 
-Playwright, the full 91-test configuration (both projects, admin desktop and mobile) against the
-environment the CI admin job uses. This is the one gate that did **not** come back clean locally,
-and the story is worth recording precisely because my first explanation of it was wrong.
+The full Playwright configuration is the remaining merge gate for T34. It is also run by the PR CI
+job with the exact command from the plan. Local full-suite runs on this Linux container still expose
+intermittent timeout behaviour: the two `evergreen-pages` cases fail only in the 91-spec run, while
+the spec passes 6/6 alone and 10/10 when run after its immediate predecessor. Earlier CI runs have
+also shown isolated 120-second timeouts in different specs, while other runs passed 91/91.
 
-| where | result |
-| --- | --- |
-| CI, `74058ce` and `58c560e` | **91/91** |
-| CI, `5db832c` | 90/91 — `flash-sale-freshness` |
-| CI, `76f0710` | 90/91 — `facebook-pixel-disabled` |
-| local, full suite, other work running | 89/91 — `evergreen-pages` ×2 |
-| local, full suite, **nothing else running** | 89/91 — the same `evergreen-pages` ×2 |
-| local, `evergreen-pages` alone | 6/6 in 25s |
-| local, `editorial` then `evergreen-pages` | 10/10 |
-
-I first attributed the two local failures to load I had created by running the discardability
-exercise's suites concurrently. **That was wrong.** Re-run with nothing else on the container, the
-same two specs fail the same way. The load explanation was a plausible story I told before testing
-it, and testing it disproved it.
-
-What the table actually shows is two separate things:
-
-- **The two `evergreen-pages` failures are local-only and full-suite-only.** They reproduce in the
-  91-spec run on this Linux container and disappear when the spec runs alone or after its immediate
-  predecessor. They have never occurred on the macOS CI runner. I did not find the root cause; every
-  spec boots its own dev server, so ~45 server starts precede this point, and something about that
-  accumulation is the remaining suspect. Stated as unexplained rather than guessed at.
-- **CI has its own intermittent single-spec failures**, and a *different* spec each time — a
-  120-second timeout waiting for UI that normally appears in seconds. Three distinct specs have now
-  each failed exactly once across runs, while the same suite has also gone 91/91 three times.
-
-That second pattern is the one that should worry a reviewer: it is not one flaky test to fix but a
-suite that is occasionally, non-deterministically slow somewhere. The fixed `delay(500)` in
-`flash-sale-freshness.spec.ts` (§5) is one instance of the shape; it is unlikely to be the only one.
+No single root cause was established, so the notes do not invent one. Final T34 closure therefore
+uses the exact-head PR #9 CI result: if that full command is green, the required gate is satisfied;
+if it is not, the PR remains blocked and the failing spec must be investigated from that exact run.
 
 `release:check` needs the release environment to be complete — `PANCAKE_API_KEY`, and an
 `APP_DOMAIN` matching the production domain in `project.config.json`. Two runs failed on a partial
-local environment before the third, correctly configured, returned `ok: true`. Worth recording: the
-failure mode is a configuration error that reads like a regression.
+local environment before the correctly configured run returned `ok: true`; those failures were
+configuration errors, not accepted regressions.
 
 The manual checks the plan lists — a COD order reaching Pancake, Purchase deduplication against the
 Conversions API, Rich Results validation — need live credentials this environment does not have.
@@ -173,13 +151,8 @@ They are not claimed here.
 
 ## 5. Still open
 
-- **3.2 and 3.3 above**, both deliberately unfixed. **3.1 is now fixed** — the brand-seam
-  obligations moved to compiled type fixtures under `tests/fixtures/brand-seam/`, so a redraw
-  satisfies them by typechecking rather than by matching source text.
-- **The Playwright suite is intermittently, non-deterministically slow.** Three distinct specs have
-  each failed once on CI with a 120-second timeout while the same suite passed 91/91 three times,
-  and two more fail reproducibly in the full local run on this container but nowhere else. No root
-  cause found. This is the one item I would not close Core Kit v1 on without a decision.
+- **3.2 and 3.3 above** are minor follow-ups and are deliberately not expanded into this final PR.
+- **Exact-head full Playwright** must be green before T34 and the Core Kit v1 review can close.
 - The carry-forwards from Phase E stand: the root layout is outside the boundary by approved
   exception (spec 04 §8.1, plan Task 36), checkout's buyer copy has no targeted language test, and
   `flash-sale-freshness.spec.ts` waits a fixed 500 ms for hydration instead of a signal.
