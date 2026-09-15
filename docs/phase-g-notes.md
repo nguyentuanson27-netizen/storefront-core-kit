@@ -70,14 +70,15 @@ formatting choice into a test failure.
 
 **Fixed** in response to review. The obligations moved to compiled fixtures under
 `tests/fixtures/brand-seam/`, using the same type-fixture pattern as the route factory and handle
-tests. They are checked on the props type's **keys**, not by assigning each component to a function
-type: the first attempt did the latter and was vacuous, because function parameters are
-contravariant and a gallery declaring only `{ media }` is assignable to a type taking the full
-input. The negative case is what caught it.
+tests. The fixtures compare the props object types directly instead of assigning components to
+function types: the first attempt did the latter and was vacuous because function parameters are
+contravariant, so a component declaring too little can still be assignable as a function.
 
-The compiled gallery contract now checks the required resolved-selection keys directly and rejects
-`manualSelection` as an input. A dedicated negative fixture covers the separate panel failure mode
-where the view owns its own hook. The exact formatting the old regex rejected now passes.
+The compiled gallery contract checks that the full resolved gallery input is assignable to the
+brand gallery props and that `manualSelection` is not accepted. The purchase-panel contract checks
+that an externally owned hook controller and the full standalone hook input are accepted. A
+dedicated negative fixture covers the separate panel failure mode where the view owns its own hook.
+The exact formatting the old regex rejected now passes.
 
 One assertion stays a source check and says why: "this module imports nothing from `@/commerce`" is
 an absence no type can express, and it constrains where a brand imports from rather than how it
