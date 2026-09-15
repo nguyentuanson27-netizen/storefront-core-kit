@@ -47,11 +47,12 @@ files** (`docs/phase-g-notes.md`).
 - `src/components/brand/**`
 - `src/brand/*.config.ts` — Brand Config (identity, contact, navigation, fulfillment, size guide)
 
-**Shared: not a fork's to edit**
+**Shared: not a fork's presentation surface**
 
-`src/routes` (loaders, view models, metadata builders, the route shell), `src/components/headless`
-(decisions without markup), `src/commerce`, `src/seo`, `src/db`, `src/auth`, `src/integrations`,
-`src/tracking`, `src/content`, `prisma`, `scripts`, `.github`.
+Everything outside the surfaces above stays shared. In particular: `src/routes` (loaders, view
+models, metadata builders, the route shell), `src/components/headless` (decisions without markup),
+`src/components/commerce` (shared checkout/tracking workflows), `src/commerce`, `src/seo`, `src/db`,
+`src/auth`, `src/integrations`, `src/tracking`, `src/content`, `prisma`, `scripts`, `.github`.
 
 ### The page boundary
 
@@ -62,8 +63,9 @@ src/app   src/routes   src/brand   src/components/brand   src/components/headles
 ```
 
 and from an **exact external allowlist** — `react`, `react-dom`, `next`, `next/image`, `next/link`.
-Exact, not by package: `next` being allowed does not admit `next/server`, `next/headers`,
-`next/cache` or `next/navigation`. Those read request state and belong to a loader.
+Exact means exact: allowing `next` does not also allow `next/server`, `next/headers`, `next/cache` or
+`next/navigation`. Request/server-state APIs belong below the page seam; `next/navigation` is also
+outside the approved page allowlist.
 
 `tests/domain/route-boundary.test.ts` enforces this against the repository. It enumerates every
 `.ts`/`.tsx` under `src/app` except `admin/**`, and holds every page-layer module to the policy.
