@@ -9,7 +9,7 @@ import { auth } from "../../src/auth/server.ts";
 import { prisma } from "../../src/db/prisma.ts";
 
 const HOST = "127.0.0.1";
-const PORT = 3212;
+const PORT = 3304;
 const BASE_URL = `http://${HOST}:${PORT}`;
 const APP_ROOT = resolve(import.meta.dirname, "../..");
 const NEXT_CLI = resolve(APP_ROOT, "node_modules/next/dist/bin/next");
@@ -132,7 +132,14 @@ test.beforeAll(async () => {
 
   server = spawn(process.execPath, [NEXT_CLI, "dev", "--hostname", HOST, "--port", String(PORT)], {
     cwd: APP_ROOT,
-    env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
+    env: {
+      ...process.env,
+      // Better Auth rejects callbacks whose origin does not match its configured base URL,
+      // so it has to follow this spec's own port rather than a value pinned in the workflow.
+      BETTER_AUTH_URL: BASE_URL,
+      APP_DOMAIN: `${HOST}:${PORT}`,
+      NEXT_TELEMETRY_DISABLED: "1",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout?.on("data", captureServerOutput);
