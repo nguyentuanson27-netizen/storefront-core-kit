@@ -17,6 +17,9 @@ const tones: readonly ProductCardTone[] = ["stone", "olive", "ink", "sand"];
 const controlClassName =
   "min-h-11 w-full border-b border-black/30 bg-transparent px-0 py-2 text-sm outline-none focus-visible:border-black focus-visible:outline-2 focus-visible:outline-offset-4";
 
+const chipClassName =
+  "inline-flex min-h-11 items-center gap-2 border border-black/25 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors hover:border-black hover:bg-black hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4";
+
 const linkClassName =
   "inline-flex min-h-11 items-center text-xs font-semibold uppercase tracking-[0.14em] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4";
 
@@ -47,13 +50,30 @@ function render(data: ShopViewModel) {
             </h2>
           </div>
           {data.filtered ? (
-            <Link className={linkClassName} href="/shop">
+            <Link className={linkClassName} href={data.clearHref}>
               Xóa bộ lọc
             </Link>
           ) : null}
         </div>
 
-        <form className="mt-8 grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-4" method="get">
+        {data.activeFilters.length > 0 ? (
+          <ul className="mt-6 flex flex-wrap gap-3" aria-label="Bộ lọc đang áp dụng">
+            {data.activeFilters.map((filter) => (
+              <li key={filter.value}>
+                <Link className={chipClassName} href={filter.href} aria-label={`Bỏ lọc ${filter.label}`}>
+                  {filter.label}
+                  <span aria-hidden="true">×</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
+        <form
+          key={data.stateHref}
+          className="mt-8 grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-4"
+          method="get"
+        >
           <label className="block sm:col-span-2">
             <span className="text-xs font-semibold uppercase tracking-[0.13em]">Tìm sản phẩm</span>
             <input
@@ -81,10 +101,11 @@ function render(data: ShopViewModel) {
           <label className="block">
             <span className="text-xs font-semibold uppercase tracking-[0.13em]">Sắp xếp</span>
             <select className={controlClassName} defaultValue={discovery.sort} name="sort">
-              <option value="name-asc">Tên A–Z</option>
-              <option value="name-desc">Tên Z–A</option>
-              <option value="price-asc">Giá thấp → cao</option>
-              <option value="price-desc">Giá cao → thấp</option>
+              {data.sortOptions.map((option) => (
+                <option key={option.value} value={option.value ?? ""}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -175,7 +196,7 @@ function render(data: ShopViewModel) {
               : "Sản phẩm sẽ xuất hiện tại đây khi sẵn sàng để mua trên website."}
           </p>
           {data.filtered ? (
-            <Link className={`mt-6 ${linkClassName}`} href="/shop">
+            <Link className={`mt-6 ${linkClassName}`} href={data.clearHref}>
               Xem tất cả sản phẩm →
             </Link>
           ) : null}

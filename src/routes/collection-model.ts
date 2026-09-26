@@ -1,3 +1,4 @@
+import type { ListingOption } from "./listing.ts";
 import {
   parseTrustedProductImageUrl,
   parseTrustedProductVideoUrl,
@@ -42,20 +43,10 @@ export type CollectionEditorial = Readonly<{
   video: CollectionVideo | null;
 }>;
 
-export type CollectionSortOption = Readonly<{
-  value: string;
-  label: string;
-  href: string;
-  active: boolean;
-}>;
+export type CollectionSortOption = ListingOption;
 
-export type CollectionSizeOption = Readonly<{
-  /** `null` is the "all sizes" entry. */
-  value: string | null;
-  label: string;
-  href: string;
-  active: boolean;
-}>;
+/** `value: null` is the "all sizes" entry. */
+export type CollectionSizeOption = ListingOption;
 
 export type CollectionViewModel = Readonly<{
   slug: string;

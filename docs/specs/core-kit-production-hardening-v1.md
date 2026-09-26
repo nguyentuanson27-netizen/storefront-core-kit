@@ -767,3 +767,38 @@ Approval means:
 - subsequent work may proceed to `/plan` and be split into the implementation slices above.
 
 Approval does **not** authorize implementation to change Lana, merge all slices into one PR, broaden brand-specific behavior into the core, or skip exact-head verification.
+
+## 19. Implementation status and planning answers
+
+Recorded as the slices were implemented; each slice is its own pull request against `main`.
+
+| Slice | Pull request | State |
+| --- | --- | --- |
+| 1 — capacity authority and persistence | nguyentuanson27-netizen/storefront-core-kit#13 | implemented |
+| 2 — safe deployment for the new invariant | nguyentuanson27-netizen/storefront-core-kit#14 | implemented |
+| 3 — trusted responsive media | nguyentuanson27-netizen/storefront-core-kit#15 | implemented |
+| 4 — overlay invariant | — | **waiting for a real surface** (Q4 below) |
+| 5 — listing URL-state seam | this slice's pull request | implemented for `/shop` |
+
+Answers to §17, resolved against the code rather than chosen in the abstract:
+
+1. **Reservation boundary.** The submission transaction that claims `POS_SUBMITTING` also takes the hold, so no create-order
+   request leaves without one and no `DRAFT`/`VALIDATING` order ever holds capacity. `CONFIRMED` records acceptance in its own
+   transaction.
+2. **Durable representation.** `CapacityReservation` (order × purchased variant, `acceptedAt`) and
+   `CapacityReservationResource` (consumed stock, `mirroredAt` + `mirrorObservationStartedAt`). A resource counts while
+   `mirroredAt` is null.
+3. **Handoff evidence.** A stock read that *started* after acceptance (the sync samples its marker before its first request),
+   for resources the reviewed Pancake evidence covers: standalone variations, and composite components used once per set.
+   Components used more than once per set, and `SYNC_UNKNOWN` holds, have no such evidence and keep holding. See
+   `docs/integrations/pancake.md` › "Capacity reservation and mirror handoff evidence".
+4. **Overlay surface.** Core Kit has no full-viewport drawer or dialog today: the only overlay-like surface, the mobile menu,
+   is a `<details>` dropdown positioned inside the sticky masthead, not a viewport-owning overlay, and there is no cart drawer,
+   search overlay or filter drawer. Per §7.3 and §14 no drawer is invented to satisfy the slice. Slice 4 lands with the first
+   real full-viewport surface a brand or a later core feature introduces, and the §7.3 regression applies to it then.
+5. **First listing surface.** `/shop`. Collections already built sort, size and clear hrefs server-side; `/shop` still wrote
+   its clear link and sort values in markup and offered no per-filter removal. Its model now owns `clearHref`, `sortOptions`,
+   `activeFilters` (one removal href per applied filter) and `stateHref`, which keys the GET form so a client-side navigation
+   cannot leave the controls showing, and resubmitting, a state the shopper just removed. Both listings share
+   `ListingOption` (`src/routes/listing.ts`).
+6. **Deploy mode.** Always quiesce before migrating (one sequence, no per-migration branch).
