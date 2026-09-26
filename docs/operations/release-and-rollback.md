@@ -118,6 +118,32 @@ For destructive/incompatible migrations or damaged data, use the release-specifi
 
 Never invent a reverse migration while responding to an incident.
 
+## Capacity reservation ledger (`20260926210000_add_capacity_reservations`)
+
+Rollout:
+
+- the migration is additive with no backfill: before it, no order held capacity, so there is nothing to reconstruct;
+- it is safe against a still-serving old writer: old code never touches the ledger, and an order it confirms simply
+  carries no hold, exactly as before;
+- from the first new-code checkout, every submitted order holds its units (`CapacityReservation` /
+  `CapacityReservationResource`) from the `POS_SUBMITTING` claim until a catalog sync that started after the order
+  was confirmed hands them to the mirror. Expect a composite's own "Set" stock to be ignored in favour of what its
+  components can supply.
+
+Rollback:
+
+- roll back application code only; keep both tables. Older code ignores them, so checkout returns to live-stock-only
+  validation, and re-deploying new code resumes from the ledger as it was;
+- never drop or truncate the ledger to "free" stock: holds for `SYNC_UNKNOWN` orders are the only record that those
+  units may already be sold in Pancake. Resolve those orders against Pancake first;
+- `OrderMirror` and `VariantMirror` rows with reservations cannot be hard-deleted (`Restrict`); that refusal is the
+  intended guard, not an error to work around.
+
+Operator view: units still locally held per variant are
+`SELECT "variantId", SUM("quantity") FROM "CapacityReservationResource" WHERE "mirroredAt" IS NULL GROUP BY 1;`.
+A hold that never clears after syncs belongs to a `SYNC_UNKNOWN` order or to a composite component consumed more than
+once per set, whose handoff is not yet evidenced (`docs/integrations/pancake.md`).
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

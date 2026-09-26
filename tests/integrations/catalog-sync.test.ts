@@ -73,7 +73,7 @@ test("catalog sync completes catalog and composite traversals before handing one
     client,
     repository,
     shopId: 123,
-    syncedAt: new Date("2026-08-11T00:00:00.000Z"),
+    clock: () => new Date("2026-08-11T00:00:00.000Z"),
   });
 
   assert.deepEqual(events, [
@@ -109,7 +109,7 @@ test("catalog sync never mutates the mirror when any catalog page fails validati
         client,
         repository,
         shopId: 123,
-        syncedAt: new Date("2026-08-11T00:00:00.000Z"),
+        clock: () => new Date("2026-08-11T00:00:00.000Z"),
       }),
     /unsuccessful/i,
   );
@@ -140,9 +140,40 @@ test("catalog sync never mutates the mirror when the composite traversal fails v
         client,
         repository,
         shopId: 123,
-        syncedAt: new Date("2026-08-11T00:00:00.000Z"),
+        clock: () => new Date("2026-08-11T00:00:00.000Z"),
       }),
     /composite pagination/i,
   );
   assert.equal(persisted, false);
+});
+
+test("catalog sync samples its stock-observation marker before any Pancake request", async () => {
+  const events: Array<"clock" | "request"> = [];
+  const client = {
+    async getJson(_endpoint: string, query: Query) {
+      events.push("request");
+      if (query.included_composite !== undefined) return emptyCompositePage();
+      return catalogPage(1, 0);
+    },
+  };
+  const repository = {
+    async syncSnapshot() {
+      return { products: 0, variations: 0 };
+    },
+  };
+
+  await syncPancakeCatalog({
+    client,
+    repository,
+    shopId: 123,
+    clock: () => {
+      // Pins ordering, not a value: a marker read after the fetch would still carry a plausible time.
+      assert.equal(events.length, 0, "the clock must be sampled before the first Pancake request");
+      events.push("clock");
+      return new Date("2026-08-11T00:00:00.000Z");
+    },
+  });
+
+  assert.equal(events[0], "clock");
+  assert.equal(events.filter((event) => event === "clock").length, 1);
 });

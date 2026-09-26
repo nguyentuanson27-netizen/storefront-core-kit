@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { createGuestOrderTrackingService } from "../../src/commerce/guest-order-tracking.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -14,7 +15,7 @@ const key = `guest-order-tracking-${process.pid}`;
 const userId = `${key}-user`;
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: `${key}-` } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: `${key}-` } } });
   await prisma.user.deleteMany({ where: { id: userId } });
 }
 

@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 import { prisma } from "../../src/db/prisma.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 /**
  * Browser tracking path with the pixel actually enabled.
@@ -90,7 +91,7 @@ async function stopServer() {
 }
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: orderCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: orderCode } });
   await prisma.cartItem.deleteMany({
     where: { variant: { product: { pancakeShopId: SHOP_ID } } },
   });

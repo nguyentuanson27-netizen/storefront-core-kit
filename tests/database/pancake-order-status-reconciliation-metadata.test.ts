@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { createPancakeOrderStatusReconciliationService } from "../../src/commerce/pancake-order-status-reconciliation.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -14,12 +15,12 @@ const shopId = 920_007;
 const publicCode = "pancake-status-state-clock";
 
 test.after(async () => {
-  await prisma.orderMirror.deleteMany({ where: { publicCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode } });
   await prisma.$disconnect();
 });
 
 test("Pancake status reconciliation never advances the local order state recovery clock", async () => {
-  await prisma.orderMirror.deleteMany({ where: { publicCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode } });
   const localUpdatedAt = new Date("2026-08-12T09:30:00.000Z");
   const order = await prisma.orderMirror.create({
     data: {

@@ -6,6 +6,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { createGuestCheckoutSnapshotService } from "../../src/commerce/guest-checkout-snapshot.ts";
 import { acceptAnyRenderedQuote } from "../fixtures/rendered-quote-authority.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -96,7 +97,7 @@ async function createCartProduct({
 }
 
 async function cleanup(key: string) {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: `checkout-${key}` } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: `checkout-${key}` } } });
   await prisma.cart.deleteMany({
     where: {
       items: {
