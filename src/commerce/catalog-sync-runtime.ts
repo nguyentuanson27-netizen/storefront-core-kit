@@ -5,9 +5,9 @@ import { createCatalogMirrorRepository } from "./catalog-mirror-repository.ts";
 import { syncPancakeCatalog } from "./catalog-sync.ts";
 
 export async function syncConfiguredPancakeCatalog({
-  syncedAt = new Date(),
+  clock = () => new Date(),
 }: {
-  syncedAt?: Date;
+  clock?: () => Date;
 } = {}) {
   const config = readPancakeConfig();
   const client = new PancakeClient({ apiKey: config.apiKey });
@@ -17,6 +17,6 @@ export async function syncConfiguredPancakeCatalog({
     client,
     repository,
     shopId: config.shopId,
-    syncedAt,
+    clock,
   });
 }

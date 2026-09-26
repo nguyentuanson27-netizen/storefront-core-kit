@@ -6,6 +6,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { readMetaPurchaseSnapshot } from "../../src/commerce/meta-purchase-snapshot.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 // The pixel id is captured when the config module first loads, because the Content-Security-Policy
 // is built from the same value and the two must agree. Setting it after the fact would be a no-op,
@@ -40,7 +41,7 @@ function sha256(value: string): string {
 }
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: orderCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: orderCode } });
   await prisma.productMirror.deleteMany({ where: { pancakeShopId: shopId } });
 }
 

@@ -6,6 +6,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { createPancakeOrderStatusReconciliationService } from "../../src/commerce/pancake-order-status-reconciliation.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import type { PancakeOrderStatus } from "../../src/integrations/pancake/order-status.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -46,7 +47,7 @@ async function createOrder(overrides: {
 }
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: `${key}-` } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: `${key}-` } } });
 }
 
 test.beforeEach(cleanup);

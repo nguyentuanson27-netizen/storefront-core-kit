@@ -1,4 +1,5 @@
 import type { PrismaClient } from "../generated/prisma/client.ts";
+import { readAdvisorySellableUnits } from "./capacity-reservation-repository.ts";
 import { createStorefrontCatalogRepository } from "./storefront-catalog.ts";
 import {
   buildStorefrontProductProjection,
@@ -133,6 +134,13 @@ export function createStorefrontProductDetailRepository(client: PrismaClient) {
     const { campaignsByVariantId } = await readApplicablePromotionCampaignsBatched({
       variantIds: pricedVariantIds,
     });
+    // The purchase panel advertises what the capacity read model says is free: a set is offered only
+    // as many times as its components can still supply, and units other orders hold are not free.
+    const sellableUnits = await readAdvisorySellableUnits(client, pricedVariantIds);
+    const withAdvisoryStock = <T extends { id: string; sellableStock: number }>(variant: T): T => ({
+      ...variant,
+      sellableStock: sellableUnits.get(variant.id) ?? 0,
+    });
 
     return {
       ...product,
@@ -149,8 +157,11 @@ export function createStorefrontProductDetailRepository(client: PrismaClient) {
         parentRelations.map((variant) => [variant.id, variant.sku]),
       ),
       projection: buildStorefrontProductProjection({
-        parentVariants: product.variants,
-        componentGroups,
+        parentVariants: product.variants.map(withAdvisoryStock),
+        componentGroups: componentGroups.map((group) => ({
+          ...group,
+          variants: group.variants.map(withAdvisoryStock),
+        })),
         hasCompositeGraph,
         // The PDP's price authority. Passing the default rule here would quietly un-promote every
         // surface built from this projection — the panel, and the variant structured data that

@@ -32,6 +32,7 @@ let server: ChildProcess | undefined;
 let serverOutput = "";
 let componentProductId = "";
 let componentVariantId = "";
+let parentVariantId = "";
 
 const activationSecret = "composite-fixture-confirmation-secret-1234";
 const commerceRepository = createProductCommerceRepository(prisma);
@@ -193,14 +194,18 @@ test.beforeAll(async () => {
       },
     ],
   });
+  // A set is offered only as many times as its components can supply (spec §5.1); the parent's
+  // own mirrored 0 is not consulted. Three units per set against a component holding two keeps
+  // the set out of stock for the activation walkthrough, which is about the component path.
   await prisma.compositeComponentMirror.create({
     data: {
       parentVariantId: parentVariant.id,
       componentVariantId: componentVariant.id,
-      quantity: 1,
+      quantity: 3,
       syncedAt,
     },
   });
+  parentVariantId = parentVariant.id;
 
   server = spawn(process.execPath, [NEXT_CLI, "dev", "--hostname", HOST, "--port", String(PORT)], {
     cwd: APP_ROOT,
@@ -326,4 +331,26 @@ test("composite activation opens and closes the real child purchase path while p
 
   expect(browserErrors).toEqual([]);
   expect(failedResponses).toEqual([]);
+});
+
+test("a set whose own Pancake stock is zero is offered once its components can supply it", async ({ page }) => {
+  await prisma.compositeComponentMirror.update({
+    where: {
+      parentVariantId_componentVariantId: { parentVariantId, componentVariantId },
+    },
+    data: { quantity: 1 },
+  });
+  try {
+    await page.goto(`${BASE_URL}/shop/${parentSlug}`, { waitUntil: "networkidle" });
+    // The component is inactive for standalone sale again, but it still supplies the set.
+    await expect(page.getByRole("radio", { name: componentName })).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: "Set" })).toBeEnabled();
+  } finally {
+    await prisma.compositeComponentMirror.update({
+      where: {
+        parentVariantId_componentVariantId: { parentVariantId, componentVariantId },
+      },
+      data: { quantity: 3 },
+    });
+  }
 });

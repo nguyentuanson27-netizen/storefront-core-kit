@@ -6,6 +6,7 @@ import {
   type PancakeCreateOrderRequest,
 } from "../integrations/pancake/order-create.ts";
 import { ANONYMOUS_CART_MAX_DISTINCT_ITEMS } from "./anonymous-cart.ts";
+import { markOrderCapacityAccepted, reserveOrderCapacity } from "./capacity-reservation-repository.ts";
 import { calculateGuestShippingFeeVnd } from "./guest-shipping-policy.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
 import type {
@@ -182,6 +183,9 @@ function checkedAddVnd(left: number, right: number): number | null {
   const result = left + right;
   return isSupportedVndAmount(result) ? result : null;
 }
+
+/** Thrown inside the reservation transaction to roll it back when the submission claim was lost. */
+class SubmissionClaimLost extends Error {}
 
 function existingResult(order: {
   state: string;
@@ -579,6 +583,35 @@ export function createPancakeOrderSubmissionService(
       return resetValidation();
     }
 
+    // The concrete stock each line spends, so the live check below looks at what a sale actually
+    // consumes: a composite parent's own Pancake figure is not the stock a set sale spends (spec §5.1).
+    // A pre-write read like the ones above, so a transient failure is retryable, not fatal.
+    let componentEdges: Array<{
+      parentVariantId: string;
+      quantity: number;
+      componentVariant: { pancakeVariationId: string };
+    }>;
+    try {
+      componentEdges = await client.compositeComponentMirror.findMany({
+        where: { parentVariantId: { in: order.lines.map(({ variantId }) => variantId) } },
+        orderBy: [{ parentVariantId: "asc" }, { componentVariantId: "asc" }],
+        select: {
+          parentVariantId: true,
+          quantity: true,
+          componentVariant: { select: { pancakeVariationId: true } },
+        },
+      });
+    } catch {
+      return resetValidation();
+    }
+    const componentsByParent = new Map<string, typeof componentEdges>();
+    for (const edge of componentEdges) {
+      const list = componentsByParent.get(edge.parentVariantId) ?? [];
+      list.push(edge);
+      componentsByParent.set(edge.parentVariantId, list);
+    }
+    const liveDemandByVariationId = new Map<string, number>();
+
     const requestedVariationIds = new Set<string>();
     const requestLines: Array<{
       pancakeVariationId: string;
@@ -629,8 +662,20 @@ export function createPancakeOrderSubmissionService(
       if (freshUnitPriceVnd === null || !isSupportedVndAmount(freshUnitPriceVnd)) {
         return reject("PRICE_UNAVAILABLE");
       }
-      if (!Number.isFinite(live.sellableStock) || live.sellableStock < line.quantity) {
-        return reject("STOCK_UNAVAILABLE");
+      const components = componentsByParent.get(line.variantId) ?? [];
+      const consumed =
+        components.length === 0
+          ? [{ pancakeVariationId: line.pancakeVariationId, quantity: line.quantity }]
+          : components.map((edge) => ({
+              pancakeVariationId: edge.componentVariant.pancakeVariationId,
+              quantity: edge.quantity * line.quantity,
+            }));
+      for (const resource of consumed) {
+        const demand = (liveDemandByVariationId.get(resource.pancakeVariationId) ?? 0) + resource.quantity;
+        if (!Number.isSafeInteger(resource.quantity) || resource.quantity <= 0 || !Number.isSafeInteger(demand)) {
+          return reject("LOCAL_ORDER_INVALID");
+        }
+        liveDemandByVariationId.set(resource.pancakeVariationId, demand);
       }
       if (line.unitPriceVnd !== BigInt(freshUnitPriceVnd)) {
         drifted = true;
@@ -671,6 +716,16 @@ export function createPancakeOrderSubmissionService(
         // line the website sold at a discount.
         unitPriceVnd: Number(line.unitPriceVnd),
       });
+    }
+
+    // Live Pancake stock for every resource the order spends, summed across lines that share one.
+    // Advisory to the local reservation below, which is the authority; this only refuses early when
+    // Pancake itself already reports too little.
+    for (const [pancakeVariationId, demand] of liveDemandByVariationId) {
+      const live = liveByVariationId.get(pancakeVariationId);
+      if (!live || !Number.isFinite(live.sellableStock) || live.sellableStock < demand) {
+        return reject("STOCK_UNAVAILABLE");
+      }
     }
 
     // Before any totals assertion or outbound call: a drifted quote is not an invalid order, and
@@ -723,16 +778,37 @@ export function createPancakeOrderSubmissionService(
       lines: requestLines,
     });
 
-    const submitting = await client.orderMirror.updateMany({
-      where: { id: order.id, state: "VALIDATING" },
-      data: { state: "POS_SUBMITTING", syncErrorCode: null },
-    });
-    if (submitting.count !== 1) {
+    // The capacity hold and the `POS_SUBMITTING` claim commit together or not at all, so no request
+    // can leave without a hold and no hold exists for an order that never reached the external call
+    // (spec §5.4.1). Nothing has been sent yet, so any failure here is still retryable.
+    let reservation: Awaited<ReturnType<typeof reserveOrderCapacity>>;
+    try {
+      reservation = await client.$transaction(async (tx) => {
+        const reserved = await reserveOrderCapacity(tx, {
+          orderId: order.id,
+          lines: order.lines.map(({ variantId, quantity }) => ({ variantId, quantity })),
+        });
+        if (!reserved.ok) return reserved;
+        const submitting = await tx.orderMirror.updateMany({
+          where: { id: order.id, state: "VALIDATING" },
+          data: { state: "POS_SUBMITTING", syncErrorCode: null },
+        });
+        if (submitting.count !== 1) throw new SubmissionClaimLost();
+        return reserved;
+      });
+    } catch (error) {
+      if (!(error instanceof SubmissionClaimLost)) return resetValidation();
       const current = await client.orderMirror.findUniqueOrThrow({
         where: { id: order.id },
         select: { state: true, pancakeOrderId: true, syncErrorCode: true },
       });
       return existingResult(current);
+    }
+    if (!reservation.ok) {
+      if (reservation.reason === "TOPOLOGY_CHANGED") return resetValidation();
+      if (reservation.reason === "VARIANT_MISSING") return reject("VARIATION_UNAVAILABLE");
+      if (reservation.reason === "INVALID_ORDER") return reject("LOCAL_ORDER_INVALID");
+      return reject("STOCK_UNAVAILABLE");
     }
 
     emitSafely(options.onEvent, {
@@ -761,14 +837,21 @@ export function createPancakeOrderSubmissionService(
       return { ok: false, state: "SYNC_UNKNOWN", reason: "CREATE_OUTCOME_UNKNOWN" };
     }
 
+    // Sampled once the response is in hand: the exact order is known to exist no later than now, so a
+    // stock observation that starts after this instant cannot have missed it.
+    const acceptedAt = new Date();
     try {
-      const confirmed = await client.orderMirror.updateMany({
-        where: { id: order.id, state: "POS_SUBMITTING" },
-        data: {
-          state: "CONFIRMED",
-          pancakeOrderId,
-          syncErrorCode: null,
-        },
+      const confirmed = await client.$transaction(async (tx) => {
+        const moved = await tx.orderMirror.updateMany({
+          where: { id: order.id, state: "POS_SUBMITTING" },
+          data: {
+            state: "CONFIRMED",
+            pancakeOrderId,
+            syncErrorCode: null,
+          },
+        });
+        if (moved.count === 1) await markOrderCapacityAccepted(tx, order.id, acceptedAt);
+        return moved;
       });
       if (confirmed.count !== 1) {
         const current = await client.orderMirror.findUniqueOrThrow({
