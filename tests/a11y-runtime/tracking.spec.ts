@@ -8,6 +8,7 @@ import { expect, test } from "@playwright/test";
 
 import { prisma } from "../../src/db/prisma.ts";
 import { BUYER_AXE_TAGS } from "./axe-tags";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const HOST = "127.0.0.1";
 const PORT = 3328;
@@ -64,7 +65,7 @@ async function stopServer() {
 }
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode } });
   await prisma.rateLimit.deleteMany({
     where: {
       OR: [

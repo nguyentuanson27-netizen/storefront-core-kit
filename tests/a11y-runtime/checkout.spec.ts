@@ -8,6 +8,7 @@ import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
 import { prisma } from "../../src/db/prisma.ts";
 import { BUYER_AXE_TAGS } from "./axe-tags";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const HOST = "127.0.0.1";
 const PORT = 3307;
@@ -123,7 +124,7 @@ async function cleanupRateLimits() {
 
 async function cleanupDatabase() {
   await prisma.orderLineSnapshot.deleteMany({}).catch(() => {});
-  await prisma.orderMirror.deleteMany({});
+  await deleteOrdersWithCapacity(prisma, {});
   await prisma.cartItem.deleteMany({});
   await prisma.cart.deleteMany({});
   await prisma.productMirror.deleteMany({
@@ -258,7 +259,7 @@ test.afterEach(async () => {
     await prisma.orderLineSnapshot.deleteMany({
       where: { order: { sourceCartId: cartId } },
     }).catch(() => {});
-    await prisma.orderMirror.deleteMany({ where: { sourceCartId: cartId } });
+    await deleteOrdersWithCapacity(prisma, { where: { sourceCartId: cartId } });
     await prisma.cartItem.deleteMany({ where: { cartId } });
     await prisma.cart.deleteMany({ where: { id: cartId } });
   }

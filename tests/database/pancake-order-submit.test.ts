@@ -6,6 +6,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { createPancakeOrderSubmissionService } from "../../src/commerce/pancake-order-submit.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import type { PancakeCatalogVariation } from "../../src/integrations/pancake/catalog-contract.ts";
+import { seedCapacityVariant } from "../support/capacity-fixture.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -40,7 +42,7 @@ function liveVariation({
 }
 
 async function cleanup(key: string) {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: `submit-${key}` } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: `submit-${key}` } });
 }
 
 async function createDraft(
@@ -53,6 +55,7 @@ async function createDraft(
   }: { price?: number; quantity?: number; shippingFee?: number; pancakeShopId?: number | null } = {},
 ) {
   await cleanup(key);
+  await seedCapacityVariant(prisma, `local-variant-${key}`);
   const subtotal = price * quantity;
   return prisma.orderMirror.create({
     data: {

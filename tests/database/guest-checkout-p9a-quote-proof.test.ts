@@ -12,6 +12,7 @@ import {
 import { createGuestCheckoutSnapshotService } from "../../src/commerce/guest-checkout-snapshot.ts";
 import { createStorefrontCartRepository } from "../../src/commerce/storefront-cart-repository.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -35,7 +36,7 @@ const checkoutInput = {
 };
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: prefix } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: prefix } } });
   await prisma.cart.deleteMany({
     where: { items: { some: { variant: { pancakeVariationId: { startsWith: prefix } } } } },
   });

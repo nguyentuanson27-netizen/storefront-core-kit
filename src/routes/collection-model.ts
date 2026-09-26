@@ -35,10 +35,19 @@ export type CollectionProduct = Readonly<{
 
 export type CollectionVideo = Readonly<{ src: string; poster: string | null }>;
 
+/**
+ * One editorial photograph with optional art direction. `mobileUrl` is a different crop for narrow
+ * viewports, not a smaller copy; when it is absent the desktop source serves every viewport.
+ */
+export type ResponsiveEditorialMedia = Readonly<{
+  desktopUrl: string;
+  mobileUrl: string | null;
+}>;
+
 export type CollectionEditorial = Readonly<{
   /** The collection's story. Not a separate field: this is `description`. */
   story: string;
-  heroImage: string | null;
+  hero: ResponsiveEditorialMedia | null;
   gallery: readonly string[];
   video: CollectionVideo | null;
 }>;
@@ -73,6 +82,7 @@ export type CollectionViewModelInput = Readonly<{
   title: string;
   description: string;
   heroImageUrl: string | null;
+  heroMobileImageUrl?: string | null;
   galleryImageUrls: readonly string[];
   videoSrcUrl: string | null;
   videoPosterUrl: string | null;
@@ -135,16 +145,25 @@ export function resolveCollectionEditorial(
   input: Readonly<{
     description: string;
     heroImageUrl: string | null;
+    heroMobileImageUrl?: string | null;
     galleryImageUrls: readonly string[];
     videoSrcUrl: string | null;
     videoPosterUrl: string | null;
   }>,
 ): CollectionEditorial {
   const src = parseTrustedProductVideoUrl(input.videoSrcUrl);
+  const desktopHero = parseTrustedProductImageUrl(input.heroImageUrl);
 
   return Object.freeze({
     story: input.description,
-    heroImage: parseTrustedProductImageUrl(input.heroImageUrl),
+    // A mobile crop never stands in for a missing or untrusted desktop hero: without one there is no
+    // hero at all, so the art direction cannot silently become the only image a desktop shopper sees.
+    hero: desktopHero === null
+      ? null
+      : Object.freeze({
+          desktopUrl: desktopHero,
+          mobileUrl: parseTrustedProductImageUrl(input.heroMobileImageUrl ?? null),
+        }),
     gallery: Object.freeze(
       input.galleryImageUrls
         .map((url) => parseTrustedProductImageUrl(url))

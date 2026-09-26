@@ -53,12 +53,12 @@ async function collectDurabilityEvidence({
   const snapshots: CatalogIdSnapshot[] = [];
 
   for (let runIndex = 0; runIndex < runs; runIndex += 1) {
-    const syncedAt = new Date();
+    let syncedAt = new Date();
     await syncPancakeCatalog({
       client: pancake,
       repository,
       shopId: config.shopId,
-      syncedAt,
+      clock: () => (syncedAt = new Date()),
     });
 
     const products = await prisma.productMirror.findMany({

@@ -9,6 +9,8 @@ import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import type { PancakeCatalogVariation } from "../../src/integrations/pancake/catalog-contract.ts";
 import { PancakeClient } from "../../src/integrations/pancake/client.ts";
 import { createPancakeOrderGateway } from "../../src/integrations/pancake/order-gateway.ts";
+import { seedCapacityVariant } from "../support/capacity-fixture.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -33,12 +35,13 @@ const liveVariation: PancakeCatalogVariation = {
 };
 
 async function cleanup(publicCode: string) {
-  await prisma.orderMirror.deleteMany({ where: { publicCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode } });
 }
 
 async function createDraft(status: number) {
   const publicCode = `submit-redirect-${status}`;
   await cleanup(publicCode);
+  await seedCapacityVariant(prisma, `redirect-local-variant-${status}`);
   return prisma.orderMirror.create({
     data: {
       publicCode,

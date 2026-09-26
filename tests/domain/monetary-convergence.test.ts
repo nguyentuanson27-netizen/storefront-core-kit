@@ -644,8 +644,17 @@ describe("U39 / G1: Direct Meta Runtime Emission Paths (AddToCart & Purchase)", 
         findMany: async () => [mockProduct],
       },
       variantMirror: {
-        findMany: async () => [{ id: "var-cuid-1", productId: "prod-cuid-1" }],
+        findMany: async () => [{ id: "var-cuid-1", productId: "prod-cuid-1", isPresent: true }],
       },
+      // The capacity read model the cart advertises stock from: a standalone variant, its mirrored
+      // stock, and no competing holds.
+      compositeComponentMirror: {
+        findMany: async () => [],
+      },
+      warehouseStock: {
+        findMany: async () => [{ variantId: "var-cuid-1", quantity: variantStock }],
+      },
+      $queryRaw: async () => [],
       promotionTarget: {
         findMany: async () =>
           campaigns.map((campaign) => ({

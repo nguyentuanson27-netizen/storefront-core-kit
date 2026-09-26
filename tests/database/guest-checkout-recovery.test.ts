@@ -6,6 +6,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { recoverStrandedGuestCheckouts } from "../../src/commerce/guest-checkout-recovery.ts";
 import { createPancakeOrderSubmissionService } from "../../src/commerce/pancake-order-submit.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -18,7 +19,7 @@ const staleAt = new Date(now.getTime() - 10 * 60_000);
 const freshAt = new Date(now.getTime() - 10_000);
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: key } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: key } } });
 }
 
 async function createOrder(
