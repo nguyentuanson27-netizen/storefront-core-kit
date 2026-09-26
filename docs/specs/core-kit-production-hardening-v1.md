@@ -778,7 +778,7 @@ Recorded as the slices were implemented; each slice is its own pull request agai
 | 2 — safe deployment for the new invariant | nguyentuanson27-netizen/storefront-core-kit#14 | implemented |
 | 3 — trusted responsive media | nguyentuanson27-netizen/storefront-core-kit#15 | implemented |
 | 4 — overlay invariant | — | **waiting for a real surface** (Q4 below) |
-| 5 — listing URL-state seam | this slice's pull request | implemented for `/shop` |
+| 5 — listing URL-state seam | nguyentuanson27-netizen/storefront-core-kit#16 | implemented for `/shop` |
 
 Answers to §17, resolved against the code rather than chosen in the abstract:
 
