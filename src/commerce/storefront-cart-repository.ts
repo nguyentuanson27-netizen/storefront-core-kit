@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { ANONYMOUS_CART_MAX_DISTINCT_ITEMS } from "./anonymous-cart.ts";
+import { readAdvisorySellableUnits } from "./capacity-reservation-repository.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
 import type { PromotionCandidateReadClient } from "./promotion-candidate-repository.ts";
 import { buildStorefrontCartLines } from "./storefront-cart.ts";
@@ -131,8 +132,11 @@ function toCartProduct(product: SelectedProduct) {
  * cart mutation's transaction. That is the point: the facts a mutation validates against and the
  * facts the cart page renders come from one projection, not two that can drift apart.
  */
-export type StorefrontCartReadClient = Pick<Prisma.TransactionClient, "productMirror">
-  & PromotionCandidateReadClient;
+export type StorefrontCartReadClient = Pick<
+  Prisma.TransactionClient,
+  "productMirror" | "variantMirror" | "compositeComponentMirror" | "warehouseStock" | "$queryRaw"
+> &
+  PromotionCandidateReadClient;
 
 export function createStorefrontCartRepository(client: PrismaClient | StorefrontCartReadClient) {
   const readClient = client as StorefrontCartReadClient;
@@ -170,7 +174,19 @@ export function createStorefrontCartRepository(client: PrismaClient | Storefront
       select: productSelection,
     });
 
-    const cartProducts = products.map(toCartProduct);
+    // Stock the cart may advertise comes from the capacity read model, not the raw mirror: a set's
+    // figure is what its components can still supply, and units other orders hold are not free.
+    const sellableUnits = await readAdvisorySellableUnits(
+      readClient,
+      products.flatMap((product) => product.variants.map(({ id }) => id)),
+    );
+    const cartProducts = products.map(toCartProduct).map((product) => ({
+      ...product,
+      variants: product.variants.map((variant) => ({
+        ...variant,
+        sellableStock: sellableUnits.get(variant.id) ?? 0,
+      })),
+    }));
     const { campaignsByVariantId } = await readApplicablePromotionCampaignsBatched({
       variantIds: cartProducts.flatMap((product) =>
         product.variants.map((variant) => variant.id),

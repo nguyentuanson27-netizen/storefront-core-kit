@@ -9,6 +9,7 @@ import { createPancakeOrderSubmissionService } from "../../src/commerce/pancake-
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import type { PancakeCatalogVariation } from "../../src/integrations/pancake/catalog-contract.ts";
 import type { PancakeCreateOrderRequest } from "../../src/integrations/pancake/order-create.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -37,7 +38,7 @@ function liveVariation(id: string, productId: string, price: number): PancakeCat
 }
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: key } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: key } } });
   await prisma.cart.deleteMany({
     where: {
       items: {

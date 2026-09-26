@@ -129,6 +129,37 @@ website sellable stock for a variation
 
 Mirrored stock is not a reservation. Checkout must re-read/revalidate authoritative Pancake availability immediately before order creation.
 
+## Capacity reservation and mirror handoff evidence
+
+`docs/specs/core-kit-production-hardening-v1.md` §5.4 lets a local capacity hold hand its accounting to the
+mirror only on causal evidence that a stored stock observation includes the accepted order's stock effect.
+These are the reviewed facts the implementation (`src/commerce/capacity-reservation-repository.ts`,
+`handOffMirroredCapacity`) relies on, and the limits it does not cross:
+
+| Resource | Evidence | Handoff |
+| --- | --- | --- |
+| Standalone variation (SELF) | The owner-run lifecycle above: saving a quantity-1 order moved that variation's `remain_quantity` by exactly −1 at save time. | Allowed once a stock read that **started after** local acceptance has been stored. |
+| Composite component, 1 unit per set | Pancake zero/negative-stock probe on the same platform (La.na storefront, run `3v3pbs`, 2026-09-16): ordering a two-child 1:1 composite parent decremented **both** children by one at save time, including a child that started at 0 (`0 → −1`). | Same rule as SELF. |
+| Composite component, more than 1 unit per set | Not probed. | **Never** automatic: the hold stays local (conservative under-capacity) until evidence is reviewed and this table is amended. |
+
+What makes an observation "after acceptance":
+
+- local acceptance (`CapacityReservation.acceptedAt`) is sampled after the create-order response carrying the exact
+  Pancake order id has arrived, and written in the same transaction as `CONFIRMED`;
+- a catalog sync samples its marker in `syncPancakeCatalog` **before** its first Pancake request and stamps it on every
+  `VariantMirror.syncedAt` / `WarehouseStock.syncedAt` it writes; `tests/integrations/catalog-sync.test.ts` pins that
+  ordering;
+- a read that started before acceptance can return a pre-order snapshot however late it is stored, so it never
+  retires a hold.
+
+Pancake itself is not a concurrency authority: the same probe showed it accepts orders at zero and negative stock,
+and accepts both halves of a concurrent race. The local reservation ledger is therefore the only place the
+non-negative floor is enforced, before the create-order request is sent.
+
+Holds for `SYNC_UNKNOWN` orders never hand off automatically: Core Kit has no reviewed mechanism yet to prove either
+that the ambiguous create produced a Pancake order or that it definitively did not. Those holds stay counted and
+need operator resolution; that is the conservative direction the spec requires.
+
 ## Final reviewed-contract verification
 
 The local verifier can now load the same ignored `.env.local` configuration:

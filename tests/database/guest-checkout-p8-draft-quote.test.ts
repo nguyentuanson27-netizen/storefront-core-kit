@@ -7,6 +7,7 @@ import { createGuestCheckoutSnapshotService } from "../../src/commerce/guest-che
 import { acceptAnyRenderedQuote } from "../fixtures/rendered-quote-authority.ts";
 import { createPancakeOrderSubmissionService } from "../../src/commerce/pancake-order-submit.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -37,7 +38,7 @@ const checkoutInput = {
 type SeededProduct = Awaited<ReturnType<typeof seedProduct>>;
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: prefix } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: prefix } } });
   await prisma.cart.deleteMany({
     where: {
       items: {

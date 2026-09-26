@@ -10,6 +10,7 @@ import {
 } from "../../src/commerce/canonical-purchase-snapshot.ts";
 import { readMetaPurchaseSnapshot } from "../../src/commerce/meta-purchase-snapshot.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 type TestVariantItem = {
   item_id: string;
@@ -35,7 +36,7 @@ async function cleanup() {
   await prisma.orderLineSnapshot.deleteMany({
     where: { order: { publicCode: orderCode } },
   });
-  await prisma.orderMirror.deleteMany({ where: { publicCode: orderCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: orderCode } });
   await prisma.variantMirror.deleteMany({
     where: { product: { pancakeShopId: shopId } },
   });

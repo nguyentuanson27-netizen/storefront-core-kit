@@ -4,6 +4,7 @@ import test from "node:test";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -22,7 +23,7 @@ const productExternalId = "website-owned-persistence-product";
 const variationExternalId = "website-owned-persistence-variation";
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { userId } });
+  await deleteOrdersWithCapacity(prisma, { where: { userId } });
   await prisma.cart.deleteMany({ where: { userId } });
   await prisma.address.deleteMany({ where: { userId } });
   await prisma.productMirror.deleteMany({ where: { pancakeProductId: productExternalId } });

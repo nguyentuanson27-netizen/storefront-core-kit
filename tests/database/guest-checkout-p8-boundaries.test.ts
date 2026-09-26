@@ -6,6 +6,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { createGuestCheckoutSnapshotService } from "../../src/commerce/guest-checkout-snapshot.ts";
 import { acceptAnyRenderedQuote } from "../fixtures/rendered-quote-authority.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -26,7 +27,7 @@ const checkoutInput = {
 };
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: prefix } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: prefix } } });
   await prisma.cart.deleteMany({
     where: { items: { some: { variant: { pancakeVariationId: { startsWith: prefix } } } } },
   });

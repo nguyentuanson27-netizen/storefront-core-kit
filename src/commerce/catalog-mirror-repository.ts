@@ -4,6 +4,7 @@ import type {
   PancakeParsedCatalogVariation,
 } from "../integrations/pancake/catalog-contract.ts";
 import type { PancakeCompositeSnapshot } from "../integrations/pancake/composite-contract.ts";
+import { handOffMirroredCapacity } from "./capacity-reservation-repository.ts";
 import {
   createBootstrapProductSlug,
   isLegacyOpaqueProductSlug,
@@ -601,6 +602,11 @@ export function createCatalogMirrorRepository(client: PrismaClient) {
           create: { pancakeShopId: safeShopId, syncedAt: safeSyncedAt },
           update: { syncedAt: safeSyncedAt },
         });
+
+        // Same transaction as the stock rows just written: a hold whose order was accepted before this
+        // observation started now has its consumption reflected in `WarehouseStock`, so the mirror
+        // becomes its accounting owner at the same instant the reflected stock becomes visible.
+        await handOffMirroredCapacity(tx, new Date());
 
         return {
           products: productIds.length,

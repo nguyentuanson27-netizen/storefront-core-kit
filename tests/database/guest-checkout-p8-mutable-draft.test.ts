@@ -9,6 +9,7 @@ import {
 } from "../../src/commerce/guest-checkout-snapshot.ts";
 import { acceptAnyRenderedQuote } from "../fixtures/rendered-quote-authority.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -19,7 +20,7 @@ const now = new Date("2026-09-03T05:00:00.000Z");
 const prefix = "u20-p8-mutable";
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode: { startsWith: prefix } } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode: { startsWith: prefix } } });
   await prisma.cart.deleteMany({
     where: { items: { some: { variant: { pancakeVariationId: { startsWith: prefix } } } } },
   });

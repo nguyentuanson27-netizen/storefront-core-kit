@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { ANONYMOUS_CART_MAX_DISTINCT_ITEMS } from "./anonymous-cart.ts";
+import { readAdvisorySellableUnits } from "./capacity-reservation-repository.ts";
 import { parseGuestCheckoutInput } from "./guest-checkout-input.ts";
 import { calculateGuestShippingFeeVnd } from "./guest-shipping-policy.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
@@ -384,13 +385,25 @@ export function createGuestCheckoutSnapshotService(
           select: productSelection,
         });
 
+        // Advisory at snapshot time, from the same capacity read model as the cart and PDP. The
+        // authoritative decision is the reservation taken when the order is submitted.
+        const sellableUnits = await readAdvisorySellableUnits(
+          tx,
+          products.flatMap((product) => product.variants.map(({ id }) => id)),
+        );
         const storefrontProducts = [];
         for (const product of products) {
           const storefrontProduct = toStorefrontProduct(product);
           if (!storefrontProduct) {
             return { ok: false, reason: "CART_LINE_UNAVAILABLE" };
           }
-          storefrontProducts.push(storefrontProduct);
+          storefrontProducts.push({
+            ...storefrontProduct,
+            variants: storefrontProduct.variants.map((variant) => ({
+              ...variant,
+              sellableStock: sellableUnits.get(variant.id) ?? 0,
+            })),
+          });
         }
 
         const { campaignsByVariantId } = await readApplicablePromotionCampaignsBatched({

@@ -338,6 +338,8 @@ model VariantMirror {
   compositeComponents             CompositeComponentMirror[] @relation("CompositeParent")
   compositeParents                CompositeComponentMirror[] @relation("CompositeComponent")
   promotionTargets                PromotionTarget[]
+  capacityReservations            CapacityReservation[]
+  capacityResources               CapacityReservationResource[]
 
   @@index([productId])
   @@index([sku])
@@ -430,6 +432,7 @@ model OrderMirror {
   updatedAt              DateTime            @updatedAt
   user                   User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
   lines                  OrderLineSnapshot[]
+  capacityReservations   CapacityReservation[]
 
   @@index([userId, createdAt])
   @@index([sourceCartId])
@@ -464,6 +467,63 @@ model OrderLineSnapshot {
   order                    OrderMirror            @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+}
+
+/// How a reserved unit of stock is identified. A standalone line consumes its own variant; a line for a
+/// composite parent consumes each component variant, never the parent's own mirrored stock.
+enum CapacityResourceKind {
+  SELF
+  COMPONENT
+}
+
+/// The local capacity hold for one purchased variant of one order.
+///
+/// Created in the same transaction that claims `POS_SUBMITTING`, i.e. before the Pancake create-order
+/// request can be sent, and never earlier, so an order abandoned in `DRAFT`/`VALIDATING` holds nothing.
+/// `acceptedAt` is written in the same transaction as `CONFIRMED`: it is the instant the exact Pancake
+/// order was known to exist, and the causal lower bound a stock observation must start after before
+/// any of this line's resources may hand their accounting to the mirror.
+///
+/// Both relations are `Restrict`: this is a capacity ledger and an audit record, so deleting the order
+/// or the variant must fail loudly instead of silently freeing a hold that still counts.
+model CapacityReservation {
+  id         String                        @id @default(cuid())
+  orderId    String
+  variantId  String
+  quantity   Int
+  acceptedAt DateTime?
+  createdAt  DateTime                      @default(now())
+  order      OrderMirror                   @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  variant    VariantMirror                 @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  resources  CapacityReservationResource[]
+
+  @@unique([orderId, variantId])
+  @@index([variantId])
+}
+
+/// The concrete stock one reserved line consumes. Immutable once written: a later composite-topology
+/// sync does not move an existing hold to different resources.
+///
+/// A resource counts in `activeReservedUnits` while `mirroredAt` is null. It stops counting only when a
+/// Pancake stock observation that started after the line's `acceptedAt` has been stored for this
+/// variant, and the reviewed Pancake contract guarantees that observation includes the order's stock
+/// effect for this resource. The row stays for history after that; the handoff is a column, not a
+/// delete.
+model CapacityReservationResource {
+  id                         String               @id @default(cuid())
+  reservationId              String
+  variantId                  String
+  kind                       CapacityResourceKind
+  /// Units of this resource one purchased unit consumes: 1 for SELF, the edge quantity for COMPONENT.
+  unitsPerLine               Int
+  quantity                   Int
+  mirroredAt                 DateTime?
+  mirrorObservationStartedAt DateTime?
+  reservation                CapacityReservation  @relation(fields: [reservationId], references: [id], onDelete: Restrict)
+  variant                    VariantMirror        @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@unique([reservationId, variantId])
+  @@index([variantId, mirroredAt])
 }
 
 model SyncEvent {

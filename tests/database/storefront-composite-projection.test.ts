@@ -12,6 +12,7 @@ import { createStorefrontCartRepository } from "../../src/commerce/storefront-ca
 import { createStorefrontProductDetailRepository } from "../../src/commerce/storefront-product-detail.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import { allowAnyCartLine } from "../fixtures/cart-line-authority.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -42,7 +43,7 @@ const syncedAt = new Date("2026-08-22T16:00:00.000Z");
 const now = new Date("2026-08-23T00:00:00.000Z");
 
 async function cleanup() {
-  await prisma.orderMirror.deleteMany({ where: { publicCode } });
+  await deleteOrdersWithCapacity(prisma, { where: { publicCode } });
   await prisma.cart.deleteMany({ where: { id: cartId } });
   await prisma.productMirror.deleteMany({ where: { pancakeShopId: shopId } });
 }
