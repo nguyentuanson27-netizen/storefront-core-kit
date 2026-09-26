@@ -228,6 +228,26 @@ test("mobile shop filters catalog through shareable URL state", async ({ page })
   await expect(page.getByText("1 sản phẩm · Trang 1/1")).toBeVisible();
   await expect(page.getByRole("link", { name: "Xóa bộ lọc" })).toHaveAttribute("href", "/shop");
 
+  // Server-built removal links: one per applied filter, each dropping only itself.
+  const applied = page.getByRole("list", { name: "Bộ lọc đang áp dụng" });
+  await expect(applied.getByRole("link")).toHaveCount(7);
+  const removeColor = applied.getByRole("link", { name: "Bỏ lọc Màu: Ink" });
+  await removeColor.focus();
+  await page.keyboard.press("Enter");
+  await page.waitForURL((url) => url.pathname === "/shop" && !url.searchParams.has("color"));
+  const withoutColor = new URL(page.url());
+  expect(withoutColor.searchParams.get("color")).toBeNull();
+  expect(withoutColor.searchParams.get("q")).toBe("Runtime City Coat");
+  expect(withoutColor.searchParams.get("collection")).toBe("city-uniform");
+  expect(withoutColor.searchParams.get("size")).toBe("M");
+  expect(withoutColor.searchParams.get("availability")).toBe("in-stock");
+  expect(withoutColor.searchParams.get("minPrice")).toBe("1000000");
+  expect(withoutColor.searchParams.get("maxPrice")).toBe("1300000");
+  expect(withoutColor.searchParams.get("page")).toBeNull();
+  await expect(applied.getByRole("link")).toHaveCount(6);
+  await expect(page.getByLabel("Màu")).toHaveValue("");
+  await expect(page.getByRole("heading", { level: 2, name: `Runtime City Coat ${runId}` })).toBeVisible();
+
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.keyboard.press("Tab");
   expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe("BODY");

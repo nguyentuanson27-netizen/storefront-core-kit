@@ -209,3 +209,77 @@ test("the form's bounds are the ones the loader enforces, not a copy", () => {
     priceVnd: STOREFRONT_DISCOVERY_LIMITS.priceVnd,
   });
 });
+
+/* ---------------------------------------------------- server-owned listing URL state */
+
+test("the clear link is the route's own unfiltered href, not markup's guess", () => {
+  const model = buildShopViewModel(input({ discovery: discovery({ color: "Ink", page: 3 }) }));
+  assert.equal(model.clearHref, "/shop");
+  // The form's remount key tracks filter state, not the page, so paging keeps typed input.
+  assert.equal(model.stateHref, "/shop?color=Ink");
+  assert.equal(
+    buildShopViewModel(input({ discovery: discovery({ color: "Ink", page: 1 }) })).stateHref,
+    model.stateHref,
+  );
+});
+
+test("each sort option links to the listing re-sorted from page one, keeping the filters", () => {
+  const model = buildShopViewModel(
+    input({ discovery: discovery({ color: "Ink", sort: "price-asc", page: 2 }) }),
+  );
+  assert.deepEqual(
+    model.sortOptions.map(({ value, href, active }) => ({ value, href, active })),
+    [
+      { value: "name-asc", href: "/shop?color=Ink", active: false },
+      { value: "name-desc", href: "/shop?color=Ink&sort=name-desc", active: false },
+      { value: "price-asc", href: "/shop?color=Ink&sort=price-asc", active: true },
+      { value: "price-desc", href: "/shop?color=Ink&sort=price-desc", active: false },
+    ],
+  );
+  assert.deepEqual(
+    model.sortOptions.map(({ label }) => label),
+    ["Tên A–Z", "Tên Z–A", "Giá thấp → cao", "Giá cao → thấp"],
+  );
+});
+
+test("removing one filter keeps every other filter and the sort, and returns to page one", () => {
+  const applied = discovery({
+    query: "áo khoác",
+    collection: "city-uniform",
+    color: "Ink",
+    size: "M",
+    minPriceVnd: 100_000,
+    maxPriceVnd: 900_000,
+    availability: "in-stock",
+    sort: "price-desc",
+    page: 4,
+  });
+  const model = buildShopViewModel(input({ discovery: applied }));
+
+  assert.deepEqual(
+    model.activeFilters.map(({ value }) => value),
+    ["query", "collection", "color", "size", "minPrice", "maxPrice", "availability"],
+  );
+  for (const filter of model.activeFilters) {
+    assert.equal(filter.active, true);
+    const params = new URL(filter.href, "https://shop.example").searchParams;
+    assert.equal(params.get("page"), null, `${filter.value} resets to page one`);
+    assert.equal(params.get("sort"), "price-desc", `${filter.value} keeps the sort`);
+  }
+  const byKey = new Map(model.activeFilters.map((filter) => [filter.value, filter]));
+  const colorless = new URL(byKey.get("color")!.href, "https://shop.example").searchParams;
+  assert.equal(colorless.get("color"), null);
+  assert.equal(colorless.get("size"), "M");
+  assert.equal(colorless.get("q"), "áo khoác");
+  assert.equal(colorless.get("collection"), "city-uniform");
+  assert.equal(colorless.get("minPrice"), "100000");
+  assert.equal(colorless.get("maxPrice"), "900000");
+  assert.equal(colorless.get("availability"), "in-stock");
+  assert.equal(byKey.get("collection")!.label, "Bộ sưu tập: City Uniform");
+  assert.match(byKey.get("minPrice")!.label, /^Giá từ 100\.000/);
+});
+
+test("an unfiltered or sort-only listing has no filters to remove", () => {
+  assert.deepEqual(buildShopViewModel(input()).activeFilters, []);
+  assert.deepEqual(buildShopViewModel(input({ discovery: discovery({ sort: "name-desc" }) })).activeFilters, []);
+});
