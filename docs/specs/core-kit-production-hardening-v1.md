@@ -142,13 +142,13 @@ A purchased line resolves to one or more **capacity resources**:
 standalone variant
   → itself × purchased quantity
 
-STANDARD composite parent
+composite parent (has CompositeComponentMirror edges)
   → each component variant × edge quantity × purchased quantity
 ```
 
 A composite parent's own mirrored `WarehouseStock` is not substituted for child stock and is not rewritten to match derived capacity.
 
-Advisory sellable quantity for a standard composite is derived from currently usable component resources:
+Advisory sellable quantity for a composite is derived from currently usable component resources:
 
 ```text
 activeReservedUnits = sum(resource units whose accounting responsibility is still local/unresolved)
@@ -156,9 +156,11 @@ componentUnits = floor(max(0, mirroredComponentStock - activeReservedUnits) / ed
 parentCapacity = min(componentUnits for every required component)
 ```
 
+`mirroredComponentStock` is the same mirrored-stock aggregate checkout already uses today: the sum of every `WarehouseStock` row for that variant across mirrored warehouses (`sumWarehouseStocks` in `src/commerce/guest-checkout-snapshot.ts` and `src/commerce/storefront-cart-repository.ts`). A variant with no stock rows has zero mirrored stock. `WarehouseStock.quantity` is stored as `Float`, so the capacity path must fail closed on a non-finite value (as checkout does now) and must floor a fractional aggregate before integer capacity arithmetic rather than rounding it up. Changing which warehouses count toward sellable stock is out of scope for v1.
+
 A reservation row may continue to exist for audit/idempotency after it stops contributing to `activeReservedUnits`. Whether a resource contributes is determined by the accounting-ownership contract in §5.4, not merely by the local order state's label.
 
-The exact treatment of currently supported non-standard selling policies must follow existing Core Kit policy ownership. v1 must not silently enable composite OVERSELL/PREORDER unless the approved policy explicitly defines resource-level floors for them.
+Core Kit has no oversell/preorder selling policy today: every sale is floored at non-negative mirrored stock. v1 keeps that single floor for standalone and composite lines alike. Introducing any oversell/preorder policy is an ask-first change (§15) and would need its own resource-level floor definition.
 
 ### 5.2 Additive persistence
 
@@ -182,7 +184,8 @@ Names are not prescribed by this spec; responsibilities are.
 
 Required properties:
 
-- reservation references existing variant identity with restrictive deletion semantics appropriate to an active hold;
+- reservation references existing variant identity with restrictive deletion semantics appropriate to an active hold. Today `VariantMirror` cascades from `ProductMirror`; production catalog sync retires variants through `isPresent`/`isActive` rather than deleting them, but several `scripts/*-http-smoke.ts` fixtures clean up with `productMirror.deleteMany`. Planning must make those cleanups remove reservations first (or otherwise stay compatible) so a restrictive reference cannot turn fixture teardown or a future hard-delete into a failure;
+- resource snapshots reference the concrete component `VariantMirror`, not the `CompositeComponentMirror` edge row, because edges cascade-delete and are replaced when topology changes;
 - resource snapshots are immutable for an accepted line's capacity identity;
 - a later sync that changes composite topology does not move an existing reservation to different resources;
 - duplicate order retries are idempotent at a stable order/variant boundary;
@@ -216,6 +219,8 @@ The same consumed unit must never be intentionally unaccounted by both sides, an
 
 #### 5.4.1 Holds that count in `activeReservedUnits`
 
+The local reservation must be accepted no later than the transaction that claims `POS_SUBMITTING`, i.e. before the Pancake create-order request can be sent. Because no elapsed-time release is allowed (below), a hold must not be created in a state that can be abandoned without a durable, non-time-based release path: creating it at `DRAFT` or `VALIDATING` is allowed only if planning also defines how an order that never reaches the external call gives the hold back.
+
 A reservation resource **must** contribute to `activeReservedUnits` from the moment the local reservation is accepted until one of the two terminal accounting outcomes below is durably proven:
 
 - **definitive no-sale release:** trusted evidence proves the Pancake create-order attempt did not produce an accepted external order and cannot later materialize as one; or
@@ -226,7 +231,7 @@ Consequences for existing local order states:
 - `POS_SUBMITTING`/equivalent in-flight submission keeps the local hold;
 - `SYNC_UNKNOWN` **must keep the local hold**. Timeout, transport failure, ambiguous response, or unknown create-order outcome is not a rejection and cannot release capacity;
 - `CONFIRMED` **does not by itself retire the local hold**. Confirmation proves an external order exists, not that the current `WarehouseStock` mirror already reflects its stock consumption;
-- `REJECTED`/equivalent may release capacity only when that state transition is backed by definitive external evidence that no accepted Pancake order exists for the attempt. A local error label after an ambiguous submit is insufficient.
+- `REJECTED`/equivalent may release capacity only when that state transition is backed by definitive evidence that no accepted Pancake order exists for the attempt. A local error label after an ambiguous submit is insufficient. A rejection reached before any create-order request was sent (today's `VALIDATING → REJECTED` validation path, including the recovery sweep's `VALIDATION_INTERRUPTED`) is itself definitive: no external attempt exists, so any hold it carried may be released.
 
 No elapsed-time TTL, process restart, local status label, or buyer retry may silently convert an unresolved hold into released capacity.
 
@@ -310,6 +315,8 @@ Database coverage must include at minimum:
 - multi-component refusal is all-or-none with no partial reservation/resource rows;
 - duplicate purchased lines are merged before capacity evaluation;
 - invalid/missing component topology fails closed;
+- a non-finite mirrored stock value fails closed, and a fractional aggregate is floored, not rounded up;
+- an order abandoned or rejected before the create-order request (`DRAFT`/`VALIDATING`) does not leave a permanent hold;
 - idempotent retry does not double-reserve;
 - later composite-topology sync does not rewrite an existing resource snapshot;
 - **confirmed-before-stock-sync:** `CONFIRMED` does not release a hold while the mirror is still pre-order stock;
@@ -409,9 +416,9 @@ Extend the reviewed Pancake **image** contract to lowercase `.webp` while preser
 
 The same extension must be reflected consistently in:
 
-- `src/commerce/product-media.ts`;
-- Next image remote-pattern configuration;
-- CSP/image host contract where relevant;
+- `src/commerce/product-media.ts` (`ALLOWED_IMAGE_EXTENSIONS` and the reviewed path-shape regex);
+- `next.config.mjs` `images.remotePatterns`, which today has one entry per extension (`*.jpg`, `*.png`);
+- CSP `img-src`, which is host-scoped (`https://content.pancake.vn`) and needs no widening for a new extension;
 - domain/integration tests that pin the trust boundary;
 - documentation that describes trusted product media.
 
@@ -685,7 +692,8 @@ If Core Kit is to move from Next `16.2.11` to the version currently proven in an
 
 ### Ask first
 
-- enabling composite PREORDER/OVERSELL semantics;
+- introducing any oversell/preorder selling policy (standalone or composite);
+- changing which warehouses count toward mirrored sellable stock;
 - changing existing selling-policy floors;
 - destructive schema changes;
 - changing the route/page boundary or import allowlist;
