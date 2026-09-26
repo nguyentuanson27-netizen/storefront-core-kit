@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { BRAND } from "@/brand";
+import { CollectionHero } from "@/components/brand/collection-hero";
 import { ProductCard, type ProductCardTone } from "@/components/brand/product-card";
 import { loadCollectionRoute, type CollectionRouteProps } from "@/routes/collection";
 import type { CollectionViewModel } from "@/routes/collection-model";
@@ -44,17 +45,12 @@ function render(data: CollectionViewModel) {
         {data.title}
       </h1>
 
-      {editorial.heroImage ? (
-        <div className="relative mt-10 aspect-[16/9] overflow-hidden bg-[var(--stone)]">
-          <Image
-            src={editorial.heroImage}
-            alt={data.title}
-            fill
-            preload
-            sizes="100vw"
-            className="object-cover"
-          />
-        </div>
+      {editorial.hero ? (
+        <CollectionHero
+          desktopUrl={editorial.hero.desktopUrl}
+          mobileUrl={editorial.hero.mobileUrl}
+          alt={data.title}
+        />
       ) : null}
 
       <div className="mt-10 grid gap-8 border-t border-black/20 pt-8 md:grid-cols-2">

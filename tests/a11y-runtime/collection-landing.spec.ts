@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { BRAND } from "../../src/brand/index.ts";
 import { prisma } from "../../src/db/prisma.ts";
@@ -22,6 +22,16 @@ const publishedSlug = `runtime-city-${suffix}`;
 const pagedSlug = `runtime-paged-${suffix}`;
 const draftSlug = `runtime-draft-${suffix}`;
 const emptySlug = `runtime-empty-${suffix}`;
+const artDirectedSlug = `runtime-art-directed-${suffix}`;
+const singleHeroSlug = `runtime-single-hero-${suffix}`;
+const desktopHero = `https://content.pancake.vn/hero/1/2/3/desktop-${suffix}.jpg`;
+const mobileHero = `https://content.pancake.vn/hero/1/2/3/mobile-${suffix}.webp`;
+const singleHero = `https://content.pancake.vn/hero/1/2/3/single-${suffix}.jpg`;
+// A 1x1 transparent PNG: the optimizer route is fulfilled locally so no test depends on the CDN.
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  "base64",
+);
 const operationalCategoryId = 987_654_321;
 
 let server: ChildProcess | undefined;
@@ -66,7 +76,7 @@ async function stopServer() {
 async function cleanup() {
   await prisma.productMirror.deleteMany({ where: { pancakeShopId: SHOP_ID } });
   await prisma.collectionDefinition.deleteMany({
-    where: { slug: { in: [publishedSlug, pagedSlug, draftSlug, emptySlug] } },
+    where: { slug: { in: [publishedSlug, pagedSlug, draftSlug, emptySlug, artDirectedSlug, singleHeroSlug] } },
   });
 }
 
@@ -146,6 +156,21 @@ test.beforeAll(async () => {
         title: "Runtime Empty Collection",
         description: "A published collection may intentionally be empty.",
         isPublished: true,
+      },
+      {
+        slug: artDirectedSlug,
+        title: "Runtime Art Directed",
+        description: "A collection with a separate phone crop for its hero.",
+        isPublished: true,
+        heroImageUrl: desktopHero,
+        heroMobileImageUrl: mobileHero,
+      },
+      {
+        slug: singleHeroSlug,
+        title: "Runtime Single Hero",
+        description: "A collection with one hero for every viewport.",
+        isPublished: true,
+        heroImageUrl: singleHero,
       },
     ],
   });
@@ -317,4 +342,63 @@ test("published empty collection renders an intentional empty state", async ({ p
   await expect(
     page.getByText("Sản phẩm sẽ xuất hiện tại đây khi được thêm vào bộ sưu tập.", { exact: true }),
   ).toBeVisible();
+});
+
+/** Records which source photographs the page asked the image optimizer for. */
+async function recordHeroRequests(page: Page) {
+  const requested: string[] = [];
+  await page.route(
+    "**/_next/image**",
+    async (route) => {
+      const source = new URL(route.request().url()).searchParams.get("url");
+      if (source) requested.push(source);
+      await route.fulfill({ status: 200, contentType: "image/png", body: PIXEL });
+    },
+  );
+  return requested;
+}
+
+async function heroSources(page: Page, requested: readonly string[]) {
+  const hero = page.locator(`img[alt="${await page.locator("h1").innerText()}"]`).first();
+  await expect(hero).toBeVisible();
+  await page.waitForLoadState("networkidle");
+  const currentSrc = await hero.evaluate((image: HTMLImageElement) => image.currentSrc);
+  return { requested: [...new Set(requested.filter((url) => url.includes("/hero/")))], currentSrc };
+}
+
+test("art-directed hero: a phone fetches only the phone crop", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const requested = await recordHeroRequests(page);
+  await page.goto(`${BASE_URL}/collections/${artDirectedSlug}`, { waitUntil: "domcontentloaded" });
+  expect(await heroSources(page, requested)).toEqual({ requested: [mobileHero], currentSrc: expect.stringContaining(encodeURIComponent(mobileHero)) });
+  await expect(page.locator("[data-art-directed-hero] img")).toHaveAttribute("alt", "Runtime Art Directed");
+});
+
+test("art-directed hero: a desktop fetches only the desktop photograph", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  const requested = await recordHeroRequests(page);
+  await page.goto(`${BASE_URL}/collections/${artDirectedSlug}`, { waitUntil: "domcontentloaded" });
+  expect(await heroSources(page, requested)).toEqual({ requested: [desktopHero], currentSrc: expect.stringContaining(encodeURIComponent(desktopHero)) });
+});
+
+test("art-directed hero is never preloaded, so no second source is fetched behind the chosen one", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${BASE_URL}/collections/${artDirectedSlug}`, { waitUntil: "domcontentloaded" });
+  const preloads = await page.locator('link[rel="preload"][as="image"]').evaluateAll((links) =>
+    links.map((link) => `${link.getAttribute("href") ?? ""} ${link.getAttribute("imagesrcset") ?? ""}`),
+  );
+  const heroPreloads = preloads.filter((entry) =>
+    [desktopHero, mobileHero].some((url) => entry.includes(encodeURIComponent(url))),
+  );
+  expect(heroPreloads).toEqual([]);
+});
+
+test("a collection without a phone crop serves its one hero on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const requested = await recordHeroRequests(page);
+  await page.goto(`${BASE_URL}/collections/${singleHeroSlug}`, { waitUntil: "domcontentloaded" });
+  expect(await heroSources(page, requested)).toEqual({ requested: [singleHero], currentSrc: expect.stringContaining(encodeURIComponent(singleHero)) });
+  await expect(page.locator("[data-art-directed-hero]")).toHaveCount(0);
+  const results = await new AxeBuilder({ page }).withTags(BUYER_AXE_TAGS).analyze();
+  expect(results.violations).toEqual([]);
 });

@@ -27,6 +27,7 @@ const publicCollectionSelect = {
   seoTitle: true,
   seoDescription: true,
   heroImageUrl: true,
+  heroMobileImageUrl: true,
   galleryImageUrls: true,
   videoSrcUrl: true,
   videoPosterUrl: true,

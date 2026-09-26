@@ -239,6 +239,8 @@ model CollectionDefinition {
   seoDescription     String?
   /** Editorial media. `description` is the collection's story; there is no separate story field. */
   heroImageUrl       String?
+  /** Optional art-directed hero for narrow viewports; the desktop hero is the fallback. */
+  heroMobileImageUrl String?
   galleryImageUrls   String[] @default([])
   videoSrcUrl        String?
   videoPosterUrl     String?
