@@ -47,10 +47,14 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # releases-v5
 
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
+          cache: pnpm
 
       - name: Enable pinned pnpm
         run: |
@@ -222,9 +226,24 @@ jobs:
 
   admin-a11y-runtime:
     needs: identity
-    runs-on: macos-14
+    runs-on: ubuntu-latest
     timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ${{ needs.identity.outputs.database-name }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ${{ needs.identity.outputs.database-name }}"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/${{ needs.identity.outputs.database-name }}
       BETTER_AUTH_SECRET: ci-only-placeholder-secret-0123456789abcdef
       BETTER_AUTH_URL: http://127.0.0.1:3212
       BETTER_AUTH_IP_HEADER: x-ci-client-ip
@@ -235,28 +254,19 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # releases-v5
 
+      - name: Enable corepack
+        run: corepack enable
+
       - name: Set up Node.js
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 22
+          cache: pnpm
 
       - name: Enable pinned pnpm
         run: |
           corepack enable
           pnpm --version
-
-      - name: Prepare PostgreSQL 16
-        shell: bash
-        env:
-          DATABASE_NAME: ${{ needs.identity.outputs.database-name }}
-        run: |
-          brew list postgresql@16 >/dev/null 2>&1 || brew install postgresql@16
-          PG_BIN="$(brew --prefix postgresql@16)/bin"
-          echo "$PG_BIN" >> "$GITHUB_PATH"
-          "$PG_BIN/initdb" -D "$RUNNER_TEMP/pgdata"
-          "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/pgdata" -l "$RUNNER_TEMP/postgres.log" -o "-p 5432" start
-          "$PG_BIN/createdb" -p 5432 "$DATABASE_NAME"
-          echo "DATABASE_URL=postgresql://$(whoami)@127.0.0.1:5432/$DATABASE_NAME" >> "$GITHUB_ENV"
 
       - name: Install application from lockfile without lifecycle scripts
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -273,7 +283,7 @@ jobs:
 
       - name: Install Playwright Chromium
         working-directory: tests/a11y-runtime
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run admin browser accessibility runtime
         working-directory: tests/a11y-runtime
