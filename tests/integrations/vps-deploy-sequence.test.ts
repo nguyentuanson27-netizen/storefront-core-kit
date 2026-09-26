@@ -64,6 +64,7 @@ function runDeploy({ appRunning, migrateExit }: { appRunning: boolean; migrateEx
     const result = spawnSync("bash", ["deploy/vps/deploy.sh"], {
       cwd: repo,
       env: {
+        NODE_ENV: "test",
         PATH: `${bin}:${process.env.PATH}`,
         HOME: root,
         CALL_LOG: callLog,
