@@ -92,7 +92,7 @@ test("trusted editorial media survives onto the model", () => {
     videoPosterUrl: photo(4),
   });
 
-  assert.equal(editorial.heroImage, photo(1));
+  assert.deepEqual(editorial.hero, { desktopUrl: photo(1), mobileUrl: null });
   assert.deepEqual(editorial.gallery, [photo(2), photo(3)]);
   assert.deepEqual(editorial.video, { src: film, poster: photo(4) });
 });
@@ -108,9 +108,37 @@ test("untrusted media is dropped rather than rendered", () => {
     videoPosterUrl: null,
   });
 
-  assert.equal(editorial.heroImage, null);
+  assert.equal(editorial.hero, null);
   assert.deepEqual(editorial.gallery, [photo(1)], "only the trusted gallery entry survives");
   assert.equal(editorial.video, null);
+});
+
+test("a trusted mobile hero becomes art direction over the desktop hero", () => {
+  const webp = photo(9).replace(/\.jpg$/, ".webp");
+  assert.deepEqual(
+    resolveCollectionEditorial({
+      description: "story",
+      heroImageUrl: photo(1),
+      heroMobileImageUrl: webp,
+      galleryImageUrls: [],
+      videoSrcUrl: null,
+      videoPosterUrl: null,
+    }).hero,
+    { desktopUrl: photo(1), mobileUrl: webp },
+  );
+});
+
+test("an untrusted mobile hero falls back to the desktop hero, and never replaces a missing one", () => {
+  const base = { description: "story", galleryImageUrls: [], videoSrcUrl: null, videoPosterUrl: null };
+  assert.deepEqual(
+    resolveCollectionEditorial({
+      ...base,
+      heroImageUrl: photo(1),
+      heroMobileImageUrl: "https://evil.example.com/1/2/3/4/photo.jpg",
+    }).hero,
+    { desktopUrl: photo(1), mobileUrl: null },
+  );
+  assert.equal(resolveCollectionEditorial({ ...base, heroImageUrl: null, heroMobileImageUrl: photo(2) }).hero, null);
 });
 
 test("a video whose poster fails validation still plays", () => {

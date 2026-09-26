@@ -25,10 +25,33 @@ test("parseTrustedProductImageUrl accepts reviewed HTTPS Pancake content URLs (.
   }
 });
 
-test("parseTrustedProductImageUrl rejects unreviewed file extensions (.jpeg, .webp, .svg, uppercase .JPG/.PNG, etc.)", () => {
+test("parseTrustedProductImageUrl accepts lowercase .webp only under the same reviewed rules", () => {
+  assert.equal(
+    parseTrustedProductImageUrl("https://content.pancake.vn/images/1/2/3/shirt.webp"),
+    "https://content.pancake.vn/images/1/2/3/shirt.webp",
+  );
+  for (const url of [
+    "https://content.pancake.vn/images/1/2/3/shirt.WEBP",
+    "https://content.pancake.vn/images/1/2/3/shirt.Webp",
+    "http://content.pancake.vn/images/1/2/3/shirt.webp",
+    "https://evil.example.com/images/1/2/3/shirt.webp",
+    "https://content.pancake.vn:8443/images/1/2/3/shirt.webp",
+    "https://user@content.pancake.vn/images/1/2/3/shirt.webp",
+    "https://content.pancake.vn/images/1/2/3/../shirt.webp",
+    "https://content.pancake.vn/images/shirt.webp",
+    "https://content.pancake.vn/images/1/2/3/shirt.webp.svg",
+  ]) {
+    assert.equal(parseTrustedProductImageUrl(url), null, url);
+  }
+  // The video entry point stays video-only.
+  assert.equal(parseTrustedProductVideoUrl("https://content.pancake.vn/images/1/2/3/shirt.webp"), null);
+  assert.equal(parseTrustedProductImageUrl("https://content.pancake.vn/images/1/2/3/clip.mp4"), null);
+});
+
+test("parseTrustedProductImageUrl rejects unreviewed file extensions (.jpeg, .svg, uppercase .JPG/.PNG/.WEBP, etc.)", () => {
   const unreviewedExtensionUrls = [
     "https://content.pancake.vn/images/1/2/3/shirt.jpeg",
-    "https://content.pancake.vn/images/1/2/3/shirt.webp",
+    "https://content.pancake.vn/images/1/2/3/shirt.WEBP",
     "https://content.pancake.vn/images/1/2/3/shirt.JPG",
     "https://content.pancake.vn/images/1/2/3/SHIRT.JPG",
     "https://content.pancake.vn/images/1/2/3/shirt.PNG",
