@@ -11,7 +11,7 @@ import { prisma } from "../../src/db/prisma.ts";
 import { BUYER_AXE_TAGS } from "./axe-tags.ts";
 
 const HOST = "127.0.0.1";
-const PORT = 3212;
+const PORT = 3303;
 const BASE_URL = `http://${HOST}:${PORT}`;
 const APP_ROOT = resolve(import.meta.dirname, "../..");
 const NEXT_CLI = resolve(APP_ROOT, "node_modules/next/dist/bin/next");
@@ -397,6 +397,10 @@ test.beforeAll(async () => {
     cwd: APP_ROOT,
     env: {
       ...process.env,
+      // Better Auth rejects callbacks whose origin does not match its configured base URL,
+      // so it has to follow this spec's own port rather than a value pinned in the workflow.
+      BETTER_AUTH_URL: BASE_URL,
+      APP_DOMAIN: `${HOST}:${PORT}`,
       PANCAKE_SHOP_ID: String(SHOP_ID),
       NEXT_TELEMETRY_DISABLED: "1",
     },

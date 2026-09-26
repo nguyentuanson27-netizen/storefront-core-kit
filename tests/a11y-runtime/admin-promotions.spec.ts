@@ -20,7 +20,7 @@ import { prisma } from "../../src/db/prisma.ts";
 import { BUYER_AXE_TAGS } from "./axe-tags.ts";
 
 const HOST = "127.0.0.1";
-const PORT = 3221;
+const PORT = 3306;
 const BASE_URL = `http://${HOST}:${PORT}`;
 const APP_ROOT = resolve(import.meta.dirname, "../..");
 const NEXT_CLI = resolve(APP_ROOT, "node_modules/next/dist/bin/next");
@@ -124,7 +124,14 @@ test.beforeAll(async () => {
     cwd: APP_ROOT,
     // The gate is left at its default — off — because that is the state this unit ships in and the
     // refusal path is what needs proving.
-    env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
+    env: {
+      ...process.env,
+      // Better Auth rejects callbacks whose origin does not match its configured base URL,
+      // so it has to follow this spec's own port rather than a value pinned in the workflow.
+      BETTER_AUTH_URL: BASE_URL,
+      APP_DOMAIN: `${HOST}:${PORT}`,
+      NEXT_TELEMETRY_DISABLED: "1",
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   server.stdout?.on("data", captureServerOutput);
