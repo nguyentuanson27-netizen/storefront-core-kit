@@ -76,7 +76,27 @@ BACKUP_FILE="$BACKUP_DIR/$PROJECT_SLUG-predeploy-${RELEASE_SHA:0:12}-$(date -u +
 chmod 600 "$BACKUP_FILE"
 echo "Created pre-migration database dump: $BACKUP_FILE"
 
-"${compose[@]}" run --rm ops pnpm prisma:migrate:deploy
+# Quiesce the currently serving application before any migration. A migration may establish a new
+# write invariant (a backfill, a new required ledger row); if the old app kept writing between that
+# migration and the new app starting, it could create old-shape rows the new code never sees. One
+# always-safe sequence rather than a per-migration mode: the only cost is a short write pause.
+app_was_running=false
+if [[ -n "$("${compose[@]}" ps -q app)" ]]; then
+  app_was_running=true
+  "${compose[@]}" stop app
+fi
+
+if ! "${compose[@]}" run --rm ops pnpm prisma:migrate:deploy; then
+  # `docker compose stop` keeps the stopped container, so this resumes that exact pre-release
+  # application instead of recreating one from the newly built image. With no app running before,
+  # there is nothing to restore and nothing is invented.
+  if [[ "$app_was_running" == "true" ]]; then
+    "${compose[@]}" start app
+  fi
+  echo "Migration failed; the pre-release application was restored where one was running" >&2
+  exit 1
+fi
+
 "${compose[@]}" up -d --no-build app caddy
 
 for _ in {1..40}; do
