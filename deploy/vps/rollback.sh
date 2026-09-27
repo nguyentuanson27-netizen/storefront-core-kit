@@ -29,6 +29,16 @@ fi
 compose=(docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE")
 RELEASE_SHA="$PREVIOUS_SHA" "${compose[@]}" up -d --no-build app caddy
 
+# The catalog sync must run the same release as the app. Releases deployed before the sync service
+# existed have no tagged ops image; for those, stop the current release's sync rather than leave newer
+# code writing under an older app, and say so, because without a sync capacity holds never clear.
+if docker image inspect "$PROJECT_SLUG-ops:$PREVIOUS_SHA" >/dev/null 2>&1; then
+  RELEASE_SHA="$PREVIOUS_SHA" "${compose[@]}" up -d --no-build catalog-sync
+else
+  "${compose[@]}" stop catalog-sync || true
+  echo "No catalog-sync image for $PREVIOUS_SHA: the scheduled catalog sync is stopped until the next release" >&2
+fi
+
 for _ in {1..40}; do
   app_id="$("${compose[@]}" ps -q app)"
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$app_id" 2>/dev/null || true)"

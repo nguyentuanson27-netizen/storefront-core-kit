@@ -7,6 +7,7 @@ import {
 } from "../integrations/pancake/order-create.ts";
 import { ANONYMOUS_CART_MAX_DISTINCT_ITEMS } from "./anonymous-cart.ts";
 import { markOrderCapacityAccepted, reserveOrderCapacity } from "./capacity-reservation-repository.ts";
+import { SYNC_TRANSACTION_TIMEOUT_MS } from "./catalog-mirror-repository.ts";
 import { calculateGuestShippingFeeVnd } from "./guest-shipping-policy.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
 import type {
@@ -186,6 +187,22 @@ function checkedAddVnd(left: number, right: number): number | null {
 
 /** Thrown inside the reservation transaction to roll it back when the submission claim was lost. */
 class SubmissionClaimLost extends Error {}
+
+/**
+ * Budget for every submission transaction that locks or writes `VariantMirror` rows: the capacity
+ * reservation, and the reprice/provenance refreshes that write fresher Pancake prices back.
+ *
+ * A catalog sync updates every mirrored variant inside one transaction of up to
+ * `SYNC_TRANSACTION_TIMEOUT_MS`, so these must be able to wait it out. For the reservation the wait
+ * is also a correctness property: the lock is what keeps a sync from committing a handoff between
+ * its stock read and its hold read. Prisma's default of 5s would instead turn every checkout that
+ * lands during a sync into a retryable failure, so the budget outlasts the longest sync with room to
+ * finish the work.
+ */
+const MIRROR_WRITE_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: SYNC_TRANSACTION_TIMEOUT_MS + 15_000,
+} as const;
 
 function existingResult(order: {
   state: string;
@@ -437,7 +454,7 @@ export function createPancakeOrderSubmissionService(
           });
         }
         return true;
-      });
+      }, MIRROR_WRITE_TRANSACTION_OPTIONS);
 
       if (!claimed) {
         return { ok: false, state: "VALIDATING", reason: "SUBMISSION_ALREADY_CLAIMED" };
@@ -505,7 +522,7 @@ export function createPancakeOrderSubmissionService(
           });
         }
         return true;
-      });
+      }, MIRROR_WRITE_TRANSACTION_OPTIONS);
     }
 
     async function resetValidation(): Promise<PancakeOrderSubmissionResult> {
@@ -795,7 +812,7 @@ export function createPancakeOrderSubmissionService(
         });
         if (submitting.count !== 1) throw new SubmissionClaimLost();
         return reserved;
-      });
+      }, MIRROR_WRITE_TRANSACTION_OPTIONS);
     } catch (error) {
       if (!(error instanceof SubmissionClaimLost)) return resetValidation();
       const current = await client.orderMirror.findUniqueOrThrow({

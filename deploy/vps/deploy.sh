@@ -76,28 +76,33 @@ BACKUP_FILE="$BACKUP_DIR/$PROJECT_SLUG-predeploy-${RELEASE_SHA:0:12}-$(date -u +
 chmod 600 "$BACKUP_FILE"
 echo "Created pre-migration database dump: $BACKUP_FILE"
 
-# Quiesce the currently serving application before any migration. A migration may establish a new
-# write invariant (a backfill, a new required ledger row); if the old app kept writing between that
-# migration and the new app starting, it could create old-shape rows the new code never sees. One
-# always-safe sequence rather than a per-migration mode: the only cost is a short write pause.
-app_was_running=false
-if [[ -n "$("${compose[@]}" ps -q app)" ]]; then
-  app_was_running=true
-  "${compose[@]}" stop app
-fi
+# Quiesce every database writer of the current release before any migration: the app and the
+# catalog sync. A migration may establish a new write invariant (a backfill, a new required ledger
+# row); if an old writer kept running between that migration and the new release starting, it could
+# create old-shape rows the new code never sees. One always-safe sequence rather than a per-migration
+# mode. The cost is real: the storefront is unavailable (Caddy answers 502) for as long as the
+# migration runs, so schedule releases with migrations accordingly.
+WRITERS=(app catalog-sync)
+stopped_writers=()
+for writer in "${WRITERS[@]}"; do
+  if [[ -n "$("${compose[@]}" ps -q "$writer")" ]]; then
+    "${compose[@]}" stop "$writer"
+    stopped_writers+=("$writer")
+  fi
+done
 
 if ! "${compose[@]}" run --rm ops pnpm prisma:migrate:deploy; then
-  # `docker compose stop` keeps the stopped container, so this resumes that exact pre-release
-  # application instead of recreating one from the newly built image. With no app running before,
-  # there is nothing to restore and nothing is invented.
-  if [[ "$app_was_running" == "true" ]]; then
-    "${compose[@]}" start app
-  fi
-  echo "Migration failed; the pre-release application was restored where one was running" >&2
+  # `docker compose stop` keeps the stopped containers, so this resumes the exact pre-release writers
+  # instead of recreating them from the newly built images. What was not running before is not
+  # started: nothing is invented.
+  for writer in ${stopped_writers[@]+"${stopped_writers[@]}"}; do
+    "${compose[@]}" start "$writer"
+  done
+  echo "Migration failed; the pre-release writers that were running were restored" >&2
   exit 1
 fi
 
-"${compose[@]}" up -d --no-build app caddy
+"${compose[@]}" up -d --no-build app caddy catalog-sync
 
 for _ in {1..40}; do
   app_id="$("${compose[@]}" ps -q app)"

@@ -231,3 +231,42 @@ test("a set line checks and reserves its components, not the parent's own Pancak
   assert.equal((await service.submit({ publicCode: second.publicCode, shopId })).state, "REJECTED");
   await cleanup();
 });
+
+test("a checkout that lands during a catalog sync waits for it instead of failing", async () => {
+  await cleanup();
+  const tee = await mirroredVariant("tee", 3);
+  const order = await draft("during-sync", tee, 1);
+  const service = createPancakeOrderSubmissionService(prisma, {
+    async fetchCompleteCatalog() {
+      return [live(tee, 3)];
+    },
+    async createOrder() {
+      return { id: 910_301 };
+    },
+  });
+
+  // Stand-in for a sync transaction: it has written this variant and holds the row until it commits,
+  // for longer than Prisma's default 5s interactive-transaction budget. The draft carries no base
+  // price, so submission also writes the fresher Pancake price back to this row before reserving:
+  // both mirror-writing transactions have to wait the sync out.
+  let signalLocked!: () => void;
+  const locked = new Promise<void>((resolve) => (signalLocked = resolve));
+  const sync = prisma.$transaction(
+    async (tx) => {
+      await tx.variantMirror.update({ where: { id: tee }, data: { syncedAt: new Date() } });
+      signalLocked();
+      await new Promise((resolve) => setTimeout(resolve, 7_000));
+    },
+    { timeout: 20_000 },
+  );
+  await locked;
+
+  assert.deepEqual(await service.submit({ publicCode: order.publicCode, shopId }), {
+    ok: true,
+    state: "CONFIRMED",
+    pancakeOrderId: "910301",
+  });
+  await sync;
+  assert.equal(await prisma.capacityReservation.count({ where: { orderId: order.id } }), 1);
+  await cleanup();
+});

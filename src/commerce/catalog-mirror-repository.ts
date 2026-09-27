@@ -16,7 +16,7 @@ const MAX_POSTGRES_INTEGER = 2_147_483_647;
 const MAX_COMPOSITE_ENTRIES = 50_000;
 const MAX_COMPOSITE_ID_LENGTH = 512;
 const SYNC_LOCK_NAMESPACE = 1_277_934_572;
-const SYNC_TRANSACTION_TIMEOUT_MS = 60_000;
+export const SYNC_TRANSACTION_TIMEOUT_MS = 60_000;
 
 type CatalogProductSnapshot = {
   pancakeProductId: string;

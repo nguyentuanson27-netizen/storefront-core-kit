@@ -47,16 +47,6 @@ describe("Merchant public-feed repository query envelope", () => {
         ]),
       },
       variantMirror: { findMany: counted("variantMirror", variants) },
-      warehouseStock: {
-        findMany: counted(
-          "warehouseStock",
-          variants.map((variant) => ({
-            variantId: variant.id,
-            pancakeWarehouseId: "warehouse-1",
-            quantity: 1,
-          })),
-        ),
-      },
       compositeComponentMirror: { findMany: counted("compositeComponentMirror", []) },
       $queryRawUnsafe: async (sql: string) => {
         if (sql.includes('FROM "ProductMirror" p')) {
@@ -72,6 +62,16 @@ describe("Merchant public-feed repository query envelope", () => {
               merchantCondition: null,
             },
           ];
+        }
+        if (sql.includes('FROM "WarehouseStock" ws')) {
+          // Stock rows and their capacity holds come back in one read.
+          count("warehouseStock");
+          return variants.map((variant) => ({
+            variantId: variant.id,
+            pancakeWarehouseId: "warehouse-1",
+            quantity: 1,
+            heldUnits: BigInt(0),
+          }));
         }
         if (sql.includes('FROM "PromotionTarget" t')) {
           count("promotionJoin");

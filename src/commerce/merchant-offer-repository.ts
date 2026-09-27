@@ -62,12 +62,6 @@ const merchantFactsSelection = {
   condition: true,
 } satisfies Prisma.ProductMerchantFactsSelect;
 
-const stockSelection = {
-  variantId: true,
-  pancakeWarehouseId: true,
-  quantity: true,
-} satisfies Prisma.WarehouseStockSelect;
-
 const compositeSelection = {
   parentVariantId: true,
   componentVariantId: true,
@@ -79,7 +73,13 @@ type SelectedProductContent = Prisma.ProductContentGetPayload<{ select: typeof c
 type SelectedMerchantFacts = Prisma.ProductMerchantFactsGetPayload<{
   select: typeof merchantFactsSelection;
 }>;
-type SelectedWarehouseStock = Prisma.WarehouseStockGetPayload<{ select: typeof stockSelection }>;
+type SelectedWarehouseStock = Readonly<{
+  variantId: string;
+  pancakeWarehouseId: string;
+  quantity: number;
+}>;
+
+type StockWithHoldsRow = SelectedWarehouseStock & Readonly<{ heldUnits: bigint }>;
 
 type ProductFactRow = Readonly<{
   productId: string;
@@ -107,6 +107,8 @@ type JoinedPromotionRow = Readonly<{
 type LoadedCandidateVariant = SelectedVariant &
   Readonly<{
     warehouseStocks: readonly SelectedWarehouseStock[];
+    /** Units still locally held by capacity reservations (`mirroredAt IS NULL`). */
+    heldUnits: number;
     isCompositeParent: boolean;
     isCompositeComponent: boolean;
   }>;
@@ -231,10 +233,12 @@ function toCandidateProduct(
       imageUrls: variantImageUrls[index] ?? [],
     })),
   });
+  // Units other orders still hold are not on offer, the same as on the PDP whose structured data
+  // this feed must agree with. An untrusted mirror stays NaN (AVAILABILITY_UNRESOLVED).
   const stockByVariantId = new Map(
     product.variants.map((variant) => [
       variant.id,
-      aggregateWarehouseStock(variant.warehouseStocks.map((stock) => stock.quantity)),
+      aggregateWarehouseStock(variant.warehouseStocks.map((stock) => stock.quantity)) - variant.heldUnits,
     ]),
   );
   const parentVariants: StorefrontVariantFacts[] = product.variants.map((variant) => ({
@@ -338,14 +342,25 @@ export function createMerchantOfferRepository(client: PrismaClient) {
     );
 
     // 4/6 and 5/6 — variant inventory and composite membership. Empty variant sets stay cheap.
+    // Each stock row carries its variant's still-local capacity holds, summed in the same read, so
+    // the feed advertises what the storefront does without spending another round trip.
     const stocks =
       variantIds.length === 0
         ? []
-        : await client.warehouseStock.findMany({
-            where: { variantId: { in: variantIds } },
-            select: stockSelection,
-            orderBy: [{ variantId: "asc" }, { pancakeWarehouseId: "asc" }],
-          });
+        : await client.$queryRawUnsafe<StockWithHoldsRow[]>(
+            `SELECT ws."variantId", ws."pancakeWarehouseId", ws."quantity",
+                    COALESCE(held."heldUnits", 0)::bigint AS "heldUnits"
+             FROM "WarehouseStock" ws
+             LEFT JOIN (
+               SELECT "variantId", SUM("quantity") AS "heldUnits"
+               FROM "CapacityReservationResource"
+               WHERE "mirroredAt" IS NULL AND "variantId" = ANY($1::text[])
+               GROUP BY "variantId"
+             ) held ON held."variantId" = ws."variantId"
+             WHERE ws."variantId" = ANY($1::text[])
+             ORDER BY ws."variantId", ws."pancakeWarehouseId"`,
+            variantIds,
+          );
     const compositeEdges =
       variantIds.length === 0
         ? []
@@ -411,6 +426,7 @@ export function createMerchantOfferRepository(client: PrismaClient) {
       if (existing === undefined) stocksByVariantId.set(stock.variantId, [stock]);
       else existing.push(stock);
     }
+    const heldByVariantId = new Map(stocks.map((row) => [row.variantId, Number(row.heldUnits)]));
     const compositeParentIds = new Set(compositeEdges.map((edge) => edge.parentVariantId));
     const compositeComponentIds = new Set(compositeEdges.map((edge) => edge.componentVariantId));
     const variantsByProductId = new Map<string, LoadedCandidateVariant[]>();
@@ -418,6 +434,7 @@ export function createMerchantOfferRepository(client: PrismaClient) {
       const loaded: LoadedCandidateVariant = {
         ...variant,
         warehouseStocks: stocksByVariantId.get(variant.id) ?? [],
+        heldUnits: heldByVariantId.get(variant.id) ?? 0,
         isCompositeParent: compositeParentIds.has(variant.id),
         isCompositeComponent: compositeComponentIds.has(variant.id),
       };
