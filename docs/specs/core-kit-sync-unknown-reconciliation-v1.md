@@ -419,8 +419,13 @@ Both releases are the same single atomic transaction. Only the recorded reason d
 A `FOUND(id)` (from §7 or §8) is applied in one transaction, as a compare-and-set on `state = SYNC_UNKNOWN`:
 
 - **Order.** `state = CONFIRMED`, `pancakeOrderId = id`, `syncErrorCode = null`.
-- **Acceptance.** `markOrderCapacityAccepted(tx, orderId, acceptedAt)`, where `acceptedAt` is the instant the search or
-  detail response that found the order was received, sampled after the response.
+- **Acceptance.** `markOrderCapacityAccepted(tx, orderId, acceptedAt)`. `acceptedAt` depends on how the order was found:
+  - **found by a search or detail read:** the instant the response that found the order was received, sampled after
+    that response;
+  - **B-with-id recovery link (below), where no successful response exists:** the instant the trusted operator's link
+    decision is committed, sampled inside the linking transaction. That instant is necessarily after the create response
+    that proved the order existed. As always, only a stock read that *starts* after `acceptedAt` can hand the hold off.
+    A stock observation taken before the link can therefore never retire it, while the next sync after the link can.
   - This is later than the true creation time, and that is deliberately conservative. Handoff requires a stock read that
     *started* after `acceptedAt`. The order provably existed before that instant, and Pancake decrements
     `remain_quantity` at order save, so such a read includes its effect.
@@ -440,6 +445,20 @@ orders.
 For path B the id came from Pancake's own create response to this order, so the detail read only has to confirm that
 the order exists in the same shop. No agreement check is needed. This applies **only** to a path-B row that R1 recorded
 with its `createResponseOrderId`. A legacy row never has one (§10.1).
+
+**B-with-id recovery link (exception to the paragraph above).** When the detail read of a B-with-id row stays
+`AMBIGUOUS` (the `B_ID_UNREADABLE` incident, §7), the operator may link it anyway, on exactly these terms:
+
+- the supplied id must **equal** the row's stored `createResponseOrderId`. Any other id falls back to the ordinary
+  operator `--link` terms: detail read plus independent verification;
+- **no** successful detail or existence read is required for that id, because Pancake's own create response to this
+  order already proved it existed;
+- the trusted, authorized actor (§9.3 b) and a recorded reason remain required;
+- all normal protections still apply: the compare-and-set on `state = SYNC_UNKNOWN`, and `pancakeOrderId @unique` (an id
+  already linked to another order refuses);
+- `acceptedAt` is the committed link instant, as above.
+
+The ordinary automatic path-B detail reconciliation is unchanged.
 
 ### 10.1 Path recording, legacy rows and marker-less rows
 
@@ -609,7 +628,9 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   It prints no PII beyond the public order code.
 - **Command.** `pnpm pancake:orders:reconcile <publicCode> [--link <pancakeOrderId> | --release]`.
   - With no flag it runs one observation now.
-  - `--link` applies §10 after the agreement checks.
+  - `--link` applies §10 after the agreement checks. The one exception is the B-with-id recovery link (§10), for the
+    stored `createResponseOrderId` only: it requires no successful detail read, but does require the trusted actor, a
+    recorded reason, and the compare-and-set and uniqueness protections.
   - `--release` branches on the row's class (§10.1). Each branch has its own complete preconditions, and the command
     refuses unless every one holds:
     - **Marker-bearing row: the §9.3 (b) override** (owner decision §15 Q4). It requires:
@@ -685,8 +706,12 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   rows follow §10.1 instead, and have their own tests below;
 - operator `--release` on a **B-with-id** row is always refused, including after repeated `AMBIGUOUS` detail reads;
   those raise `B_ID_UNREADABLE` and never count toward absence-confirmed;
-- `--link` of a B-with-id row to its stored `createResponseOrderId` succeeds with the trusted actor even when the detail
-  read is `404`, and makes the row `CONFIRMED` with `acceptedAt`;
+- `--link` of a B-with-id row to its stored `createResponseOrderId` succeeds with the trusted actor and a reason even
+  when the detail read is `404`, and makes the row `CONFIRMED` with `acceptedAt` = the committed link instant;
+- the same recovery `--link` with a **different** id is refused unless the ordinary `--link` terms are met. It is
+  also refused when the stored id is already linked to another order, or the row is no longer `SYNC_UNKNOWN`;
+- **handoff boundary for a recovery link:** a catalog-sync stock observation that started before the link instant does
+  not hand the hold off, while the next observation that starts after it does;
 - operator `--release` without the structured verification fields is refused;
 - **operator `--release` whose recorded verification outcome is `MATCHING_ORDER_FOUND` is refused**, releases nothing,
   and points to `--link` or incident handling; `INCONCLUSIVE` is refused too;
