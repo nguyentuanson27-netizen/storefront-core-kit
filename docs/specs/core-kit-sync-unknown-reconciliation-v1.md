@@ -144,7 +144,7 @@ The standing rule is unchanged: no CI job makes a live create-order write.
 | **E1 — carrier round-trip** | For each candidate field (`custom_id`, `note`, `note_print`), does a value sent on create come back byte-for-byte on detail **and** list reads? | A sanitized, checked-in live observation. |
 | **E2 — carrier stability** | Does Pancake itself rewrite the field (normalize, truncate, prefix, auto-fill `custom_id`)? Is the field editable in the Pancake UI? Does it appear on customer-facing or carrier-facing output (invoice, label)? | Live observation plus the Pancake UI/documentation. A field that is customer- or carrier-facing is rejected. |
 | **E3 — list contract** | For `GET /shops/{SHOP_ID}/orders`, what are the reviewed query parameters and item fields? Is there a server-side filter that can find the marker, and a time-window filter? What is the pagination metadata? Which endpoint (list item or order detail) carries the line items and billing phone that §8.3 compares? | A machine-derived OpenAPI evidence file, the same kind as the create/detail files. |
-| **E4 — coverage semantics** | Can the list be proven complete for a window? That means stable `total_entries`/`total_pages`, whether cancelled, returned and **deleted/trashed** orders are included (or which filter includes them), and the time-zone semantics of the window parameters. | E3 plus a live observation: an order created, cancelled and deleted, then searched in the window. |
+| **E4 — coverage semantics** | Can the list be proven complete for a window? That means: stable `total_entries`/`total_pages`; whether cancelled, returned and **deleted/trashed** orders are included (or which filter includes them); the time-zone semantics of the window parameters; and **pagination stability under concurrent writes**, which needs either a snapshot or cursor, or keyset pagination on an immutable sort key. With plain offset or page-number paging, an insert, delete or status change can shift an item between pages without changing totals or producing a duplicate. | E3 plus a live observation: an order created, cancelled and deleted, then searched in the window. For stability, the reviewed contract must name the snapshot, cursor or keyset mechanism. A live observation cannot prove it. |
 | **E5 — search propagation** | How long after a *successful* create response is the new order visible to the chosen search? | A live measurement over several creates. It sets a lower bound on the minimum age before an absence observation counts (§9.2). It says nothing about creates whose response never arrived. |
 | **E6 — create-outcome horizon** | After the client stops waiting (timeout, abort, crash — paths A and C), is there a **guaranteed** bound after which Pancake can no longer create an order from that request? | Only an authoritative statement: Pancake documentation or a written statement from Pancake of a server-side processing deadline or request expiry. A live measurement can show a typical delay, but it cannot prove that a late creation never happens, so it does not satisfy E6. |
 
@@ -152,12 +152,22 @@ The standing rule is unchanged: no CI job makes a live create-order write.
 
 1. a field that is filterable server-side, not staff-facing, and round-trips unchanged — `custom_id` is the first
    candidate;
-2. otherwise a staff-facing field that round-trips unchanged (`note`), accepting that staff can remove the marker; in that
-   case §9's automatic release stays permanently off.
+2. otherwise a staff-facing field that round-trips unchanged (`note`), accepting that staff can remove the marker.
+
+The chosen rule is recorded as the deployment's **carrier mode** (`RULE_1` or `STAFF_EDITABLE`). In `STAFF_EDITABLE`
+mode:
+
+- the definitive release (§9.3 a) and any automatic release are permanently unavailable, because a missing marker there
+  can mean a staff edit, not a missing order;
+- orders can still become absence-confirmed as an investigation status (§9.2);
+- the manual override (§9.3 b) stays available. Its required independent verification searches the Pancake admin by time
+  window, phone and items, and does not rely on the marker.
 
 `shipping_address.*` and `note_print` are never carriers (E2).
 
 If E3 shows no server-side filter that can find the marker, the search must cover the whole time window page by page (§8.2).
+Such a scan can only conclude `ABSENT` if E4 also proves stable pagination; otherwise every miss is `AMBIGUOUS` and only
+`FOUND` is reachable.
 If E4 cannot prove complete coverage of a window, `ABSENT` can never be concluded and v1 ships `FOUND`-only.
 If E6 is not established, the search window is never truncated (§8.1) and the definitive no-sale release does not exist
 (§9.3). Only the manual risk override remains.
@@ -234,6 +244,18 @@ createOutcomeHorizon = requestTimeout + upstreamCompletionBound (E6) + searchPro
 - The result is **incomplete** if a page limit is reached, metadata is missing or contradictory, a transport error occurs,
   or an item fails the reviewed item shape.
 - Incomplete coverage is `AMBIGUOUS`, whatever was or was not seen.
+- **Absence needs stable pagination as well as complete coverage.** Consistent totals and no duplicates do not prove that
+  no item was skipped: with offset or page-number paging, a concurrent change can move the marker-bearing order from an
+  unread page to one already read. A complete search may therefore conclude `ABSENT` only when one of these holds:
+  1. **the result fits in one page**: the server-side marker filter (E3) returned a single page whose reported total
+     equals the items returned (normally zero), so there is no page boundary to slip across; or
+  2. **E4 established stable pagination**: a snapshot, cursor, or keyset on an immutable key, which the gateway uses.
+
+  Any other multi-page search that finds no match is `AMBIGUOUS(UNSTABLE_PAGINATION)`. That includes a multi-page scan of
+  an unfiltered time window under offset paging. It never counts toward absence-confirmed. Re-reading or overlapping pages
+  is not accepted as a substitute, because it narrows the gap but does not prove there is none.
+- A match is not weakened by unstable pagination in the same way: an item that was seen exists. `FOUND` still requires
+  the §8.3 agreement checks and complete coverage for "exactly one".
 
 ### 8.3 Classification
 
@@ -248,12 +270,14 @@ For one order, one search yields exactly one of:
   The Pancake id must not already be linked to another local order (`pancakeOrderId` is `@unique`). A match seen on a
   search whose coverage was incomplete is recorded as `AMBIGUOUS(MATCH_WITH_INCOMPLETE_COVERAGE)`, because "exactly one"
   cannot be proven. The next complete search turns it into `FOUND`.
-- **`ABSENT`**. Coverage is complete and no item carries the marker.
+- **`ABSENT`**. Coverage is complete, pagination is stable (§8.2: a single page, or an E4-proven snapshot, cursor or
+  keyset), and no item carries the marker.
 - **`AMBIGUOUS(reason)`**. Anything else:
   - more than one match;
   - a match that disagrees with the local order;
   - an id already linked elsewhere;
   - incomplete coverage;
+  - no match on a multi-page search without stable pagination (`UNSTABLE_PAGINATION`);
   - a transport or contract error;
   - an order that is missing its marker or shop scope.
 
@@ -280,7 +304,9 @@ window, pages read, totals, reason code). An order is **absence-confirmed** only
 Absence-confirmed is an investigation status: it puts the order in front of an operator with its evidence. It is not the
 hardening §5.4 definitive no-sale proof.
 
-1. it has a marker (§6.1), and the carrier is not staff-editable (§5 rule 1);
+1. it has a marker (§6.1), in either carrier mode (§5). The status records the carrier mode it was reached under, and the
+   operator report shows it: in `STAFF_EDITABLE` mode a missing marker is weaker evidence, because staff may have edited
+   it away;
 2. at least `K` consecutive complete `ABSENT` observations exist, with no `FOUND` or `AMBIGUOUS` among them — any other
    outcome restarts the count;
 3. the first counted observation is at least `minAge` after `submitAttemptedAt`. `minAge` is at least the create
@@ -292,13 +318,16 @@ raise them. Lowering them requires a spec amendment.
 
 ### 9.3 The two releases, and what each requires
 
-Absence-confirmed is a precondition for both releases below and sufficient for neither.
+Absence-confirmed is a precondition for both releases below and sufficient for neither. It is reachable in both carrier
+modes, so the manual override is reachable in both. The definitive release additionally requires carrier mode
+`RULE_1`.
 
 **(a) Definitive no-sale release: the hardening §5.4.1 path.** It exists only when **all** of these hold:
 
 - E4 establishes authoritative completeness of the searched window, including cancelled, returned and deleted orders;
 - E6 establishes the bounded no-late-materialization guarantee;
-- the order was sent with a marker in a rule-1 carrier (§5): server-filterable and not staff-editable;
+- the order was sent with a marker in carrier mode `RULE_1` (§5): server-filterable and not staff-editable. This stays
+  mandatory for the definitive release and for anything automatic;
 - every counted observation's window started at or before `submitAttemptedAt − skewAllowance` and was taken after
   `submitAttemptedAt + createOutcomeHorizon`.
 
@@ -383,10 +412,25 @@ the order exists in the same shop. No agreement check is needed.
   - Running it after the sync, not before, means a `FOUND` order's hold becomes eligible for handoff on the next sync.
   - The sweep's failure must not fail the sync or the sync's heartbeat; catalog-sync health stays about catalog sync. The
     sweep has its own liveness signal instead (§11.1). Failures are logged with fixed, non-PII messages.
-- **Batch.** Each tick handles at most `N` orders (default 20), oldest `submitAttemptedAt` first, with a per-tick Pancake
-  request budget.
-  - An order not yet at `minAge` is observed (for `FOUND`) but its `ABSENT` does not count.
-  - Released orders are observed on the §9.4 cadence, below unreleased orders in priority.
+- **Batch and fair scheduling.** Each tick handles at most `N` work items (default 20) under a per-tick Pancake request
+  budget. A work item is an unreleased `SYNC_UNKNOWN` order or a released order's watch entry (§9.4).
+  - **`nextDueAt` on every item.**
+    - Every work item carries a durable `nextDueAt`.
+    - A new `SYNC_UNKNOWN` order starts due immediately.
+    - After each observation, whatever its outcome, `nextDueAt = observedAt + cadence`. The cadence is `D` for an
+      unreleased order, and the §9.4 decaying cadence for a watch entry.
+    - An item whose observation could not run (the budget ran out, or a transport error) keeps its `nextDueAt`. It is
+      therefore at the front of the queue on the next tick.
+  - **Selection.**
+    - A tick selects due items (`nextDueAt ≤ now`) ordered by `nextDueAt`, then `submitAttemptedAt`, then `id`.
+    - Never-observed items sort first among equal due times.
+    - Because every observed item moves behind everything already due, every due item is reached within
+      `ceil(dueCount ÷ N)` ticks, whatever the backlog. Ordering by `submitAttemptedAt` alone would reselect the same `N`
+      oldest orders on every tick and starve order `N + 1`.
+  - **Reserved share for watch entries.** When any watch entry is due, at least `max(1, N ÷ 4)` of the tick's items go to
+    watch entries. The rest go to unreleased orders, and each class may use the other's unused share. Neither class can
+    starve the other.
+  - **`minAge`.** An order not yet at `minAge` is still observed, so it can be `FOUND`, but its `ABSENT` does not count.
 - **Concurrency.** The transitions are compare-and-sets on `state = SYNC_UNKNOWN`. A buyer revisiting the order, an
   operator command and the sweep may race, and exactly one wins. The losers re-read the state and report it.
 
@@ -405,9 +449,11 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   holds:
   1. no `ok` sweep has finished within `2 × CATALOG_SYNC_INTERVAL_SECONDS + 120 s`, the bound catalog sync already uses
      (`STALE_SWEEP`);
-  2. **starvation**: some unreleased `SYNC_UNKNOWN` order has had no observation for longer than
-     `3 × interval + (unreleased count ÷ N) × interval` (`ORDER_UNOBSERVED`). This catches sweeps that are `ok` but whose
-     batch never reaches an order.
+  2. **overdue work**: some work item's `nextDueAt` is overdue by more than
+     `2 × interval + ceil(dueCount ÷ reservedShare) × interval` (`ORDER_UNOBSERVED`). This covers unreleased orders and
+     watch entries, each against its own share.
+     - This is a safety net, not the fairness mechanism. The scheduler above guarantees progress by construction.
+     - The health check catches a scheduler defect, or a budget too small for the backlog.
 - **Where it is surfaced.**
   - The health command is the contract.
   - `docs/operations/release-and-rollback.md` requires wiring it into the deployment's monitoring, the same place the
@@ -462,7 +508,19 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - reconciliation health:
   - a failing sweep writes a not-`ok` record and the health command reports `STALE_SWEEP` after the bound, while the
     catalog-sync heartbeat stays healthy;
-  - `ok` sweeps that never reach an order report `ORDER_UNOBSERVED`;
+  - an overdue work item reports `ORDER_UNOBSERVED`;
+- fair scheduling:
+  - with a backlog of `3N` orders that never resolve, every order is observed within 3 ticks and again within 6;
+  - an observation that could not run keeps its `nextDueAt` and is taken first on the next tick;
+  - due watch entries get their reserved share while unreleased orders are also due, and vice versa;
+- pagination:
+  - a multi-page, no-match search under offset paging is `AMBIGUOUS(UNSTABLE_PAGINATION)` and never counts toward
+    absence-confirmed;
+  - a single-page filtered result with total 0 is `ABSENT`;
+  - with an E4-proven cursor or keyset, a multi-page no-match is `ABSENT`;
+- carrier modes:
+  - in `STAFF_EDITABLE` mode an order can become absence-confirmed and the manual override is reachable;
+  - in that mode the definitive release is unreachable.
   - an open release incident reports `RELEASE_INCIDENT`.
 
 **Database:**
