@@ -263,6 +263,10 @@ A checkout that holds those locks evaluates against the policy committed before 
 in-flight checkouts. So no decision is ever made against a half-applied change, and the deadlock-free ordering is
 preserved.
 
+**Scope of this guarantee.** §7.2 serializes the **authoritative reservation decision** (`reserveOrderCapacity`, under the
+lock) with policy writes, and nothing else. The live pre-check (§7.3) and every advisory read (§8) run outside that lock.
+They may observe a policy that is already stale by the time the locked decision runs.
+
 ### 7.3 The live Pancake pre-check (F5)
 
 It becomes mode-aware with the same floor:
@@ -272,6 +276,25 @@ live.sellableStock − demand ≥ floor
 ```
 
 It stays advisory to the ledger, as today. A non-finite live value still refuses.
+
+**Consistency contract: conservatively stale.** The pre-check runs before the transaction that takes the `VariantMirror`
+locks, so it reads `effectivePolicy` without serialization. A concurrent policy change can make it disagree with the
+locked decision, and the two directions behave differently:
+
+- **Pre-check looser than the locked decision.** Example: it read `OVERSELL`, then a change to `STANDARD` committed. The
+  pre-check passes, and the locked authority (§7.1) refuses under the new floor. No oversell is possible: safety comes
+  only from the locked decision.
+- **Pre-check stricter than the locked decision.** Example: it read `STANDARD`, then a change to `OVERSELL` committed. The
+  pre-check can refuse `STOCK_UNAVAILABLE` under the old floor before the order reaches the locked authority.
+  - This is accepted. It is the same outcome the buyer would have seen one instant earlier.
+  - Nothing is held or sent, and the rejection happens before `POS_SUBMITTING`.
+  - The buyer can resubmit, and the next attempt reads the new policy.
+  - The spec does **not** claim that the pre-check observes policy changes atomically. Implementations must not add
+    retries, caches or comments that imply it does.
+
+The pre-check deliberately does not try to share a snapshot with the locked decision. Tying the two would mean either
+holding the locks across the Pancake request, which the hardening spec forbids for latency and deadlock reasons, or
+re-running the check after the lock, which the locked authority already does.
 
 ### 7.4 What does not change
 
@@ -450,6 +473,15 @@ It prints no PII.
 - `SELLING_MODES_ENABLED` off → an `OVERSELL` row behaves exactly as `STANDARD` in checkout, advisory TypeScript, SQL,
   Merchant and the live pre-check;
 - TS/SQL parity holds under all four flag combinations.
+
+**Policy-change races (§7.2, §7.3):**
+
+- **looser pre-check:** the pre-check reads `OVERSELL`, `STANDARD` commits before the lock, and at 0 stock the locked
+  authority refuses. Nothing is held and nothing is sent to Pancake;
+- **stricter pre-check:** the pre-check reads `STANDARD`, `OVERSELL` commits before the lock, and at 0 stock the order is
+  rejected `STOCK_UNAVAILABLE` before `POS_SUBMITTING`. A resubmission then succeeds under `OVERSELL`;
+- a policy write blocks while a checkout holds the product's variant locks, and the checkout completes under the policy
+  it read under the lock.
 
 **Quantity-aware preorder (§8):**
 
