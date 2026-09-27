@@ -102,7 +102,7 @@ coverage, with more than one match treated as ambiguous. It deliberately differs
 | Marker in `shipping_address.address` | It is printed on the shipping label and read by the carrier; it pollutes an operational field. | The marker never goes in a delivery field (§6.2). |
 | Marker in free-text `note`, which staff can edit | Staff can delete it. A deleted marker makes a real order look absent. | The carrier field is chosen by evidence (§5). Absence alone can never prove no-sale (§9). |
 | Search scans the newest pages of the unfiltered order list (3 × 50) and trusts that order | The sort order is unreviewed. In any shop larger than 150 orders, coverage is never complete, so every miss is `AMBIGUOUS`. | Search is a **reviewed, filtered, time-bounded window** whose complete coverage is proven page by page (§8). |
-| Absence confirmed by 5 searches about 1 s apart, in memory, in one call | The window is far shorter than any plausible Pancake processing or indexing lag. A restart loses the count. | Absence evidence is **durable, spread over a minimum age and elapsed time**, and by default never releases automatically (§9). |
+| Absence confirmed by 5 searches about 1 s apart, in memory, in one call | The window is far shorter than any plausible Pancake processing or indexing lag. A restart loses the count. | Absence evidence is **durable and spread over a minimum age and elapsed time**. It is an investigation signal, not proof of no-sale, unless E4 and E6 are established (§9). |
 | `ABSENT` → `REJECTED` | If the order appears later, the buyer has been told "rejected", their cart is unlocked for a second order, and a real Pancake order exists with no hold. | Absence never changes the order to `REJECTED` automatically in v1 (§9, §10). |
 | Reconciliation triggered per cart, when the buyer returns | Orders whose buyer never returns are never resolved. | A bounded scheduled sweep (§11), plus the per-order operator command (§12). |
 | Order found by marker only | A copied or colliding marker links the wrong order. | A match must also agree with the local order's lines and contact (§8.3). |
@@ -113,11 +113,14 @@ coverage, with more than one match treated as ambiguous. It deliberately differs
 
 1. An order in `SYNC_UNKNOWN` whose Pancake order exists is linked (`pancakeOrderId`), moved to `CONFIRMED`, and its hold
    becomes eligible for the normal mirror handoff, without a human.
-2. An order in `SYNC_UNKNOWN` whose Pancake order does not exist is surfaced with durable, reviewable absence evidence. It
-   is released only by the rule in §9.
+2. An order in `SYNC_UNKNOWN` whose Pancake order was not found is surfaced with durable, reviewable absence evidence, for
+   investigation. Its hold is released only by one of the two releases in §9.3. Repeated absence on its own is never
+   treated as proof of no-sale.
 3. No path releases capacity, rejects an order or unlocks a cart on a single miss, a transport error, incomplete
    coverage, or elapsed time alone.
 4. Every decision is recorded as evidence that can be audited later.
+5. A reconciliation path that has stopped working is detectable in production, separately from catalog-sync health
+   (§11.1).
 
 ### Non-goals
 
@@ -130,8 +133,9 @@ coverage, with more than one match treated as ambiguous. It deliberately differs
 
 ## 5. Evidence gate (blocks implementation)
 
-No code writes a marker, calls a list endpoint, or changes an order's state from search results until all of E1–E5 are
-checked in as sanitized evidence. The evidence uses the same fingerprinted-OpenAPI workflow as
+No code writes a marker, calls a list endpoint, or changes an order's state from search results until E1–E5 are checked
+in as sanitized evidence. E6 is not required to start; without it, the parts of this spec that depend on it stay off
+(§8.1, §9.3). The evidence uses the same fingerprinted-OpenAPI workflow as
 `docs/integrations/pancake-order-openapi-evidence.md`, plus one **human-gated** live verification against a test shop.
 The standing rule is unchanged: no CI job makes a live create-order write.
 
@@ -141,7 +145,8 @@ The standing rule is unchanged: no CI job makes a live create-order write.
 | **E2 — carrier stability** | Does Pancake itself rewrite the field (normalize, truncate, prefix, auto-fill `custom_id`)? Is the field editable in the Pancake UI? Does it appear on customer-facing or carrier-facing output (invoice, label)? | Live observation plus the Pancake UI/documentation. A field that is customer- or carrier-facing is rejected. |
 | **E3 — list contract** | For `GET /shops/{SHOP_ID}/orders`, what are the reviewed query parameters and item fields? Is there a server-side filter that can find the marker, and a time-window filter? What is the pagination metadata? Which endpoint (list item or order detail) carries the line items and billing phone that §8.3 compares? | A machine-derived OpenAPI evidence file, the same kind as the create/detail files. |
 | **E4 — coverage semantics** | Can the list be proven complete for a window? That means stable `total_entries`/`total_pages`, whether cancelled, returned and **deleted/trashed** orders are included (or which filter includes them), and the time-zone semantics of the window parameters. | E3 plus a live observation: an order created, cancelled and deleted, then searched in the window. |
-| **E5 — propagation** | How long after a create response is the new order visible to the chosen search? | A live measurement over several creates. It sets the minimum age before any absence observation counts (§9). |
+| **E5 — search propagation** | How long after a *successful* create response is the new order visible to the chosen search? | A live measurement over several creates. It sets a lower bound on the minimum age before an absence observation counts (§9.2). It says nothing about creates whose response never arrived. |
+| **E6 — create-outcome horizon** | After the client stops waiting (timeout, abort, crash — paths A and C), is there a **guaranteed** bound after which Pancake can no longer create an order from that request? | Only an authoritative statement: Pancake documentation or a written statement from Pancake of a server-side processing deadline or request expiry. A live measurement can show a typical delay, but it cannot prove that a late creation never happens, so it does not satisfy E6. |
 
 **Carrier choice rule.** Prefer, in order:
 
@@ -154,6 +159,8 @@ The standing rule is unchanged: no CI job makes a live create-order write.
 
 If E3 shows no server-side filter that can find the marker, the search must cover the whole time window page by page (§8.2).
 If E4 cannot prove complete coverage of a window, `ABSENT` can never be concluded and v1 ships `FOUND`-only.
+If E6 is not established, the search window is never truncated (§8.1) and the definitive no-sale release does not exist
+(§9.3). Only the manual risk override remains.
 
 ## 6. Marker contract
 
@@ -201,13 +208,21 @@ recorded explicitly as `submitAttemptedAt`) and not on the buyer's clock:
 
 ```text
 from = submitAttemptedAt − skewAllowance
-to   = min(now, submitAttemptedAt + maxCreateLag)
+to   = now                                                         (default)
+to   = min(now, submitAttemptedAt + createOutcomeHorizon + skewAllowance)   (only with E6)
+
+createOutcomeHorizon = requestTimeout + upstreamCompletionBound (E6) + searchPropagationBound (E5) + margin
 ```
 
-- `skewAllowance` defaults to 1 day and covers Pancake's timezone-less timestamps (E4). `maxCreateLag` comes from E5 with
-  a generous margin.
-- Widening the window is always safe, because it costs requests, not correctness. Narrowing it below the E4/E5 evidence is
-  not allowed.
+- `skewAllowance` defaults to 1 day and covers Pancake's timezone-less timestamps (E4).
+- **The upper bound is not truncated unless E6 holds.** On paths A and C no response arrived. Pancake may still be
+  processing the request and create the order later. E5 only measures visibility *after a successful response*, so it
+  cannot bound when such an order is created. A window ending before the order's creation would exclude it from every
+  later search and turn a real order into repeated `ABSENT`s. Without E6, `to` is always `now`.
+- An open-ended window costs requests, not correctness. With a server-side marker filter (E3) it stays small. Without
+  one, the page count grows with the shop's order volume. Once the page budget is exceeded, coverage becomes incomplete and
+  the result is `AMBIGUOUS`, which fails closed.
+- Widening the window is always safe. Narrowing it below what E4, E5 and E6 establish is not allowed.
 
 ### 8.2 Coverage
 
@@ -242,7 +257,7 @@ For one order, one search yields exactly one of:
   - a transport or contract error;
   - an order that is missing its marker or shop scope.
 
-## 9. Absence is never terminal on one miss
+## 9. Absence is evidence for investigation, not proof of no-sale
 
 This section is the safety core of the spec.
 
@@ -254,37 +269,64 @@ staff may have edited a staff-facing marker away. Therefore:
 
 - a single `ABSENT` changes nothing: not the order state, not the hold, not the cart lock;
 - `AMBIGUOUS` resets nothing and proves nothing;
-- elapsed time alone proves nothing.
+- elapsed time alone proves nothing;
+- **many** `ABSENT`s are still empirical absence. They show the order was not visible at each of those moments. They do
+  not show that this create cannot still materialize. That guarantee exists only with E6 (§9.3).
 
 ### 9.2 Durable absence evidence
 
 Every search outcome is appended to a ledger (for example `OrderReconciliationObservation`: order, observed-at, outcome,
-window, pages read, totals, reason code). An order is **absence-confirmed** only when all of these hold:
+window, pages read, totals, reason code). An order is **absence-confirmed** only when all of these hold.
+Absence-confirmed is an investigation status: it puts the order in front of an operator with its evidence. It is not the
+hardening §5.4 definitive no-sale proof.
 
 1. it has a marker (§6.1), and the carrier is not staff-editable (§5 rule 1);
 2. at least `K` consecutive complete `ABSENT` observations exist, with no `FOUND` or `AMBIGUOUS` among them — any other
    outcome restarts the count;
-3. the first counted observation is at least `minAge` after `submitAttemptedAt`, where `minAge` is at least the E5
-   propagation bound plus the create request's own timeout;
+3. the first counted observation is at least `minAge` after `submitAttemptedAt`. `minAge` is at least the create
+   request's own timeout plus the E5 propagation bound. When E6 is established, it is at least `createOutcomeHorizon`;
 4. consecutive counted observations are at least `D` apart, and the span from first to last is at least `S`.
 
 The recommended defaults are `K = 3`, `D = 10 min`, `S = 30 min` and `minAge = max(30 min, E5 bound × 3)`. §5 evidence may
 raise them. Lowering them requires a spec amendment.
 
-### 9.3 What absence-confirmed allows
+### 9.3 The two releases, and what each requires
 
-- **Default (v1): nothing automatic.** An absence-confirmed order stays `SYNC_UNKNOWN` and keeps its hold. The operator
-  report (§12) lists it with its evidence, and the operator command (§12) can release it. The command refuses unless the
-  order is absence-confirmed, and it records who released it and why.
-- **Automatic release (owner decision, §15 Q1).** Only when the owner explicitly enables it: a flag that defaults off, set
-  per deployment. It is allowed only with carrier rule 1. The release is the same transition as the operator command,
-  performed by the sweep.
+Absence-confirmed is a precondition for both releases below and sufficient for neither.
 
-In both cases the release transition is the **definitive no-sale release** of hardening §5.4.1, and it is a single atomic
-transaction:
+**(a) Definitive no-sale release: the hardening §5.4.1 path.** It exists only when **all** of these hold:
 
-- The order moves `SYNC_UNKNOWN → REJECTED` with `syncErrorCode = CREATE_NOT_FOUND`. The compare-and-set requires
-  `state = SYNC_UNKNOWN`.
+- E4 establishes authoritative completeness of the searched window, including cancelled, returned and deleted orders;
+- E6 establishes the bounded no-late-materialization guarantee;
+- the order was sent with a marker in a rule-1 carrier (§5): server-filterable and not staff-editable;
+- every counted observation's window started at or before `submitAttemptedAt − skewAllowance` and was taken after
+  `submitAttemptedAt + createOutcomeHorizon`.
+
+Only then does repeated complete absence prove that this create produced no order **and** cannot produce one later. If
+any condition is missing, this release does not exist in the code at all; it is not merely disabled. It is the only
+release the sweep may ever perform automatically, behind a per-deployment flag that defaults off (R5, §15 Q1).
+
+**(b) Manual risk override.** This is not a proof. It is an explicit, audited decision by a person to accept the risk of
+a late materialization.
+
+- It is available only through the operator command (§12), and only for an absence-confirmed order.
+- The operator must record:
+  - their identity;
+  - a reason;
+  - what they independently verified, as structured fields: at least a search in the Pancake admin (trash included) for
+    the order's time window, phone and items, with its result. Contact with the buyer is optional.
+- The command refuses when the verification fields are missing.
+- It is never automated, never triggered by the sweep, and it has no flag.
+
+The hardening spec's rule — no timer, label or retry may silently release an unresolved hold — is respected because the
+override is neither silent nor automatic. It is still an exception to the hardening spec's §5.4 requirement for definitive
+evidence before release. **This spec therefore proposes an amendment to hardening §5.4.1 that admits exactly this
+override, and it needs owner approval (§15 Q4).** Until that is approved, R4 ships without `--release`.
+
+Both releases are the same single atomic transaction. Only the recorded reason differs:
+
+- The order moves `SYNC_UNKNOWN → REJECTED` with a compare-and-set on `state = SYNC_UNKNOWN`. `syncErrorCode` records
+  which release it was: `CREATE_NOT_FOUND_DEFINITIVE` for (a), `MANUAL_RELEASE_OVERRIDE` for (b).
 - Every resource of its reservations gets `releasedAt` (a new additive column) set.
 - A released resource stops counting in **every** capacity read path listed in §2.3: the TypeScript read, the SQL CTEs,
   the Merchant stock query, and the partial index predicate (`mirroredAt IS NULL AND releasedAt IS NULL`).
@@ -294,10 +336,18 @@ transaction:
 
 - If a later observation ever finds the marker (`FOUND`) for a released order, that is an **incident**, not a silent
   re-confirmation.
-- The sweep records it and alerts. The released hold is **not** silently re-taken (capacity may already be sold).
-- The operator resolves it in Pancake.
-- The sweep keeps observing released orders for a bounded tail (`S` again) precisely so that this case is detected rather
-  than missed.
+  - The sweep records it and raises it on the operator surface (§12) and through the reconciliation health signal
+    (§11.1).
+  - The released hold is **not** silently re-taken: the capacity may already be sold.
+  - The operator resolves it in Pancake.
+- **Released orders stay under observation so that this case is detected, not missed.**
+  - After a definitive release (a), they are observed until `createOutcomeHorizon` has passed with margin.
+  - After a manual override (b), they are observed **indefinitely**. Nothing bounds a late materialization, so no fixed
+    tail is safe.
+  - Observation continues at a decaying cadence: every tick for the first `S`, then hourly for a day, then daily.
+  - It shares the per-tick request budget (§11) and has lower priority than unreleased orders.
+  - An operator may retire an override's watch entry only with a recorded decision, for example after the order window
+    has been manually reviewed in Pancake again.
 
 ## 10. `FOUND` and the order lifecycle
 
@@ -330,27 +380,58 @@ the order exists in the same shop. No agreement check is needed.
   process is already scheduled, health-checked, and quiesced together with the app by `deploy.sh` and stopped first by
   `rollback.sh`, so no new writer has to be added to the deploy sequence.
   - Running it after the sync, not before, means a `FOUND` order's hold becomes eligible for handoff on the next sync.
-  - The sweep's failure must not fail the sync or its heartbeat. It is logged with fixed, non-PII messages.
+  - The sweep's failure must not fail the sync or the sync's heartbeat; catalog-sync health stays about catalog sync. The
+    sweep has its own liveness signal instead (§11.1). Failures are logged with fixed, non-PII messages.
 - **Batch.** Each tick handles at most `N` orders (default 20), oldest `submitAttemptedAt` first, with a per-tick Pancake
   request budget.
   - An order not yet at `minAge` is observed (for `FOUND`) but its `ABSENT` does not count.
-  - Released orders are observed only within their §9.4 tail.
+  - Released orders are observed on the §9.4 cadence, below unreleased orders in priority.
 - **Concurrency.** The transitions are compare-and-sets on `state = SYNC_UNKNOWN`. A buyer revisiting the order, an
   operator command and the sweep may race, and exactly one wins. The losers re-read the state and report it.
+
+### 11.1 Reconciliation liveness
+
+Reconciliation that fails on every tick while catalog sync stays healthy must be visible in production. This is the same
+class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for catalog sync itself.
+
+- **Durable sweep record.** Every sweep writes one row (for example `OrderReconciliationSweep`: `startedAt`,
+  `finishedAt`, `ok`, per-outcome counts, a fixed failure code).
+  - The record lives in the database, not in a container-local file, so it survives restarts and any process can read it.
+  - A sweep is `ok` only if it ran its whole batch, committed its ledger writes, and every Pancake call returned a response
+    that could be classified. Transport failures, exceptions and budget exhaustion before the batch ends are not `ok`.
+  - A sweep with nothing eligible is `ok`: there was nothing to do.
+- **Health rule.** `pnpm pancake:orders:reconciliation-health` exits non-zero, with a fixed reason, when either of these
+  holds:
+  1. no `ok` sweep has finished within `2 × CATALOG_SYNC_INTERVAL_SECONDS + 120 s`, the bound catalog sync already uses
+     (`STALE_SWEEP`);
+  2. **starvation**: some unreleased `SYNC_UNKNOWN` order has had no observation for longer than
+     `3 × interval + (unreleased count ÷ N) × interval` (`ORDER_UNOBSERVED`). This catches sweeps that are `ok` but whose
+     batch never reaches an order.
+- **Where it is surfaced.**
+  - The health command is the contract.
+  - `docs/operations/release-and-rollback.md` requires wiring it into the deployment's monitoring, the same place the
+    app's health is watched.
+  - The report command (§12) prints its result at the top.
+  - `deploy.sh` runs it after `catalog-sync` turns healthy. A failed first sweep fails the deploy with "order
+    reconciliation has not succeeded", as a failed first sync does.
+  - It does not change the `catalog-sync` container's Docker health: production can tell "catalog sync healthy,
+    reconciliation dead" apart from a healthy system.
+- An open incident (§9.4) also makes the health command fail (`RELEASE_INCIDENT`) until an operator acknowledges it.
 
 ## 12. Operator surface
 
 - **Report.** `pnpm pancake:orders:unknown` lists every `SYNC_UNKNOWN` order with:
   - its age, marker presence and path (A/B/C);
   - its last observations;
-  - whether it is absence-confirmed;
+  - whether it is absence-confirmed (an investigation status, not proof);
   - its held units.
 
   It prints no PII beyond the public order code.
 - **Command.** `pnpm pancake:orders:reconcile <publicCode> [--link <pancakeOrderId> | --release]`.
   - With no flag it runs one observation now.
   - `--link` applies §10 after the agreement checks.
-  - `--release` applies §9.3 and refuses unless the order is absence-confirmed.
+  - `--release` applies the manual risk override (§9.3 b). It refuses unless the order is absence-confirmed **and** the
+    structured verification fields are supplied. It is not available until owner decision §15 Q4 is made.
   - Every use is recorded with the operator identity and reason.
 - **Docs.** `docs/operations/release-and-rollback.md` replaces "resolve by hand" with this procedure.
   `docs/integrations/pancake.md` records the reviewed marker and list contract.
@@ -373,7 +454,15 @@ the order exists in the same shop. No agreement check is needed.
   - an `AMBIGUOUS` or `FOUND` between absences restarts the count;
   - an observation before `minAge` does not count;
   - spacing below `D` does not count;
-- a marker-less order is never searched.
+- a marker-less order is never searched;
+- the window's upper bound is `now` unless E6 is configured, so an order created long after `submitAttemptedAt` is still
+  inside the window and is `FOUND`;
+- without E4 and E6 established, the definitive release (§9.3 a) is not reachable, however many absences are recorded;
+- reconciliation health:
+  - a failing sweep writes a not-`ok` record and the health command reports `STALE_SWEEP` after the bound, while the
+    catalog-sync heartbeat stays healthy;
+  - `ok` sweeps that never reach an order report `ORDER_UNOBSERVED`;
+  - an open release incident reports `RELEASE_INCIDENT`.
 
 **Database:**
 
@@ -383,6 +472,8 @@ the order exists in the same shop. No agreement check is needed.
 - **one `ABSENT` changes nothing**: order state, hold, cart lock and tracking status are all unchanged;
 - absence-confirmed with automatic release off → still held;
 - operator `--release` on an order that is not absence-confirmed is refused;
+- operator `--release` without the structured verification fields is refused;
+- an overridden order stays under observation beyond `S`, and a later `FOUND` for it is recorded as an incident;
 - release → every capacity read path stops counting the resource (the parity test extended);
 - `FOUND` after release is recorded as an incident and re-takes nothing;
 - the sweep never sends a create request.
@@ -392,29 +483,33 @@ reads the database, as `pancake-order-capacity.test.ts` already does), and it ne
 request.
 
 **Deploy:** the sweep inherits `catalog-sync` quiescing (the existing `vps-deploy-sequence` tests stay green, no new
-writer).
+writer), and a deploy whose first sweep fails reports "order reconciliation has not succeeded".
 
 ## 14. Slicing
 
 | Slice | Content | Depends on |
 | --- | --- | --- |
-| **R0** — evidence | E1–E5 artifacts and docs only. Live verification is human-gated. | owner approval of this spec |
-| **R1** — path B | Keep the returned id; detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the report command. | none (reviewed detail contract) |
+| **R0** — evidence | E1–E5 artifacts and docs only, and E6 if Pancake can supply it. Live verification is human-gated. | owner approval of this spec |
+| **R1** — path B | Keep the returned id; detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. | none (reviewed detail contract) |
 | **R2** — marker write | Additive `reconciliationMarker` and `submitAttemptedAt`; written in the claim transaction; carrier per E1/E2. | R0 |
 | **R3** — search and `FOUND` | The reviewed list gateway; §8 classification; the sweep in `catalog-sync`; `FOUND`-only transitions. | R0, R2 |
-| **R4** — absence evidence and operator release | The §9.2 ledger rules; `releasedAt` across every capacity read path; the operator `--release`. | R3 |
-| **R5** — automatic release (optional) | The flag, default off. | R4 + owner decision §15 Q1 + carrier rule 1 |
+| **R4** — absence evidence and manual override | The §9.2 investigation status; `releasedAt` across every capacity read path; §9.4 observation of released orders; the operator `--release` override. | R3 + owner decision §15 Q4 (without it, R4 ships without `--release`) |
+| **R5** — definitive release (optional) | §9.3 (a) behind a flag that defaults off. | R4 + E4 **and E6** established + carrier rule 1 + owner decision §15 Q1. **Blocked until E6 exists.** |
 
 Each slice is its own pull request. R1 can ship before any new Pancake evidence exists.
 
 ## 15. Owner decisions
 
-1. **Automatic release (§9.3).** Recommendation: ship R1–R4 and keep releases operator-only until production shows how
-   often absence-confirmed orders occur. Revisit R5 with that data.
+1. **Automatic release (§9.3 a).** It can only ever be the definitive release, and it is blocked until E6 exists.
+   Recommendation: do not plan R5 unless Pancake supplies an authoritative processing deadline.
 2. **Carrier (§5).** Accept `custom_id` if E1–E4 pass. If only `note` works, accept that automatic release is permanently
    off.
 3. **Buyer message while `CHECKING`.** Should tracking say more than it does today, for example "we are confirming your
    order with the shop"? This is copy only, and optional.
+4. **Manual risk override (§9.3 b).** Approve the amendment to hardening §5.4.1 that admits an audited operator override
+   with recorded independent verification. The override is explicitly not proof of no-sale. The alternative is to keep
+   today's rule: holds for orders that were never found stay held until Pancake support or the shop confirms the outcome
+   outside the system.
 
 ## 16. Boundaries
 
@@ -424,12 +519,14 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
 - Search coverage is proven, or the result is `AMBIGUOUS`.
 - Transitions are compare-and-sets on `state = SYNC_UNKNOWN`.
 - Every observation and decision is recorded.
-- Holds are released only through §9.3.
+- Holds are released only through §9.3, and every release records which of the two it was.
+- Reconciliation liveness is monitored separately from catalog-sync health.
 
 **Ask first**
 
 - Changing a §9.2 default downward.
-- Enabling automatic release.
+- Enabling automatic release (and only after E4 and E6).
+- Truncating the search window (only with E6).
 - Adding a carrier field.
 - Running a live create-order verification.
 
@@ -439,5 +536,6 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
 - Treating the marker (or `custom_id`) as an idempotency key.
 - Putting the marker in a delivery or customer-facing field.
 - Releasing or rejecting on one miss, a transport error, incomplete coverage, or elapsed time.
+- Calling repeated absence "definitive no-sale proof" without E4 and E6.
 - Re-taking a released hold silently.
 - Changing Lana.
