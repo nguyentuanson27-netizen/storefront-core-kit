@@ -163,6 +163,8 @@ non-negative floor is enforced, before the create-order request is sent.
 Holds for `SYNC_UNKNOWN` orders never hand off automatically: Core Kit has no reviewed mechanism yet to prove either
 that the ambiguous create produced a Pancake order or that it definitively did not. Those holds stay counted and
 need operator resolution; that is the conservative direction the spec requires.
+A proposed design for resolving them automatically, gated on new Pancake evidence, is
+`docs/specs/core-kit-sync-unknown-reconciliation-v1.md`. Until it is approved and implemented, the rule above stands.
 
 ## Final reviewed-contract verification
 
