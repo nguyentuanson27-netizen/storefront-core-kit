@@ -47,6 +47,11 @@ There are three paths, all in `src/commerce/pancake-order-submit.ts` and `src/co
 The hold is taken in the same transaction that claims `POS_SUBMITTING` (hardening §19 Q1), so every `SYNC_UNKNOWN` order
 has a hold. `CapacityReservation.acceptedAt` stays `null`.
 
+**Today the three paths cannot be told apart after the fact.** All three write the same
+`state = SYNC_UNKNOWN` + `syncErrorCode = CREATE_OUTCOME_UNKNOWN`, and path B discards the id. Every `SYNC_UNKNOWN` row
+that exists before R1 is therefore **legacy**: its path, its Pancake id (if any) and its submit time are unknown. §10.1
+defines what may and may not be done with such rows.
+
 ### 2.2 What the reviewed Pancake contract says
 
 - **Create** (`docs/integrations/pancake-order-create-contract-observed.json`, `pancake-order-openapi-evidence.md`):
@@ -417,7 +422,40 @@ phone in the Pancake UI and the command records that they did. There is no searc
 orders.
 
 For path B the id came from Pancake's own create response to this order, so the detail read only has to confirm that
-the order exists in the same shop. No agreement check is needed.
+the order exists in the same shop. No agreement check is needed. This applies **only** to a path-B row that R1 recorded
+with its `createResponseOrderId`. A legacy row never has one (§10.1).
+
+### 10.1 Path recording and legacy rows
+
+**From R1 on**, the transition into `SYNC_UNKNOWN` records its path in an additive column, for example
+`unknownPath = A | B | C`, in the same write that sets the state:
+
+- path B also stores `createResponseOrderId`;
+- rows sent after R2 also carry `reconciliationMarker` and `submitAttemptedAt`.
+
+**The R1 migration** sets `unknownPath = LEGACY` on every row that is `SYNC_UNKNOWN` at that moment. It never guesses A,
+B or C, and it never invents an id, a marker or a submit time. A legacy row has, and keeps, null
+`createResponseOrderId`, `reconciliationMarker` and `submitAttemptedAt`.
+
+**What a legacy row allows.**
+
+| Action | Legacy row |
+| --- | --- |
+| Detail-read by id (§7) | **No.** No id exists. |
+| Marker search (§8), absence evidence (§9.2) | **No.** No marker exists, so it can never become absence-confirmed. |
+| Definitive release (§9.3 a), anything automatic | **Never.** |
+| Operator `--link <pancakeOrderId>` | **Yes**, on the marker-less terms of §10. The trusted actor (§9.3 b) is required. So is a structured independent verification whose outcome is `MATCHING_ORDER_FOUND` for that id: a search in the Pancake admin by the order's time (bounded by the row's `createdAt` and `updatedAt`), phone and items. The §8.3 agreement checks against the detail read apply once E3 has reviewed their fields. |
+| Operator `--release` | **Not under this spec.** The approved override requires absence-confirmed, which a legacy row cannot reach. Extending the override to legacy rows is owner decision §15 Q5. Until then a legacy row stays held until it is linked. |
+
+**Surfacing.**
+
+- The report (§12) lists legacy rows in their own section, first, marked "needs operator action: path unknown". It
+  shows each row's age, held units, and the time bounds the operator should search.
+- Legacy rows are **not sweep work items**, because nothing about them can be observed automatically. Their
+  `nextDueAt` stays null, and they do not count toward `ORDER_UNOBSERVED`.
+- Instead, the health command (§11.1) reports their count as a non-failing line (`LEGACY_UNRESOLVED: n`). They are
+  therefore visible, never silently skipped, and they do not hold reconciliation health red indefinitely for a condition
+  no sweep can fix.
 
 ## 11. Runtime
 
@@ -434,14 +472,23 @@ the order exists in the same shop. No agreement check is needed.
     - A new `SYNC_UNKNOWN` order starts due immediately.
     - After each observation, whatever its outcome, `nextDueAt = observedAt + cadence`. The cadence is `D` for an
       unreleased order, and the §9.4 decaying cadence for a watch entry.
-    - An item whose observation could not run (the budget ran out, or a transport error) keeps its `nextDueAt`. It is
+    - An item **not attempted** because the tick's budget ran out before reaching it keeps its `nextDueAt`. It is
       therefore at the front of the queue on the next tick.
+    - An item **attempted and failed** gets a backoff due time:
+      `nextDueAt = attemptedAt + min(D × 2^(consecutiveFailures − 1), 6 h)`.
+      - Failed means a transport error, or a response that could not be classified.
+      - `consecutiveFailures` is durable per item and resets on any completed observation.
+      - Every attempt, successful or not, moves the item behind the work already due. Items that keep failing can
+        therefore never occupy every slot of every tick.
+      - The failure is recorded in the ledger and makes that sweep not `ok` (§11.1).
   - **Selection.**
     - A tick selects due items (`nextDueAt ≤ now`) ordered by `nextDueAt`, then `submitAttemptedAt`, then `id`.
     - Never-observed items sort first among equal due times.
-    - Because every observed item moves behind everything already due, every due item is reached within
-      `ceil(dueCount ÷ N)` ticks, whatever the backlog. Ordering by `submitAttemptedAt` alone would reselect the same `N`
-      oldest orders on every tick and starve order `N + 1`.
+    - Because every **attempted** item moves behind everything already due (after a success or a failure), and only
+      un-attempted items keep their place, every due item is attempted within `ceil(dueCount ÷ N)` ticks, whatever the
+      backlog and however many items keep failing.
+    - Ordering by `submitAttemptedAt` alone would reselect the same `N` oldest orders on every tick and starve order
+      `N + 1`. So would leaving failed items at the front.
   - **Reserved share for watch entries.** When any watch entry is due, at least `max(1, N ÷ 4)` of the tick's items go to
     watch entries. The rest go to unreleased orders, and each class may use the other's unused share. Neither class can
     starve the other.
@@ -483,7 +530,7 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 ## 12. Operator surface
 
 - **Report.** `pnpm pancake:orders:unknown` lists every `SYNC_UNKNOWN` order with:
-  - its age, marker presence and path (A/B/C);
+  - its age, marker presence and path (A, B, C, or `LEGACY` in its own section first, §10.1);
   - its last observations;
   - whether it is absence-confirmed (an investigation status, not proof);
   - its held units.
@@ -531,7 +578,10 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   - an overdue work item reports `ORDER_UNOBSERVED`;
 - fair scheduling:
   - with a backlog of `3N` orders that never resolve, every order is observed within 3 ticks and again within 6;
-  - an observation that could not run keeps its `nextDueAt` and is taken first on the next tick;
+  - an item not attempted because the budget ran out keeps its `nextDueAt` and is taken first on the next tick;
+  - **`N` items that fail on every attempt, plus one healthy item due later: the healthy item is observed by the second
+    tick**. The failing items back off exponentially (capped) and never monopolize a tick;
+  - `consecutiveFailures` resets after a completed observation;
   - due watch entries get their reserved share while unreleased orders are also due, and vice versa;
 - pagination:
   - a multi-page, no-match search under offset paging is `AMBIGUOUS(UNSTABLE_PAGINATION)` and never counts toward
@@ -562,6 +612,16 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - `FOUND` after release is recorded as an incident and re-takes nothing;
 - the sweep never sends a create request.
 
+**Migration and legacy rows:**
+
+- given an existing `SYNC_UNKNOWN` row created before R1 (`CREATE_OUTCOME_UNKNOWN`, no id, no marker), the R1
+  migration marks it `LEGACY` with null `createResponseOrderId`, marker, `submitAttemptedAt` and `nextDueAt`;
+- the sweep never detail-reads or searches it;
+- it is excluded from `ORDER_UNOBSERVED` but counted in `LEGACY_UNRESOLVED`;
+- it appears first in the report;
+- `--link` on it requires the trusted actor and a `MATCHING_ORDER_FOUND` verification;
+- `--release` on it is refused.
+
 **Integration:** the marker is written in the `POS_SUBMITTING` transaction before the gateway is called (the gateway fake
 reads the database, as `pancake-order-capacity.test.ts` already does), and it never appears in delivery fields of the
 request.
@@ -574,7 +634,7 @@ writer), and a deploy whose first sweep fails reports "order reconciliation has 
 | Slice | Content | Depends on |
 | --- | --- | --- |
 | **R0** — evidence | E1–E5 artifacts and docs only, and E6 if Pancake can supply it. Live verification is human-gated. | owner approval of this spec |
-| **R1** — path B | Keep the returned id; detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. | none (reviewed detail contract) |
+| **R1** — path B | Record `unknownPath` and keep the returned id; the migration marking existing rows `LEGACY` (§10.1); detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. | none (reviewed detail contract) |
 | **R2** — marker write | Additive `reconciliationMarker` and `submitAttemptedAt`; written in the claim transaction; carrier per E1/E2. | R0 |
 | **R3** — search and `FOUND` | The reviewed list gateway; §8 classification; the sweep in `catalog-sync`; `FOUND`-only transitions. | R0, R2 |
 | **R4** — absence evidence and manual override | The §9.2 investigation status; `releasedAt` across every capacity read path; §9.4 observation of released orders; the operator `--release` override. | R3 (§15 Q4 approved) |
@@ -594,6 +654,12 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
    operator override with recorded independent verification, exactly as §9.3 (b) specifies. The override is explicitly
    not proof of no-sale. It stays operator-only, never automated, and the overridden order stays under indefinite
    observation (§9.4).
+5. **Legacy rows and the override (§10.1).** Should the manual override be extended to legacy `SYNC_UNKNOWN` rows, which
+   can never be absence-confirmed?
+   - Without this, a legacy row is released only after it is linked; one that never matches stays held.
+   - Recommendation, if extended: require the trusted actor, a `NO_MATCHING_ORDER` verification over the row's
+     `createdAt`/`updatedAt` time bounds, a minimum age of 7 days since `updatedAt`, and indefinite observation
+     afterwards. That would need a further amendment to hardening §5.4.1.
 
 ## 16. Boundaries
 
