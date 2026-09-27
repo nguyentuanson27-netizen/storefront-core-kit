@@ -1,6 +1,21 @@
 # Spec — Core Kit Production Hardening v1
 
-Status: **PROPOSED — human review required before planning or implementation.**
+Status: **IMPLEMENTED (Slices 1, 2, 3, 5) / PARTIALLY DEFERRED (Slice 4).**
+
+- Approved and merged as the specification in nguyentuanson27-netizen/storefront-core-kit#11.
+- Implementation evidence: one pull request per slice (nguyentuanson27-netizen/storefront-core-kit#13,
+  nguyentuanson27-netizen/storefront-core-kit#14, nguyentuanson27-netizen/storefront-core-kit#15,
+  nguyentuanson27-netizen/storefront-core-kit#16), plus nguyentuanson27-netizen/storefront-core-kit#17 for the lifecycle
+  gaps found in self-review and owner review. §19 records what each one shipped and how §17 was answered.
+- Deferred: Slice 4 (overlay invariant). Core Kit has no real full-viewport overlay yet; §7.4 holds the acceptance contract
+  for the first one.
+- Out of scope for v1 and not implemented: automatic reconciliation of `SYNC_UNKNOWN` orders. Such holds are kept
+  indefinitely, as §5.4 requires, and are resolved by an operator. Automating that is a separate specification.
+
+**Reading this document after implementation.** Sections 1–18 are the approved contract. Where the implementation is
+*stricter* than the original wording, the implementation is correct and this document says so in place, marked
+"Implementation note". Do not loosen code back toward the original wording; amend this spec first if a rule really has to
+change.
 
 Planning/review base: `storefront-core-kit/main@ff3793cf4ce2c019db1562b28a7471998a8f66f8`.
 
@@ -206,6 +221,15 @@ For each order commit:
 7. Evaluate every line/resource.
 8. Insert all line reservations and all resource snapshots in the same transaction, or insert none.
 
+> **Implementation note — topology race guard (stricter than steps 2–6).** The lock set is resolved and locked in one
+> statement, but under `READ COMMITTED` a component edge committed while that statement waited for a row lock is not in
+> its result. Topology is therefore read **again after the lock**, and if the re-read plan names any resource variant
+> that is not in the locked set, the reservation is refused with `TOPOLOGY_CHANGED`. Nothing is inserted, no Pancake
+> request is sent, and the order returns to `DRAFT` (`VALIDATION_UNAVAILABLE`) so the buyer can simply retry against the
+> new topology. A reservation is never accepted on a resource this transaction does not hold
+> (`src/commerce/capacity-reservation-repository.ts`, `reserveOrderCapacity`). Removing this guard reopens exactly the
+> race the locks exist to close.
+
 `READ COMMITTED` is acceptable only if correctness is supplied by the explicit lock ordering and post-lock reads. The implementation must prove this with DB concurrency tests rather than relying on commentary.
 
 ### 5.4 Reservation accounting lifecycle and Pancake mirror handoff
@@ -396,6 +420,50 @@ At a representative mobile viewport (390×844 or the repository's canonical equi
 5. assert close-button/initial focus, scroll lock, Escape dismissal, and focus restoration.
 
 If Core Kit has no cart drawer at implementation time, apply this to the first real full-viewport drawer rather than inventing a cart drawer solely for the test.
+
+### 7.4 Acceptance contract for the first real overlay (deferred Slice 4)
+
+**Status.** Deferred. Core Kit has no full-viewport overlay today (§19, Q4). Do not build one just to satisfy this section.
+
+**Evidence.** nguyentuanson27-netizen/la.na_design_storefront#63 is the production bug this contract comes from. A mobile cart drawer was rendered
+inside the sticky site header. Once the page scrolled, the header gained `backdrop-filter`. A `backdrop-filter` (like a
+`transform` or `filter`) makes an element the containing block for its `position: fixed` descendants. The "full-screen"
+drawer was then sized and positioned against the header instead of the viewport. The fix was to render the drawer through
+`createPortal(…, document.body)`. The browser regression below reproduced the bug before the fix.
+
+**The contract.** The first change that introduces a full-viewport drawer, dialog or overlay in Core Kit — cart drawer,
+search overlay, filter drawer or anything equivalent — must ship all of the following in the same pull request:
+
+1. **Portal.** The overlay root is rendered into `document.body` (or a reviewed top-layer root) and is never rendered in
+   place under a sticky, transformed or filtered ancestor. Prefer one shared helper so later overlays reuse it.
+2. **Viewport bounds.** At 390×844, the overlay root's bounding box is `x = 0, y = 0, width = 390, height = 844` **after
+   the page has scrolled** and the header is in its scrolled state (the state that applies the containing-block style).
+3. **Focus.** On open, focus moves into the overlay (its close button or first control). Tab stays inside it while it is
+   open. On close, focus returns to the element that opened it.
+4. **Escape.** Escape closes a dismissible overlay.
+5. **Scroll lock.** The background does not scroll while the overlay is open, through one canonical helper. The previous
+   scroll-lock state is restored on close, including when two overlays open in sequence.
+6. **Semantics.** The overlay exposes `dialog` semantics with an accessible name. Nothing behind it is reachable by
+   keyboard.
+7. **Authority stays put.** Portalling moves markup only. Cart and checkout data, mutations and capacity decisions stay in
+   the headless and commerce layers.
+
+**Required browser regression** (`tests/a11y-runtime/`, mobile project), modelled on the one nguyentuanson27-netizen/la.na_design_storefront#63
+added:
+
+```text
+viewport 390×844 → go to a page with the sticky header
+→ scrollTo(0, 120); wait until scrollY > 20 and the header reports its scrolled state
+→ open the overlay from its real trigger
+→ assert overlayRoot.parentElement === document.body
+→ assert boundingBox == { x: 0, y: 0, width: 390, height: 844 }
+→ assert initial focus is inside the overlay; assert document.body scroll is locked
+→ Tab past the last control → assert focus is still inside the overlay
+→ press Escape → assert the overlay is gone, focus is back on the trigger, and the scroll lock is released
+```
+
+The test must fail against a version rendered in place (no portal) and pass with the portal. Lana's own regression stops at
+Escape. The two after-close assertions in the last step (focus restored, scroll lock released) are added here on purpose.
 
 ## 8. Capability D — Trusted responsive media
 
@@ -662,7 +730,7 @@ Slice 2 must land before a production migration that depends on the no-old-write
 - introduce/reuse top-layer portal + scroll/focus behavior on a real existing full-viewport surface;
 - mobile scrolled-header regression.
 
-Do not invent a new drawer solely to satisfy this slice.
+Do not invent a new drawer solely to satisfy this slice. **Deferred.** The acceptance contract for when it lands is §7.4.
 
 ### Slice 5 — Listing URL-state seam
 
@@ -719,26 +787,26 @@ If Core Kit is to move from Next `16.2.11` to the version currently proven in an
 
 The full initiative is complete only when all applicable implementation slices satisfy both their acceptance criteria and the repository's standing quality gates.
 
-At minimum:
+At minimum (state as of nguyentuanson27-netizen/storefront-core-kit#17; evidence in §19):
 
-- [ ] composite and direct sales share one correctly locked capacity pool;
-- [ ] parent mirror stock remains untouched;
-- [ ] reservation resources are snapshotted atomically and retry-safe;
-- [ ] `activeReservedUnits` includes every local/unresolved hold and excludes a hold only after definitive no-sale release or proven mirror handoff;
-- [ ] `SYNC_UNKNOWN` cannot release capacity early;
-- [ ] `CONFIRMED` before stock reflection keeps the local hold;
-- [ ] mirror handoff is causally evidenced, durable, and idempotent, with no oversell gap and no permanent double accounting after proof;
-- [ ] DB tests prove concurrent shared-resource safety, all-or-none behavior, confirmed-before-stock-sync, stock-reflected-before-hold-retirement, unknown-outcome retention, and reconciliation idempotency;
-- [ ] production migration cannot race the old writer for the protected invariant;
-- [ ] migration failure can restore the stopped pre-release app when applicable;
-- [ ] `.webp` is accepted only through the reviewed Pancake image contract;
-- [ ] mobile/desktop art direction fetches one intended hero source per viewport;
-- [ ] at least one real full-screen overlay owns the viewport under a scrolled/sticky ancestor and preserves keyboard/focus/scroll behavior;
-- [ ] listing controls consume server-built canonical hrefs rather than duplicating query-state logic;
-- [ ] brand presentation remains replaceable without editing shared commerce/route authority;
-- [ ] lint, typecheck, domain/integration/DB tests, build, release preflight, browser/a11y, VPS and other required exact-head CI gates pass;
-- [ ] no secrets, debug code, dead migration scaffolding, or unrelated refactor remains;
-- [ ] rollout and rollback implications are documented for the capacity migration.
+- [x] composite and direct sales share one correctly locked capacity pool;
+- [x] parent mirror stock remains untouched;
+- [x] reservation resources are snapshotted atomically and retry-safe;
+- [x] `activeReservedUnits` includes every local/unresolved hold and excludes a hold only after definitive no-sale release or proven mirror handoff;
+- [x] `SYNC_UNKNOWN` cannot release capacity early (it never releases automatically in v1; see status header);
+- [x] `CONFIRMED` before stock reflection keeps the local hold;
+- [x] mirror handoff is causally evidenced, durable, and idempotent, with no oversell gap and no permanent double accounting after proof (for the resources the Pancake evidence covers; others keep holding, §19 Q3);
+- [x] DB tests prove concurrent shared-resource safety, all-or-none behavior, confirmed-before-stock-sync, stock-reflected-before-hold-retirement, unknown-outcome retention, and reconciliation idempotency;
+- [x] production migration cannot race the old writer for the protected invariant;
+- [x] migration failure can restore the stopped pre-release app when applicable;
+- [x] `.webp` is accepted only through the reviewed Pancake image contract;
+- [x] mobile/desktop art direction fetches one intended hero source per viewport;
+- [ ] at least one real full-screen overlay owns the viewport under a scrolled/sticky ancestor and preserves keyboard/focus/scroll behavior — **deferred with Slice 4; contract in §7.4**;
+- [x] listing controls consume server-built canonical hrefs rather than duplicating query-state logic (`/shop`, plus the existing collection pages);
+- [x] brand presentation remains replaceable without editing shared commerce/route authority;
+- [x] lint, typecheck, domain/integration/DB tests, build, release preflight, browser/a11y, VPS and other required exact-head CI gates pass;
+- [x] no secrets, debug code, dead migration scaffolding, or unrelated refactor remains;
+- [x] rollout and rollback implications are documented for the capacity migration.
 
 ## 17. Open questions for planning, not for spec approval
 
@@ -756,6 +824,8 @@ Planning may choose implementation shape and evidence source, but it may not red
 These questions must not be answered by importing Lana-specific names or business rules. The implementation plan must resolve them from current Core Kit contracts, Pancake integration evidence, and tests.
 
 ## 18. Review gate
+
+*Historical: this gate was passed when the specification merged as nguyentuanson27-netizen/storefront-core-kit#11.*
 
 This PR is specification only.
 
@@ -777,14 +847,29 @@ Recorded as the slices were implemented; each slice is its own pull request agai
 | 1 — capacity authority and persistence | nguyentuanson27-netizen/storefront-core-kit#13 | implemented |
 | 2 — safe deployment for the new invariant | nguyentuanson27-netizen/storefront-core-kit#14 | implemented |
 | 3 — trusted responsive media | nguyentuanson27-netizen/storefront-core-kit#15 | implemented |
-| 4 — overlay invariant | — | **waiting for a real surface** (Q4 below) |
+| 4 — overlay invariant | — | **deferred: waiting for a real surface** (Q4 below; contract §7.4) |
 | 5 — listing URL-state seam | nguyentuanson27-netizen/storefront-core-kit#16 | implemented for `/shop` |
+| lifecycle gaps from self-review and owner review | nguyentuanson27-netizen/storefront-core-kit#17 | implemented |
+
+What nguyentuanson27-netizen/storefront-core-kit#17 added:
+
+- **Scheduled catalog sync.** A `catalog-sync` compose service runs `pnpm pancake:catalog:sync --loop`. Without a
+  recurring sync, holds would never hand off.
+  - It has a heartbeat-based health check: stale after two intervals plus 120 s.
+  - `deploy.sh` quiesces it together with the app and waits for it to become healthy.
+  - `rollback.sh` stops it before the previous app starts.
+- **Reservation transactions wait out a sync.** The transactions that write `VariantMirror` wait out a catalog sync that
+  holds the row lock instead of failing at Prisma's 5 s default.
+- **One capacity read model everywhere.** Listing filters, flash-sale and Merchant availability read the same capacity
+  numbers as checkout (`CAPACITY_SELLABLE_CTES`, `withAdvisorySellableStock`).
+- **Partial index** on unmirrored reservation resources.
 
 Answers to §17, resolved against the code rather than chosen in the abstract:
 
 1. **Reservation boundary.** The submission transaction that claims `POS_SUBMITTING` also takes the hold, so no create-order
    request leaves without one and no `DRAFT`/`VALIDATING` order ever holds capacity. `CONFIRMED` records acceptance in its own
-   transaction.
+   transaction. A topology change that races the lock refuses the hold with `TOPOLOGY_CHANGED` and returns the order to
+   `DRAFT` (§5.3 implementation note).
 2. **Durable representation.** `CapacityReservation` (order × purchased variant, `acceptedAt`) and
    `CapacityReservationResource` (consumed stock, `mirroredAt` + `mirrorObservationStartedAt`). A resource counts while
    `mirroredAt` is null.
