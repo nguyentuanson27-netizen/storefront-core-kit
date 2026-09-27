@@ -288,7 +288,11 @@ locked decision, and the two directions behave differently:
   pre-check can refuse `STOCK_UNAVAILABLE` under the old floor before the order reaches the locked authority.
   - This is accepted. It is the same outcome the buyer would have seen one instant earlier.
   - Nothing is held or sent, and the rejection happens before `POS_SUBMITTING`.
-  - The buyer can resubmit, and the next attempt reads the new policy.
+  - **That order stays terminal.** The existing state machine moves it `VALIDATING → REJECTED` with
+    `STOCK_UNAVAILABLE`, and `submit()` returns that rejection for the same order. This spec does not change it: making
+    this one rejection retryable would add a state transition for a rare race.
+  - **Recovery is a new checkout from the same cart.** `lockActiveCheckout` does not treat a `REJECTED` order as active,
+    so the cart is free. The buyer's next checkout creates a new order, and that order's pre-check reads the new policy.
   - The spec does **not** claim that the pre-check observes policy changes atomically. Implementations must not add
     retries, caches or comments that imply it does.
 
@@ -479,7 +483,8 @@ It prints no PII.
 - **looser pre-check:** the pre-check reads `OVERSELL`, `STANDARD` commits before the lock, and at 0 stock the locked
   authority refuses. Nothing is held and nothing is sent to Pancake;
 - **stricter pre-check:** the pre-check reads `STANDARD`, `OVERSELL` commits before the lock, and at 0 stock the order is
-  rejected `STOCK_UNAVAILABLE` before `POS_SUBMITTING`. A resubmission then succeeds under `OVERSELL`;
+  rejected `STOCK_UNAVAILABLE` before `POS_SUBMITTING`. That order stays `REJECTED` and a second `submit()` of it
+  returns the same rejection, unchanged. A **new** checkout from the same cart then succeeds under `OVERSELL`;
 - a policy write blocks while a checkout holds the product's variant locks, and the checkout completes under the policy
   it read under the lock.
 
