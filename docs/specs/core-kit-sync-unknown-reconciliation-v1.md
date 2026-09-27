@@ -445,7 +445,29 @@ B or C, and it never invents an id, a marker or a submit time. A legacy row has,
 | Marker search (§8), absence evidence (§9.2) | **No.** No marker exists, so it can never become absence-confirmed. |
 | Definitive release (§9.3 a), anything automatic | **Never.** |
 | Operator `--link <pancakeOrderId>` | **Yes**, on the marker-less terms of §10. The trusted actor (§9.3 b) is required. So is a structured independent verification whose outcome is `MATCHING_ORDER_FOUND` for that id: a search in the Pancake admin by the order's time (bounded by the row's `createdAt` and `updatedAt`), phone and items. The §8.3 agreement checks against the detail read apply once E3 has reviewed their fields. |
-| Operator `--release` | **Not under this spec.** The approved override requires absence-confirmed, which a legacy row cannot reach. Extending the override to legacy rows is owner decision §15 Q5. Until then a legacy row stays held until it is linked. |
+| Operator `--release` | **Yes, as the legacy override** (owner decision §15 Q5: approved). It is the §9.3 (b) override with the absence-confirmed precondition replaced by the conditions below. It is recorded with `syncErrorCode = MANUAL_RELEASE_OVERRIDE_LEGACY`. |
+
+**The legacy override.** `--release` on a legacy row proceeds only when **all** of these hold, and refuses otherwise:
+
+1. the trusted, authorized actor (§9.3 b) is established by the operator surface, never a caller-supplied name;
+2. the row is at least **7 days** old, counted from its `updatedAt` (the last local transition, which is at or after the
+   create attempt);
+3. a structured independent verification covers a search in the Pancake admin, trash included, bounded by the row's
+   `createdAt` and `updatedAt` plus `skewAllowance` on each side, by phone and items;
+4. that verification's recorded outcome is `NO_MATCHING_ORDER`:
+   - `MATCHING_ORDER_FOUND` refuses and directs the operator to `--link`;
+   - `INCONCLUSIVE`, or any missing field, refuses and keeps the hold.
+
+Like every override, it is never automated and is not proof of no-sale. It is the same atomic release transaction as
+§9.3.
+
+**After a legacy override.** A legacy row has no marker and no id, so the sweep **cannot** watch it for a late
+appearance, and the spec does not pretend otherwise. Instead:
+
+- the report keeps every legacy override permanently in a "released without automatic watch" section, with its time
+  bounds, so a later manual review can find it;
+- the release-incident procedure (§9.4) applies if one is ever linked to a Pancake order after release. Linking a
+  released row records an incident and re-takes no capacity.
 
 **Surfacing.**
 
@@ -620,7 +642,12 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - it is excluded from `ORDER_UNOBSERVED` but counted in `LEGACY_UNRESOLVED`;
 - it appears first in the report;
 - `--link` on it requires the trusted actor and a `MATCHING_ORDER_FOUND` verification;
-- `--release` on it is refused.
+- `--release` on it succeeds only with the trusted actor, age ≥ 7 days, and a `NO_MATCHING_ORDER` verification over its
+  time bounds, and records `MANUAL_RELEASE_OVERRIDE_LEGACY`;
+- `--release` on it is refused when it is younger than 7 days, when the outcome is `MATCHING_ORDER_FOUND` or
+  `INCONCLUSIVE`, when a field is missing, or when there is no trusted actor;
+- a legacy override appears in the report's "released without automatic watch" section, and a later `--link` of that
+  row records an incident and re-takes nothing.
 
 **Integration:** the marker is written in the `POS_SUBMITTING` transaction before the gateway is called (the gateway fake
 reads the database, as `pancake-order-capacity.test.ts` already does), and it never appears in delivery fields of the
@@ -654,12 +681,14 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
    operator override with recorded independent verification, exactly as §9.3 (b) specifies. The override is explicitly
    not proof of no-sale. It stays operator-only, never automated, and the overridden order stays under indefinite
    observation (§9.4).
-5. **Legacy rows and the override (§10.1).** Should the manual override be extended to legacy `SYNC_UNKNOWN` rows, which
-   can never be absence-confirmed?
-   - Without this, a legacy row is released only after it is linked; one that never matches stays held.
-   - Recommendation, if extended: require the trusted actor, a `NO_MATCHING_ORDER` verification over the row's
-     `createdAt`/`updatedAt` time bounds, a minimum age of 7 days since `updatedAt`, and indefinite observation
-     afterwards. That would need a further amendment to hardening §5.4.1.
+5. **Legacy rows and the override (§10.1). Decided: approved by the owner.** The manual override is extended to legacy
+   `SYNC_UNKNOWN` rows on the terms in §10.1:
+   - the trusted actor;
+   - age of at least 7 days since `updatedAt`;
+   - a `NO_MATCHING_ORDER` verification over the row's time bounds.
+
+   Because a legacy row cannot be watched automatically, it is listed permanently in the report instead. Hardening
+   §5.4.1's amendment is extended accordingly.
 
 ## 16. Boundaries
 
