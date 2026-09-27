@@ -3,8 +3,13 @@
  *
  * Pure: it turns repository rows and the deployment's flags into lines, so what an operator sees is
  * exactly what `effectivePolicy()` decides. It prints product slugs and variant ids only, no PII.
+ *
+ * Units come from the same resource plan as the storefront's advisory capacity. A composite parent's
+ * figure is the fewest whole sets its components can supply, never its own mirrored stock, and it is
+ * measured against floor 0 whatever the product's policy: component resources never oversell (§6.1).
  */
 
+import { wholeFreeUnits } from "../commerce/capacity-resources.ts";
 import type { SellingPolicyReportRow } from "../commerce/selling-policy-repository.ts";
 import { effectivePolicy, type SellingModeFlags } from "../commerce/selling-policy.ts";
 
@@ -17,7 +22,11 @@ export type SellingPolicyReportFlag =
 
 export type SellingPolicyReportVariantLine = Readonly<{
   variantId: string;
+  /** `standalone`, `components` (composite parent), or `unprovable` when the topology fails closed. */
+  capacityBasis: "standalone" | "components" | "unprovable";
   freeUnits: number | null;
+  /** The floor this variant is measured against: the product's, or 0 for a composite parent. */
+  floor: number | null;
   sellableUnits: number | null;
   readyUnits: number | null;
   atOrBelowFloor: boolean;
@@ -48,13 +57,20 @@ export function buildSellingPolicyReport(
 
     const floor = effective.kind === "SELL" ? effective.floor : null;
     const variants = row.variants.map((variant) => {
-      const freeUnits = variant.mirroredUnits === null ? null : variant.mirroredUnits - variant.activeReservedUnits;
-      const sellableUnits = freeUnits === null || floor === null ? null : Math.max(0, freeUnits - floor);
-      const atOrBelowFloor = freeUnits !== null && floor !== null && freeUnits <= floor;
+      const resources = variant.capacityResources;
+      const capacityBasis = resources === null
+        ? "unprovable" as const
+        : resources.some((resource) => resource.kind === "COMPONENT") ? "components" as const : "standalone" as const;
+      const freeUnits = resources === null ? null : wholeFreeUnits(resources);
+      const variantFloor = floor === null ? null : capacityBasis === "standalone" ? floor : 0;
+      const sellableUnits = freeUnits === null || variantFloor === null ? null : Math.max(0, freeUnits - variantFloor);
+      const atOrBelowFloor = freeUnits !== null && variantFloor !== null && freeUnits <= variantFloor;
       if (atOrBelowFloor) reportFlags.add("AT_OR_BELOW_FLOOR");
       return {
         variantId: variant.variantId,
+        capacityBasis,
         freeUnits,
+        floor: variantFloor,
         sellableUnits,
         readyUnits: freeUnits === null ? null : Math.max(0, freeUnits),
         atOrBelowFloor,
@@ -88,7 +104,7 @@ export function formatSellingPolicyReport(
     );
     for (const variant of line.variants) {
       out.push(
-        `  ${variant.variantId}: free ${variant.freeUnits ?? "?"}, sellable ${variant.sellableUnits ?? "?"}, ready ${variant.readyUnits ?? "?"}`
+        `  ${variant.variantId} (${variant.capacityBasis}): free ${variant.freeUnits ?? "?"}, sellable ${variant.sellableUnits ?? "?"}, ready ${variant.readyUnits ?? "?"}`
           + (variant.atOrBelowFloor ? " (at or below floor)" : ""),
       );
     }

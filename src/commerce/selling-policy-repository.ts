@@ -12,7 +12,7 @@
 
 import { Prisma, type PrismaClient } from "../generated/prisma/client.ts";
 
-import { readResourceFacts } from "./capacity-reservation-repository.ts";
+import { readAdvisoryCapacityResources, type AdvisoryCapacityResource } from "./capacity-reservation-repository.ts";
 import type { SellingMode, SellingPolicyChange, StoredSellingPolicy } from "./selling-policy.ts";
 
 type PolicyReadClient = Pick<Prisma.TransactionClient, "productSellingPolicy">;
@@ -39,8 +39,12 @@ export async function readStoredSellingPolicies(
 export type SellingPolicyReportVariant = Readonly<{
   variantId: string;
   isCompositeParent: boolean;
-  mirroredUnits: number | null;
-  activeReservedUnits: number;
+  /**
+   * What one unit of this variant consumes, read exactly as the storefront's advisory capacity is:
+   * its own stock when standalone, its components when a composite parent (whose own mirrored stock
+   * is never consulted). `null` when the topology cannot be proven.
+   */
+  capacityResources: readonly AdvisoryCapacityResource[] | null;
 }>;
 
 export type SellingPolicyReportRow = Readonly<{
@@ -126,7 +130,7 @@ export function createSellingPolicyRepository(client: PrismaClient) {
       },
     });
 
-    const facts = await readResourceFacts(
+    const capacity = await readAdvisoryCapacityResources(
       client,
       rows.flatMap((row) => row.product.variants.map((variant) => variant.id)),
     );
@@ -136,15 +140,11 @@ export function createSellingPolicyRepository(client: PrismaClient) {
       productSlug: row.product.slug,
       stored: { sellingMode: row.sellingMode, negativeStockLimit: row.negativeStockLimit },
       updatedAt: row.updatedAt,
-      variants: row.product.variants.map((variant) => {
-        const fact = facts.get(variant.id);
-        return {
-          variantId: variant.id,
-          isCompositeParent: variant.compositeComponents.length > 0,
-          mirroredUnits: fact?.mirroredUnits ?? null,
-          activeReservedUnits: fact?.activeReservedUnits ?? 0,
-        };
-      }),
+      variants: row.product.variants.map((variant) => ({
+        variantId: variant.id,
+        isCompositeParent: variant.compositeComponents.length > 0,
+        capacityResources: capacity.get(variant.id) ?? null,
+      })),
     }));
   }
 

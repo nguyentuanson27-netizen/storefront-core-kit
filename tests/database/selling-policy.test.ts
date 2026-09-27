@@ -3,8 +3,10 @@ import test from "node:test";
 
 import { PrismaPg } from "@prisma/adapter-pg";
 
+import { readAdvisorySellableUnits } from "../../src/commerce/capacity-reservation-repository.ts";
 import { createSellingPolicyRepository, readStoredSellingPolicies } from "../../src/commerce/selling-policy-repository.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
+import { buildSellingPolicyReport } from "../../src/operations/selling-policy-report.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -210,4 +212,58 @@ test("composite parents and the operator report are read from the mirror", async
     byProduct.get(set)?.variants.map((variant) => variant.isCompositeParent),
     [true],
   );
+});
+
+test("the report reads a composite parent's capacity from its components, not its own stock", async (t) => {
+  const f = fixture("composite-units");
+  await f.cleanup();
+  t.after(f.cleanup);
+  const top = await f.product("top");
+  const skirt = await f.product("skirt");
+  const set = await f.product("set");
+  const actor = await f.admin("owner");
+  const ids = {
+    top: "selling-policy-composite-units-top-v0",
+    skirt: "selling-policy-composite-units-skirt-v0",
+    set: "selling-policy-composite-units-set-v0",
+  };
+  await prisma.warehouseStock.createMany({
+    data: [
+      { variantId: ids.set, pancakeWarehouseId: "w0", quantity: 8, syncedAt: EARLY },
+      { variantId: ids.top, pancakeWarehouseId: "w0", quantity: 5, syncedAt: EARLY },
+      { variantId: ids.skirt, pancakeWarehouseId: "w0", quantity: 0, syncedAt: EARLY },
+    ],
+  });
+  await prisma.compositeComponentMirror.createMany({
+    data: [
+      { parentVariantId: ids.set, componentVariantId: ids.top, quantity: 1, syncedAt: EARLY },
+      { parentVariantId: ids.set, componentVariantId: ids.skirt, quantity: 1, syncedAt: EARLY },
+    ],
+  });
+  for (const productId of [top, skirt, set]) {
+    await repository.saveSellingPolicy(productId, { kind: "SET", sellingMode: "STANDARD", negativeStockLimit: -20 }, actor);
+  }
+
+  const flags = { sellingModesEnabled: false, preorderEnabled: false };
+  const rows = (await repository.readSellingPolicyReport()).filter((row) => [top, skirt, set].includes(row.productId));
+  const variants = new Map(buildSellingPolicyReport(rows, flags).flatMap((line) => line.variants.map((v) => [v.variantId, v])));
+
+  assert.deepEqual(
+    { ...variants.get(ids.set) },
+    {
+      variantId: ids.set,
+      capacityBasis: "components",
+      freeUnits: 0,
+      floor: 0,
+      sellableUnits: 0,
+      readyUnits: 0,
+      atOrBelowFloor: true,
+    },
+    "own stock 8 is ignored; the exhausted skirt caps the set at 0",
+  );
+  assert.equal(variants.get(ids.top)?.sellableUnits, 5);
+
+  // Same numbers the storefront advertises.
+  const advisory = await readAdvisorySellableUnits(prisma, [ids.set, ids.top, ids.skirt]);
+  for (const [variantId, units] of advisory) assert.equal(variants.get(variantId)?.sellableUnits, units, variantId);
 });
