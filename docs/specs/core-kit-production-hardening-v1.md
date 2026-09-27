@@ -264,7 +264,10 @@ No elapsed-time TTL, process restart, local status label, or buyer retry may sil
 > `docs/specs/core-kit-sync-unknown-reconciliation-v1.md` §9.3 (b), and only as that section defines it:
 >
 > - the order must be absence-confirmed by durable reconciliation evidence;
-> - the operator must record their identity, a reason, and the independent verification they performed;
+> - the actor is an authenticated, authorized operator established by the trusted operator surface, never a
+>   caller-supplied name; with no such actor the override fails closed;
+> - the operator records a reason and the independent verification they performed, and the override proceeds only when
+>   that verification found no matching order;
 > - the override is never automated;
 > - the order stays under indefinite observation afterwards, and a later appearance is an incident.
 >

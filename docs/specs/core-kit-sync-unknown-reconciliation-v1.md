@@ -339,12 +339,27 @@ release the sweep may ever perform automatically, behind a per-deployment flag t
 a late materialization.
 
 - It is available only through the operator command (§12), and only for an absence-confirmed order.
-- The operator must record:
-  - their identity;
-  - a reason;
-  - what they independently verified, as structured fields: at least a search in the Pancake admin (trash included) for
-    the order's time window, phone and items, with its result. Contact with the buyer is optional.
-- The command refuses when the verification fields are missing.
+- **Trusted actor.** The actor recorded for the release is established by the operator surface, never asserted by the
+  caller.
+  - The command runs only in the trusted operator surface. For example: an admin action behind Core Kit's
+    authenticated admin session, or a server-side command whose actor comes from an authenticated, authorized context
+    such as the admin session's user id, or an OS or SSH identity mapped to an authorized operator account.
+  - The actor must be authorized for this privileged action: an explicit role or allow-list, not just any signed-in user.
+  - A caller-supplied string such as `--operator alice` never satisfies the audit requirement.
+  - When no authenticated, authorized actor can be established, the command fails closed and releases nothing.
+  - The exact mechanism is left to implementation; the rule is that the identity is not self-asserted.
+- **Structured verification.** The operator records a reason and what they independently verified, as structured fields.
+  At least:
+  - a search in the Pancake admin (trash included) for the order's time window, phone and items;
+  - its **outcome**, one of `NO_MATCHING_ORDER`, `MATCHING_ORDER_FOUND` or `INCONCLUSIVE`.
+
+  Contact with the buyer is optional.
+- **The outcome is a precondition, not a note.** The command releases only when the recorded outcome is
+  `NO_MATCHING_ORDER`:
+  - **`MATCHING_ORDER_FOUND`**: refuses. The external sale is known to exist, so this is no longer a risk override under
+    uncertainty. It directs the operator to `--link <pancakeOrderId>` (§10), or to the release-incident procedure (§9.4)
+    if the order was already released.
+  - **`INCONCLUSIVE`**, or any missing field: refuses. The hold stays.
 - It is never automated, never triggered by the sweep, and it has no flag.
 
 The hardening spec's rule — no timer, label or retry may silently release an unresolved hold — is respected because the
@@ -477,9 +492,14 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - **Command.** `pnpm pancake:orders:reconcile <publicCode> [--link <pancakeOrderId> | --release]`.
   - With no flag it runs one observation now.
   - `--link` applies §10 after the agreement checks.
-  - `--release` applies the manual risk override (§9.3 b). It refuses unless the order is absence-confirmed **and** the
-    structured verification fields are supplied (owner decision §15 Q4: approved).
-  - Every use is recorded with the operator identity and reason.
+  - `--release` applies the manual risk override (§9.3 b), approved as owner decision §15 Q4. It refuses unless all of
+    these hold:
+    - the order is absence-confirmed;
+    - the structured verification fields are supplied;
+    - the recorded verification outcome is `NO_MATCHING_ORDER`;
+    - an authenticated, authorized actor is established by the operator surface.
+  - `--link` and `--release` run only in the trusted operator surface (§9.3 b). Every use is recorded with that actor,
+    the reason, and the verification outcome. A caller-supplied name is never the recorded actor.
 - **Docs.** `docs/operations/release-and-rollback.md` replaces "resolve by hand" with this procedure.
   `docs/integrations/pancake.md` records the reviewed marker and list contract.
 
@@ -532,6 +552,11 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - absence-confirmed with automatic release off → still held;
 - operator `--release` on an order that is not absence-confirmed is refused;
 - operator `--release` without the structured verification fields is refused;
+- **operator `--release` whose recorded verification outcome is `MATCHING_ORDER_FOUND` is refused**, releases nothing,
+  and points to `--link` or incident handling; `INCONCLUSIVE` is refused too;
+- operator `--release` with no authenticated, authorized actor fails closed, and a caller-supplied `--operator` value
+  is ignored for attribution. It neither satisfies nor replaces the actor;
+- an authenticated user without the operator role is refused;
 - an overridden order stays under observation beyond `S`, and a later `FOUND` for it is recorded as an incident;
 - release → every capacity read path stops counting the resource (the parity test extended);
 - `FOUND` after release is recorded as an incident and re-takes nothing;
@@ -579,6 +604,7 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
 - Transitions are compare-and-sets on `state = SYNC_UNKNOWN`.
 - Every observation and decision is recorded.
 - Holds are released only through §9.3, and every release records which of the two it was.
+- A manual release records a server-established, authorized actor, never a caller-supplied name.
 - Reconciliation liveness is monitored separately from catalog-sync health.
 
 **Ask first**
