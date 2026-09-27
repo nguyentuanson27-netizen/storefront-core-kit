@@ -211,6 +211,8 @@ test("mobile shop filters catalog through shareable URL state", async ({ page })
   await page.getByLabel("Giá tối đa").fill("1300000");
   await page.getByLabel("Chỉ còn hàng").check();
   await page.getByRole("button", { name: "Áp dụng" }).click();
+  // The form navigates client-side now, so there is no new document load to wait for.
+  await page.waitForURL((url) => url.searchParams.has("q"));
   await page.waitForLoadState("networkidle");
 
   const url = new URL(page.url());
@@ -257,4 +259,52 @@ test("mobile shop filters catalog through shareable URL state", async ({ page })
   expect(accessibilityScan.violations).toEqual([]);
   expect(browserErrors).toEqual([]);
   expect(failedResponses).toEqual([]);
+});
+
+/**
+ * Pins the one thing `scroll={false}` changes: where the viewport is after refining. Smooth
+ * scrolling and scroll anchoring are switched off for the measurement -- the first would leave a
+ * jump to the top still animating when the position is read, and the second is the browser
+ * re-anchoring on content that moved, not the router. Each path fails with its own `scroll={false}`
+ * removed: the page goes back to the top.
+ */
+test("refining the shop keeps the shopper's scroll position", async ({ page }) => {
+  await page.goto(`${BASE_URL}/shop?color=Ink`, { waitUntil: "networkidle" });
+  await page.addStyleTag({
+    content: "html { scroll-behavior: auto !important; } * { overflow-anchor: none !important; }",
+  });
+  const scrollY = () => page.evaluate(() => window.scrollY);
+  const applied = page.getByRole("list", { name: "Bộ lọc đang áp dụng" });
+  await expect(applied.getByRole("link")).toHaveCount(1);
+
+  // The filter form: submitted from well below the top of the page.
+  const apply = page.getByRole("button", { name: "Áp dụng" });
+  await apply.evaluate((element) => element.scrollIntoView({ block: "center" }));
+  const beforeSubmit = await scrollY();
+  expect(beforeSubmit).toBeGreaterThan(200);
+  await page.getByLabel("Kích cỡ").selectOption("M");
+  await apply.click();
+  await page.waitForURL((url) => url.searchParams.get("size") === "M");
+  await expect(applied.getByRole("link")).toHaveCount(2);
+  expect(Math.abs((await scrollY()) - beforeSubmit)).toBeLessThanOrEqual(50);
+
+  // An active-filter chip.
+  const removeSize = applied.getByRole("link", { name: /^Bỏ lọc .*M$/ });
+  await removeSize.evaluate((element) => element.scrollIntoView({ block: "start" }));
+  const beforeChip = await scrollY();
+  expect(beforeChip).toBeGreaterThan(100);
+  await removeSize.click();
+  await page.waitForURL((url) => !url.searchParams.has("size"));
+  await expect(applied.getByRole("link")).toHaveCount(1);
+  expect(Math.abs((await scrollY()) - beforeChip)).toBeLessThanOrEqual(50);
+
+  // Clearing everything.
+  const clear = page.getByRole("link", { name: "Xóa bộ lọc" });
+  await clear.evaluate((element) => element.scrollIntoView({ block: "start" }));
+  const beforeClear = await scrollY();
+  expect(beforeClear).toBeGreaterThan(100);
+  await clear.click();
+  await page.waitForURL((url) => url.search === "");
+  await expect(applied).toHaveCount(0);
+  expect(Math.abs((await scrollY()) - beforeClear)).toBeLessThanOrEqual(50);
 });
