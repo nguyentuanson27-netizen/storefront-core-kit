@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BRAND } from "@/brand";
+import { ListingRefineForm } from "@/components/brand/listing-refine-form";
 import { ProductCard, type ProductCardTone } from "@/components/brand/product-card";
 import { createStorefrontRoute } from "@/routes/factory";
 import { buildShopMetadata } from "@/routes/metadata/shop";
@@ -10,6 +11,11 @@ import type { ShopViewModel } from "@/routes/shop-model";
 /**
  * Markup only. The query parsing, the catalog page, the facets, the tracking and the refresh window
  * all live in `@/routes/shop`; the shell mounts what the loader sealed.
+ *
+ * Refining the listing -- the filter form, the clear links, the active-filter chips -- keeps the
+ * shopper's scroll position (`scroll={false}`): they are narrowing what they are looking at, not
+ * starting over. Pagination still returns to the top, because a new page is new content. Every href
+ * here is still the one the loader built; this only changes where the viewport stays.
  */
 
 const tones: readonly ProductCardTone[] = ["stone", "olive", "ink", "sand"];
@@ -50,7 +56,7 @@ function render(data: ShopViewModel) {
             </h2>
           </div>
           {data.filtered ? (
-            <Link className={linkClassName} href={data.clearHref}>
+            <Link className={linkClassName} href={data.clearHref} scroll={false}>
               Xóa bộ lọc
             </Link>
           ) : null}
@@ -60,7 +66,12 @@ function render(data: ShopViewModel) {
           <ul className="mt-6 flex flex-wrap gap-3" aria-label="Bộ lọc đang áp dụng">
             {data.activeFilters.map((filter) => (
               <li key={filter.value}>
-                <Link className={chipClassName} href={filter.href} aria-label={`Bỏ lọc ${filter.label}`}>
+                <Link
+                  className={chipClassName}
+                  href={filter.href}
+                  scroll={false}
+                  aria-label={`Bỏ lọc ${filter.label}`}
+                >
                   {filter.label}
                   <span aria-hidden="true">×</span>
                 </Link>
@@ -69,10 +80,10 @@ function render(data: ShopViewModel) {
           </ul>
         ) : null}
 
-        <form
+        <ListingRefineForm
           key={data.stateHref}
+          action="/shop"
           className="mt-8 grid gap-x-6 gap-y-7 sm:grid-cols-2 lg:grid-cols-4"
-          method="get"
         >
           <label className="block sm:col-span-2">
             <span className="text-xs font-semibold uppercase tracking-[0.13em]">Tìm sản phẩm</span>
@@ -181,7 +192,7 @@ function render(data: ShopViewModel) {
               Áp dụng
             </button>
           </div>
-        </form>
+        </ListingRefineForm>
       </section>
 
       {data.totalCount === 0 ? (
@@ -196,7 +207,7 @@ function render(data: ShopViewModel) {
               : "Sản phẩm sẽ xuất hiện tại đây khi sẵn sàng để mua trên website."}
           </p>
           {data.filtered ? (
-            <Link className={`mt-6 ${linkClassName}`} href={data.clearHref}>
+            <Link className={`mt-6 ${linkClassName}`} href={data.clearHref} scroll={false}>
               Xem tất cả sản phẩm →
             </Link>
           ) : null}
