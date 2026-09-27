@@ -6,8 +6,9 @@ import { join, resolve } from "node:path";
 import test from "node:test";
 
 /**
- * Runs the real `deploy/vps/deploy.sh` against a stand-in `docker` that records every call, so these
- * tests pin the order commands actually execute in, not how the script happens to be spelled.
+ * Runs the real `deploy/vps/deploy.sh` and `rollback.sh` against a stand-in `docker` that records
+ * every call, so these tests pin the order commands actually execute in, not how the scripts happen
+ * to be spelled.
  */
 
 const REPO_ROOT = resolve(import.meta.dirname, "../..");
@@ -15,8 +16,12 @@ const REPO_ROOT = resolve(import.meta.dirname, "../..");
 const FAKE_DOCKER = `#!/usr/bin/env bash
 set -euo pipefail
 echo "$*" >> "$CALL_LOG"
+if [[ "\${1:-}" == "image" && "\${2:-}" == "inspect" ]]; then
+  [[ " \${FAKE_IMAGES:-} " == *" \${3:-} "* ]] && exit 0 || exit 1
+fi
 if [[ "\${1:-}" == "inspect" ]]; then
-  echo healthy
+  container="\${*: -1}"
+  if [[ "$container" == "catalog-sync-container" ]]; then echo "\${FAKE_SYNC_HEALTH:-healthy}"; else echo healthy; fi
   exit 0
 fi
 args=" $* "
@@ -26,7 +31,7 @@ case "$args" in
     if [[ -f "$FAKE_STATE/$service-running" ]]; then echo "$service-container"; fi ;;
   *" stop "*) service="\${args##* stop }"; rm -f "$FAKE_STATE/\${service%% *}-running" ;;
   *" start "*) service="\${args##* start }"; touch "$FAKE_STATE/\${service%% *}-running" ;;
-  *" up -d --no-build app caddy catalog-sync "*) touch "$FAKE_STATE/app-running" "$FAKE_STATE/catalog-sync-running" ;;
+  *" up -d --no-build "*) for service in \${args##* --no-build }; do touch "$FAKE_STATE/$service-running"; done ;;
   *" pnpm prisma:migrate:deploy "*) exit "\${FAKE_MIGRATE_EXIT:-0}" ;;
   *" exec -T postgres "*) echo fake-dump ;;
 esac
@@ -34,13 +39,29 @@ esac
 
 type Run = { status: number | null; calls: string[]; stderr: string };
 
-function runDeploy({
-  running,
-  migrateExit,
-}: {
+type ScriptRun = {
   running: readonly ("app" | "catalog-sync")[];
-  migrateExit: number;
-}): Run {
+  migrateExit?: number;
+  syncHealth?: "healthy" | "unhealthy";
+  images?: readonly string[];
+};
+
+function runDeploy(options: ScriptRun): Run {
+  return runScript("deploy.sh", [], options);
+}
+
+const PREVIOUS_SHA = "a".repeat(40);
+const PROJECT_SLUG = JSON.parse(readFileSync(join(REPO_ROOT, "project.config.json"), "utf8")).projectSlug as string;
+
+function runRollback(options: ScriptRun): Run {
+  return runScript("rollback.sh", [PREVIOUS_SHA], options);
+}
+
+function runScript(
+  script: "deploy.sh" | "rollback.sh",
+  args: readonly string[],
+  { running, migrateExit = 0, syncHealth = "healthy", images = [] }: ScriptRun,
+): Run {
   const root = mkdtempSync(join(tmpdir(), "deploy-sequence-"));
   try {
     const repo = join(root, "repo");
@@ -49,7 +70,12 @@ function runDeploy({
     mkdirSync(join(repo, "deploy/vps"), { recursive: true });
     mkdirSync(bin);
     mkdirSync(state);
-    for (const file of ["deploy/vps/deploy.sh", "deploy/vps/project-identity.sh", "project.config.json"]) {
+    for (const file of [
+      "deploy/vps/deploy.sh",
+      "deploy/vps/rollback.sh",
+      "deploy/vps/project-identity.sh",
+      "project.config.json",
+    ]) {
       copyFileSync(join(REPO_ROOT, file), join(repo, file));
     }
     writeFileSync(join(repo, ".gitignore"), "deploy/vps/.env.production\n");
@@ -68,7 +94,7 @@ function runDeploy({
     const callLog = join(root, "calls.log");
     writeFileSync(callLog, "");
 
-    const result = spawnSync("bash", ["deploy/vps/deploy.sh"], {
+    const result = spawnSync("bash", [`deploy/vps/${script}`, ...args], {
       cwd: repo,
       env: {
         NODE_ENV: "test",
@@ -77,6 +103,8 @@ function runDeploy({
         CALL_LOG: callLog,
         FAKE_STATE: state,
         FAKE_MIGRATE_EXIT: String(migrateExit),
+        FAKE_SYNC_HEALTH: syncHealth,
+        FAKE_IMAGES: images.join(" "),
         BACKUP_DIR: join(root, "backups"),
       },
       encoding: "utf8",
@@ -158,4 +186,48 @@ test("a first release with nothing serving migrates and starts the new release",
   assert.equal(run.status, 0, run.stderr);
   assert.equal(position(run.calls, STOP_APP), -1);
   assert.ok(position(run.calls, START_NEW) > position(run.calls, MIGRATE));
+});
+
+test("a release whose catalog sync never succeeds is reported as a failed deploy", () => {
+  const run = runDeploy({ running: ["app", "catalog-sync"], syncHealth: "unhealthy" });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /catalog sync has not succeeded/);
+  // The app itself did come up: the failure is about the sync, and says so.
+  assert.ok(position(run.calls, START_NEW) >= 0);
+  assert.ok(run.calls.some((call) => call === "logs --tail=200 catalog-sync"));
+});
+
+const ROLLBACK_APP = "up -d --no-build app caddy";
+const ROLLBACK_SYNC = "up -d --no-build catalog-sync";
+
+test("rollback quiesces the current catalog sync before the previous app starts, then starts that release's sync", () => {
+  const run = runRollback({
+    running: ["app", "catalog-sync"],
+    images: [`${PROJECT_SLUG}:${PREVIOUS_SHA}`, `${PROJECT_SLUG}-ops:${PREVIOUS_SHA}`],
+  });
+  assert.equal(run.status, 0, run.stderr);
+  const stop = position(run.calls, STOP_SYNC);
+  const app = position(run.calls, ROLLBACK_APP);
+  const sync = position(run.calls, ROLLBACK_SYNC);
+  assert.ok(stop >= 0 && app > stop, "no window where the older app runs beside the newer sync");
+  assert.ok(sync > app, "the previous release's own sync starts after its app");
+});
+
+test("rollback to a release without a catalog-sync image leaves sync stopped and warns", () => {
+  const run = runRollback({
+    running: ["app", "catalog-sync"],
+    images: [`${PROJECT_SLUG}:${PREVIOUS_SHA}`],
+  });
+  assert.equal(run.status, 0, run.stderr);
+  assert.ok(position(run.calls, STOP_SYNC) >= 0);
+  assert.ok(position(run.calls, ROLLBACK_APP) > position(run.calls, STOP_SYNC));
+  assert.equal(position(run.calls, ROLLBACK_SYNC), -1);
+  assert.match(run.stderr, /WARNING: .* has no catalog-sync image/);
+});
+
+test("rollback refuses before touching any writer when the previous app image is missing", () => {
+  const run = runRollback({ running: ["app", "catalog-sync"], images: [] });
+  assert.notEqual(run.status, 0);
+  assert.equal(position(run.calls, STOP_SYNC), -1);
+  assert.equal(position(run.calls, ROLLBACK_APP), -1);
 });

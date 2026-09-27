@@ -104,21 +104,36 @@ fi
 
 "${compose[@]}" up -d --no-build app caddy catalog-sync
 
-for _ in {1..40}; do
-  app_id="$("${compose[@]}" ps -q app)"
-  health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$app_id" 2>/dev/null || true)"
-  if [[ "$health" == "healthy" ]]; then
-    echo "Application container is healthy at release $RELEASE_SHA"
-    exit 0
-  fi
-  if [[ "$health" == "unhealthy" ]]; then
-    "${compose[@]}" logs --tail=200 app
-    echo "Application health check failed" >&2
-    exit 1
-  fi
-  sleep 3
-done
+# wait_healthy SERVICE ATTEMPTS DELAY: succeeds once Docker reports SERVICE healthy.
+wait_healthy() {
+  local service="$1" attempts="$2" delay="$3" container health
+  for ((attempt = 0; attempt < attempts; attempt += 1)); do
+    container="$("${compose[@]}" ps -q "$service")"
+    health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || true)"
+    if [[ "$health" == "healthy" ]]; then
+      return 0
+    fi
+    if [[ "$health" == "unhealthy" ]]; then
+      return 1
+    fi
+    sleep "$delay"
+  done
+  return 1
+}
 
-"${compose[@]}" logs --tail=200 app
-echo "Timed out waiting for application health" >&2
-exit 1
+if ! wait_healthy app 40 3; then
+  "${compose[@]}" logs --tail=200 app
+  echo "Application did not become healthy at release $RELEASE_SHA" >&2
+  exit 1
+fi
+echo "Application container is healthy at release $RELEASE_SHA"
+
+# The release is not done until the catalog sync has actually succeeded once: a running loop whose
+# every sync fails would otherwise leave capacity holds uncleared and restocks unsellable while the
+# deploy reports success. Its health check turns healthy on the first successful sync.
+if ! wait_healthy catalog-sync 80 5; then
+  "${compose[@]}" logs --tail=200 catalog-sync
+  echo "Application is serving release $RELEASE_SHA, but the catalog sync has not succeeded; fix it before relying on stock" >&2
+  exit 1
+fi
+echo "Catalog sync is healthy at release $RELEASE_SHA"

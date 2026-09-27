@@ -37,6 +37,8 @@ export type CatalogSyncLoopOptions = Readonly<{
   sleep: (ms: number, signal: AbortSignal) => Promise<void>;
   signal: AbortSignal;
   log: (line: string) => void;
+  /** Called after every successful sync, with the instant it finished: the liveness heartbeat. */
+  onSuccess?: (at: Date) => void;
   now?: () => Date;
 }>;
 
@@ -55,9 +57,17 @@ export async function runCatalogSyncLoop(options: CatalogSyncLoopOptions): Promi
     runs += 1;
     try {
       const result = await options.sync();
+      const finishedAt = now();
       options.log(
-        `${now().toISOString()} catalog sync ok: ${result.products} products, ${result.variations} variations`,
+        `${finishedAt.toISOString()} catalog sync ok: ${result.products} products, ${result.variations} variations`,
       );
+      // Outside the sync's own failure handling on purpose: a heartbeat that cannot be written must
+      // not turn a good sync into a counted failure, and the health check will report it as stale.
+      try {
+        options.onSuccess?.(finishedAt);
+      } catch {
+        options.log(`${finishedAt.toISOString()} catalog sync heartbeat could not be written`);
+      }
     } catch {
       failures += 1;
       options.log(`${now().toISOString()} catalog sync failed; retrying next interval`);
@@ -66,4 +76,33 @@ export async function runCatalogSyncLoop(options: CatalogSyncLoopOptions): Promi
     await options.sleep(options.intervalMs, options.signal);
   }
   return { runs, failures };
+}
+
+/** Where the loop records its last successful sync, and where the health check reads it. */
+export const DEFAULT_CATALOG_SYNC_HEARTBEAT_FILE = "/tmp/catalog-sync-last-success";
+
+export type CatalogSyncHealth =
+  | { healthy: true; lastSuccessAt: Date; ageSeconds: number }
+  | { healthy: false; reason: "NEVER_SUCCEEDED" | "HEARTBEAT_UNREADABLE" | "STALE"; ageSeconds: number | null };
+
+/**
+ * Whether the loop has recently proven it works, from its heartbeat alone.
+ *
+ * A running process is not evidence: the loop deliberately survives failures, so only a recent
+ * successful sync counts. Stale means no success within two intervals plus two minutes -- one missed
+ * run is tolerated (a Pancake blip, a sync that ran long), a second is reported.
+ */
+export function evaluateCatalogSyncHeartbeat({
+  heartbeat,
+  now,
+  intervalSeconds,
+}: Readonly<{ heartbeat: string | null; now: Date; intervalSeconds: number }>): CatalogSyncHealth {
+  if (heartbeat === null) return { healthy: false, reason: "NEVER_SUCCEEDED", ageSeconds: null };
+  const lastSuccessAt = new Date(heartbeat.trim());
+  if (Number.isNaN(lastSuccessAt.getTime())) {
+    return { healthy: false, reason: "HEARTBEAT_UNREADABLE", ageSeconds: null };
+  }
+  const ageSeconds = Math.max(0, Math.floor((now.getTime() - lastSuccessAt.getTime()) / 1000));
+  if (ageSeconds > 2 * intervalSeconds + 120) return { healthy: false, reason: "STALE", ageSeconds };
+  return { healthy: true, lastSuccessAt, ageSeconds };
 }

@@ -142,8 +142,17 @@ Rollback:
 Holds clear only through a catalog sync, so the `catalog-sync` Compose service runs one every
 `CATALOG_SYNC_INTERVAL_SECONDS` (default 300) with the release's own `ops` image; `pnpm pancake:catalog:sync` runs a
 single sync by hand. If that service is stopped, sold units stay held and a Pancake restock is not offered until it runs
-again: check `docker compose ... logs catalog-sync` first when stock looks stuck. `rollback.sh` starts the previous
-release's sync when that release shipped one and stops it otherwise.
+again: check `docker compose ... logs catalog-sync` first when stock looks stuck.
+
+Liveness is a successful sync, not a running process. Each success writes a heartbeat inside the container, and the
+service's health check (`scripts/catalog-sync-health.ts`) is healthy only while the last success is at most two
+intervals plus two minutes old, so `docker compose ps` shows `unhealthy` for a loop that keeps failing (bad Pancake
+configuration, an outage) or has never succeeded. `deploy.sh` does not report success until that check turns healthy
+after the first sync of the new release; a failure there means the app is serving but stock will not refresh.
+
+`rollback.sh` stops the current `catalog-sync` before starting the previous app, so an older app never serves beside
+newer sync code. It then starts the previous release's own sync and waits for it to be healthy when that release shipped
+one, and otherwise leaves sync stopped with a warning.
 
 Operator view: units still locally held per variant are
 `SELECT "variantId", SUM("quantity") FROM "CapacityReservationResource" WHERE "mirroredAt" IS NULL GROUP BY 1;`.

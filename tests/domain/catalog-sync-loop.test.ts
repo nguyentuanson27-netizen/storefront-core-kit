@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   DEFAULT_CATALOG_SYNC_INTERVAL_SECONDS,
+  evaluateCatalogSyncHeartbeat,
   parseCatalogSyncIntervalSeconds,
   runCatalogSyncLoop,
 } from "../../src/operations/catalog-sync-loop.ts";
@@ -76,4 +77,52 @@ test("a stop during the wait ends the loop without another sync", async () => {
   });
   assert.deepEqual(result, { runs: 1, failures: 0 });
   assert.equal(calls, 1);
+});
+
+test("the heartbeat is written only after a successful sync, and a failed write is not a failed sync", async () => {
+  const controller = new AbortController();
+  const beats: string[] = [];
+  let calls = 0;
+  const result = await runCatalogSyncLoop({
+    sync: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("pancake down");
+      if (calls === 3) controller.abort();
+      return { products: 1, variations: 1 };
+    },
+    intervalMs: 1,
+    sleep: async () => undefined,
+    signal: controller.signal,
+    log: () => undefined,
+    onSuccess: (at) => {
+      beats.push(at.toISOString());
+      if (beats.length === 1) throw new Error("disk full");
+    },
+    now: () => new Date("2026-09-27T01:00:00.000Z"),
+  });
+  assert.deepEqual(result, { runs: 3, failures: 1 });
+  assert.deepEqual(beats, ["2026-09-27T01:00:00.000Z", "2026-09-27T01:00:00.000Z"]);
+});
+
+test("health needs a recent success: never, unreadable and stale heartbeats are all unhealthy", () => {
+  const now = new Date("2026-09-27T12:00:00.000Z");
+  const ago = (seconds: number) => new Date(now.getTime() - seconds * 1000).toISOString();
+  assert.deepEqual(evaluateCatalogSyncHeartbeat({ heartbeat: null, now, intervalSeconds: 300 }), {
+    healthy: false,
+    reason: "NEVER_SUCCEEDED",
+    ageSeconds: null,
+  });
+  assert.deepEqual(evaluateCatalogSyncHeartbeat({ heartbeat: "garbage", now, intervalSeconds: 300 }), {
+    healthy: false,
+    reason: "HEARTBEAT_UNREADABLE",
+    ageSeconds: null,
+  });
+  // One missed run is tolerated: 2 intervals + 120s.
+  assert.equal(evaluateCatalogSyncHeartbeat({ heartbeat: ago(720), now, intervalSeconds: 300 }).healthy, true);
+  assert.deepEqual(evaluateCatalogSyncHeartbeat({ heartbeat: ago(721), now, intervalSeconds: 300 }), {
+    healthy: false,
+    reason: "STALE",
+    ageSeconds: 721,
+  });
+  assert.equal(evaluateCatalogSyncHeartbeat({ heartbeat: `${ago(5)}\n`, now, intervalSeconds: 60 }).healthy, true);
 });
