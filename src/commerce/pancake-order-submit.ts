@@ -15,6 +15,8 @@ import type {
   PromotionCandidateReadClient,
 } from "./promotion-candidate-repository.ts";
 import { isUsableBasePriceVnd, resolvePromotionPricing } from "./promotion-pricing.ts";
+import { readSellingModeFlags, type EffectiveSellingPolicy, type SellingModeFlags } from "./selling-policy.ts";
+import { readEffectiveSellingPolicies } from "./selling-policy-repository.ts";
 
 const MAX_PUBLIC_CODE_LENGTH = 128;
 
@@ -42,6 +44,19 @@ type PancakeOrderValidationRejectionReason = Extract<
   | "STOCK_UNAVAILABLE"
 >;
 
+/**
+ * Why a `STOCK_UNAVAILABLE` rejection happened, for operators only. The buyer always sees the one
+ * buyer-facing reason; this tells an exhausted oversell allowance, a corrupt policy row and a plain
+ * sell-out apart in the event stream (selling modes spec §7.1).
+ */
+export type PancakeOrderStockRejectionDetail =
+  | "LIVE_STOCK_UNAVAILABLE"
+  | "INSUFFICIENT_CAPACITY"
+  | "NEGATIVE_LIMIT_REACHED"
+  | "INVALID_POLICY"
+  | "COMPOSITE_MODE_UNSUPPORTED"
+  | "TOPOLOGY_UNPROVEN";
+
 export type PancakeOrderSubmissionEvent =
   | {
       name: "pancake_order.validation_started";
@@ -53,6 +68,7 @@ export type PancakeOrderSubmissionEvent =
       correlationId: string;
       state: "REJECTED";
       reason: PancakeOrderValidationRejectionReason;
+      detail?: PancakeOrderStockRejectionDetail;
     }
   | {
       name: "pancake_order.validation_unavailable";
@@ -127,6 +143,11 @@ export type PancakeOrderSubmissionOptions = {
    * boundary and price two lines of the same order against different instants.
    */
   now?: () => Date;
+  /**
+   * The deployment's selling-mode flags. Defaults to the environment. Both the live pre-check and
+   * the locked reservation decide under these, through `effectivePolicy()`.
+   */
+  sellingModeFlags?: SellingModeFlags;
 };
 
 function emitSafely(
@@ -247,6 +268,7 @@ export function createPancakeOrderSubmissionService(
   options: PancakeOrderSubmissionOptions = {},
 ) {
   const readNow = options.now ?? (() => new Date());
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
   async function submit({
     publicCode,
     shopId,
@@ -283,6 +305,7 @@ export function createPancakeOrderSubmissionService(
 
     async function reject(
       reason: PancakeOrderValidationRejectionReason,
+      detail?: PancakeOrderStockRejectionDetail,
     ): Promise<PancakeOrderSubmissionResult> {
       await client.orderMirror.updateMany({
         where: { id: order.id, state: "VALIDATING" },
@@ -293,6 +316,7 @@ export function createPancakeOrderSubmissionService(
         correlationId,
         state: "REJECTED",
         reason,
+        ...(detail === undefined ? {} : { detail }),
       });
       return { ok: false, state: "REJECTED", reason };
     }
@@ -627,7 +651,23 @@ export function createPancakeOrderSubmissionService(
       list.push(edge);
       componentsByParent.set(edge.parentVariantId, list);
     }
+    // The selling policy of every purchased variant, for the live pre-check's floors. Read without the
+    // `VariantMirror` locks, so it may already be stale when the locked reservation decides (selling
+    // modes spec §7.3): a looser answer here is caught by that decision; a stricter one rejects this
+    // order, and the buyer's next checkout from the same cart reads the new policy.
+    let linePolicies: Map<string, EffectiveSellingPolicy>;
+    try {
+      linePolicies = await readEffectiveSellingPolicies(
+        client,
+        order.lines.map(({ variantId }) => variantId),
+        sellingModeFlags,
+      );
+    } catch {
+      return resetValidation();
+    }
+    let policyRefusal: "INVALID_POLICY" | "COMPOSITE_MODE_UNSUPPORTED" | null = null;
     const liveDemandByVariationId = new Map<string, number>();
+    const liveFloorByVariationId = new Map<string, number>();
 
     const requestedVariationIds = new Set<string>();
     const requestLines: Array<{
@@ -687,12 +727,26 @@ export function createPancakeOrderSubmissionService(
               pancakeVariationId: edge.componentVariant.pancakeVariationId,
               quantity: edge.quantity * line.quantity,
             }));
+      // Same floors as the locked decision (spec §5, §6): the purchased variant's own floor for a
+      // standalone line, 0 for every component of a set, and the stricter one where both meet.
+      const policy = linePolicies.get(line.variantId);
+      if (!policy || policy.kind === "REFUSE") {
+        policyRefusal ??= "INVALID_POLICY";
+      } else if (components.length > 0 && policy.mode !== "STANDARD") {
+        policyRefusal ??= "COMPOSITE_MODE_UNSUPPORTED";
+      }
+      const resourceFloor = components.length === 0 && policy?.kind === "SELL" ? policy.floor : 0;
       for (const resource of consumed) {
         const demand = (liveDemandByVariationId.get(resource.pancakeVariationId) ?? 0) + resource.quantity;
         if (!Number.isSafeInteger(resource.quantity) || resource.quantity <= 0 || !Number.isSafeInteger(demand)) {
           return reject("LOCAL_ORDER_INVALID");
         }
         liveDemandByVariationId.set(resource.pancakeVariationId, demand);
+        const floor = liveFloorByVariationId.get(resource.pancakeVariationId);
+        liveFloorByVariationId.set(
+          resource.pancakeVariationId,
+          floor === undefined ? resourceFloor : Math.max(floor, resourceFloor),
+        );
       }
       if (line.unitPriceVnd !== BigInt(freshUnitPriceVnd)) {
         drifted = true;
@@ -735,13 +789,17 @@ export function createPancakeOrderSubmissionService(
       });
     }
 
-    // Live Pancake stock for every resource the order spends, summed across lines that share one.
-    // Advisory to the local reservation below, which is the authority; this only refuses early when
-    // Pancake itself already reports too little.
+    if (policyRefusal !== null) return reject("STOCK_UNAVAILABLE", policyRefusal);
+
+    // Live Pancake stock for every resource the order spends, summed across lines that share one,
+    // measured against the same floor as the locked decision. Advisory to the local reservation
+    // below, which is the authority; this only refuses early when Pancake itself already reports too
+    // little.
     for (const [pancakeVariationId, demand] of liveDemandByVariationId) {
       const live = liveByVariationId.get(pancakeVariationId);
-      if (!live || !Number.isFinite(live.sellableStock) || live.sellableStock < demand) {
-        return reject("STOCK_UNAVAILABLE");
+      const floor = liveFloorByVariationId.get(pancakeVariationId) ?? 0;
+      if (!live || !Number.isFinite(live.sellableStock) || live.sellableStock - demand < floor) {
+        return reject("STOCK_UNAVAILABLE", "LIVE_STOCK_UNAVAILABLE");
       }
     }
 
@@ -804,6 +862,7 @@ export function createPancakeOrderSubmissionService(
         const reserved = await reserveOrderCapacity(tx, {
           orderId: order.id,
           lines: order.lines.map(({ variantId, quantity }) => ({ variantId, quantity })),
+          sellingModeFlags,
         });
         if (!reserved.ok) return reserved;
         const submitting = await tx.orderMirror.updateMany({
@@ -825,7 +884,7 @@ export function createPancakeOrderSubmissionService(
       if (reservation.reason === "TOPOLOGY_CHANGED") return resetValidation();
       if (reservation.reason === "VARIANT_MISSING") return reject("VARIATION_UNAVAILABLE");
       if (reservation.reason === "INVALID_ORDER") return reject("LOCAL_ORDER_INVALID");
-      return reject("STOCK_UNAVAILABLE");
+      return reject("STOCK_UNAVAILABLE", reservation.reason);
     }
 
     emitSafely(options.onEvent, {

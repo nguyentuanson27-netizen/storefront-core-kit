@@ -114,13 +114,13 @@ test("an order passes only if every shared resource fits after summing its lines
   const facts = (mirroredUnits: number, activeReservedUnits = 0) =>
     new Map([["top", { mirroredUnits, activeReservedUnits }]]);
   // One unit left: each line alone would fit, both together must not.
-  assert.deepEqual(evaluatePlannedCapacity(plan.lines, facts(1)), { ok: false, variantId: "top" });
+  assert.deepEqual(evaluatePlannedCapacity(plan.lines, facts(1)), { ok: false, variantId: "top", floor: 0 });
   assert.deepEqual(evaluatePlannedCapacity(plan.lines, facts(2)), { ok: true });
-  assert.deepEqual(evaluatePlannedCapacity(plan.lines, facts(3, 2)), { ok: false, variantId: "top" });
-  assert.deepEqual(evaluatePlannedCapacity(plan.lines, new Map()), { ok: false, variantId: "top" });
+  assert.deepEqual(evaluatePlannedCapacity(plan.lines, facts(3, 2)), { ok: false, variantId: "top", floor: 0 });
+  assert.deepEqual(evaluatePlannedCapacity(plan.lines, new Map()), { ok: false, variantId: "top", floor: 0 });
   assert.deepEqual(
     evaluatePlannedCapacity(plan.lines, new Map([["top", { mirroredUnits: null, activeReservedUnits: 0 }]])),
-    { ok: false, variantId: "top" },
+    { ok: false, variantId: "top", floor: 0 },
   );
 });
 

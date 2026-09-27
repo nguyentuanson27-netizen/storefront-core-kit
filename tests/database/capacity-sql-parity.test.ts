@@ -8,6 +8,7 @@ import {
   reserveOrderCapacity,
 } from "../../src/commerce/capacity-reservation-repository.ts";
 import { buildVariantStockCte } from "../../src/commerce/storefront-catalog.ts";
+import { SELLING_MODE_FLAGS_OFF } from "../../src/commerce/selling-policy.ts";
 import { Prisma, PrismaClient } from "../../src/generated/prisma/client.ts";
 import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
@@ -52,7 +53,7 @@ async function edge(parentVariantId: string, componentVariantId: string, quantit
 async function hold(name: string, variantId: string, quantity: number) {
   const order = await prisma.orderMirror.create({ data: { publicCode: `${PREFIX}-${name}` } });
   const result = await prisma.$transaction((tx) =>
-    reserveOrderCapacity(tx, { orderId: order.id, lines: [{ variantId, quantity }] }),
+    reserveOrderCapacity(tx, { orderId: order.id, lines: [{ variantId, quantity }], sellingModeFlags: SELLING_MODE_FLAGS_OFF }),
   );
   assert.ok(result.ok, name);
 }

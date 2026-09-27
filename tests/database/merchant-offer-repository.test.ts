@@ -15,6 +15,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { createCatalogMirrorRepository } from "../../src/commerce/catalog-mirror-repository.ts";
 import { createMerchantOfferRepository } from "../../src/commerce/merchant-offer-repository.ts";
 import { createProductMerchantFactsRepository } from "../../src/commerce/product-merchant-facts-repository.ts";
+import { SELLING_MODE_FLAGS_OFF } from "../../src/commerce/selling-policy.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import type {
   PancakeCatalogField,
@@ -453,7 +454,7 @@ test("M3 units other orders still hold are not advertised, matching the storefro
   const order = await prisma.orderMirror.create({ data: { publicCode: "m3-capacity-hold" } });
   try {
     const reserved = await prisma.$transaction((tx) =>
-      reserveOrderCapacity(tx, { orderId: order.id, lines: [{ variantId: xl.id, quantity: 2 }] }),
+      reserveOrderCapacity(tx, { orderId: order.id, lines: [{ variantId: xl.id, quantity: 2 }], sellingModeFlags: SELLING_MODE_FLAGS_OFF }),
     );
     assert.deepEqual(reserved, { ok: true, created: true });
 

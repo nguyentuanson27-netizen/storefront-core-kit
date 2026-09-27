@@ -1,7 +1,7 @@
 import { prisma } from "../src/db/prisma.ts";
-import { createSellingPolicyRepository } from "../src/commerce/selling-policy-repository.ts";
 import { readSellingModeFlags } from "../src/commerce/selling-policy.ts";
 import { buildSellingPolicyReport, formatSellingPolicyReport } from "../src/operations/selling-policy-report.ts";
+import { readSellingPolicyReportRows } from "../src/operations/selling-policy-report-repository.ts";
 
 /**
  * `pnpm catalog:selling-policy:report` — every product with a stored selling policy, what it sells as
@@ -9,7 +9,7 @@ import { buildSellingPolicyReport, formatSellingPolicyReport } from "../src/oper
  */
 try {
   const flags = readSellingModeFlags();
-  const rows = await createSellingPolicyRepository(prisma).readSellingPolicyReport();
+  const rows = await readSellingPolicyReportRows(prisma);
   console.log(formatSellingPolicyReport(buildSellingPolicyReport(rows, flags), flags));
 } finally {
   await prisma.$disconnect();
