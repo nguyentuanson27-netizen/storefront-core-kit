@@ -212,6 +212,19 @@ Reconciliation of such an order does not search. It reads the reviewed detail en
 - a valid response for the same shop → `FOUND`;
 - `404` or a contract failure → `AMBIGUOUS`, never `ABSENT`: a create response *said* it existed.
 
+**A B-with-id row is never released, by any path.**
+
+- Pancake's own response to this order returned an id, so an order was created. There is no no-sale to prove.
+- A detail read that stays `AMBIGUOUS`, for example a `404` because the order was later deleted, is **not** absence
+  evidence and never counts toward absence-confirmed.
+- After `K` consecutive ambiguous reads it is raised as a `B_ID_UNREADABLE` incident on the operator surface.
+- The operator resolves it with `--link` to the stored `createResponseOrderId`, with the trusted actor and a recorded
+  reason. For this id only, a successful detail read is not required: Pancake's own create response already proves that
+  the order existed.
+- Linking makes the row `CONFIRMED` with `acceptedAt` (§10), so the normal mirror handoff takes over. If the order was
+  later cancelled or deleted in Pancake, the returned stock then reaches capacity through the mirror, never through a
+  local release.
+
 This part needs no new Pancake evidence and may ship first (§14, R1).
 
 ## 8. Search contract
@@ -445,7 +458,7 @@ columns, never guessed:
 
 | Class | Definition | Resolved by |
 | --- | --- | --- |
-| **B-with-id** | `unknownPath = B` and `createResponseOrderId` present | the sweep: detail read (§7) |
+| **B-with-id** | `unknownPath = B` and `createResponseOrderId` present | the sweep: detail read (§7), and operator `--link`. **Never released** (§7). |
 | **Marker-bearing** | `unknownPath ∈ {A, C}` and `reconciliationMarker` present | the sweep: marker search (§8, §9) |
 | **Marker-less** | `unknownPath ∈ {A, C}` and `reconciliationMarker` null. These are the A/C failures between R1 and R2, with a known path and `submitAttemptedAt`. | operator only, as below |
 | **Legacy** | `unknownPath = LEGACY` (§10.1 migration) | operator only, as below |
@@ -582,6 +595,7 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   - It does not change the `catalog-sync` container's Docker health: production can tell "catalog sync healthy,
     reconciliation dead" apart from a healthy system.
 - An open incident (§9.4) also makes the health command fail (`RELEASE_INCIDENT`) until an operator acknowledges it.
+- An open `B_ID_UNREADABLE` incident (§7) makes the health command fail the same way until it is linked or acknowledged.
 
 ## 12. Operator surface
 
@@ -598,7 +612,7 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   - `--link` applies §10 after the agreement checks.
   - `--release` branches on the row's class (§10.1). Each branch has its own complete preconditions, and the command
     refuses unless every one holds:
-    - **Marker-bearing or B-with-id row: the §9.3 (b) override** (owner decision §15 Q4). It requires:
+    - **Marker-bearing row: the §9.3 (b) override** (owner decision §15 Q4). It requires:
       - the order is absence-confirmed;
       - the structured verification fields are supplied;
       - the recorded verification outcome is `NO_MATCHING_ORDER`;
@@ -610,8 +624,8 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
       - the structured verification fields are supplied;
       - the recorded outcome is `NO_MATCHING_ORDER`;
       - an authenticated, authorized actor is established by the operator surface.
-    - A B-with-id row in practice resolves by detail read (§7); the override applies to it only if that read stays
-      ambiguous.
+    - **B-with-id row: refused, always.** Pancake returned an id for it, so there is no no-sale to override (§7). The
+      command points to `--link` and to the `B_ID_UNREADABLE` incident procedure.
   - `--link` and `--release` run only in the trusted operator surface (§9.3 b). Every use is recorded with that actor,
     the reason, and the verification outcome. A caller-supplied name is never the recorded actor.
 - **Docs.** `docs/operations/release-and-rollback.md` replaces "resolve by hand" with this procedure.
@@ -667,7 +681,12 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - path B reads detail by the stored id, and a `404` stays `SYNC_UNKNOWN`;
 - **one `ABSENT` changes nothing**: order state, hold, cart lock and tracking status are all unchanged;
 - absence-confirmed with automatic release off → still held;
-- operator `--release` on an order that is not absence-confirmed is refused;
+- operator `--release` on a **marker-bearing** order that is not absence-confirmed is refused. Legacy and marker-less
+  rows follow §10.1 instead, and have their own tests below;
+- operator `--release` on a **B-with-id** row is always refused, including after repeated `AMBIGUOUS` detail reads;
+  those raise `B_ID_UNREADABLE` and never count toward absence-confirmed;
+- `--link` of a B-with-id row to its stored `createResponseOrderId` succeeds with the trusted actor even when the detail
+  read is `404`, and makes the row `CONFIRMED` with `acceptedAt`;
 - operator `--release` without the structured verification fields is refused;
 - **operator `--release` whose recorded verification outcome is `MATCHING_ORDER_FOUND` is refused**, releases nothing,
   and points to `--link` or incident handling; `INCONCLUSIVE` is refused too;
@@ -747,8 +766,12 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
    `SYNC_UNKNOWN` rows on the terms in §10.1. It applies equally to marker-less A/C rows created between R1 and R2,
    which have the same evidence (no marker, no id) plus a known path and `submitAttemptedAt`. The terms are:
    - the trusted actor;
-   - age of at least 7 days since `updatedAt`;
-   - a `NO_MATCHING_ORDER` verification over the row's time bounds.
+   - age of at least 7 days, counted from `updatedAt` for a legacy row and from `submitAttemptedAt` for a marker-less
+     row;
+   - a `NO_MATCHING_ORDER` verification over the row's time bounds: `createdAt`–`updatedAt` for legacy, and
+     `submitAttemptedAt`–`updatedAt` for marker-less, each widened by `skewAllowance`.
+
+   §10.1 is the single authority for these anchors; §12 and §13 refer to it.
 
    Because a legacy row cannot be watched automatically, it is listed permanently in the report instead. Hardening
    §5.4.1's amendment is extended accordingly.
