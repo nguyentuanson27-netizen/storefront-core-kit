@@ -95,13 +95,30 @@ mode-aware without code changes in those surfaces. F1, F3, F4 and F5 need explic
 enum SellingMode { STANDARD, OVERSELL, PREORDER }
 
 model ProductSellingPolicy {
-  productId          String      @id            // ProductMirror.id, onDelete: Cascade
+  productId          String        @id
   sellingMode        SellingMode
-  negativeStockLimit Int                        // CHECK (negativeStockLimit <= 0 AND negativeStockLimit >= -100000)
-  updatedAt          DateTime    @updatedAt
-  updatedByUserId    String?                    // authenticated admin actor; FK User, onDelete: SetNull
+  negativeStockLimit Int
+  updatedAt          DateTime      @updatedAt
+  updatedByUserId    String?
+  product            ProductMirror @relation(fields: [productId], references: [id], onDelete: Cascade)
+  updatedBy          User?         @relation("SellingPolicyUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
 }
+
+// reverse relation fields, required by Prisma:
+model ProductMirror { … sellingPolicy ProductSellingPolicy? }
+model User          { … sellingPoliciesUpdated ProductSellingPolicy[] @relation("SellingPolicyUpdatedBy") }
 ```
+
+- **Referential integrity comes from explicit Prisma relations, not comments.** The two `@relation` fields above generate
+  the database foreign keys: `productId → ProductMirror.id ON DELETE CASCADE`, and
+  `updatedByUserId → User.id ON DELETE SET NULL`. The generated migration SQL must contain both `FOREIGN KEY` clauses.
+  Review of M1 checks the SQL, not only the schema.
+- **Prisma cannot express the limit CHECK**, so the migration adds it by hand:
+  `ALTER TABLE "ProductSellingPolicy" ADD CONSTRAINT "ProductSellingPolicy_negativeStockLimit_range" CHECK
+  ("negativeStockLimit" <= 0 AND "negativeStockLimit" >= -100000)`. This follows the existing precedent for hand-added
+  constraints in this repository's migrations.
 
 - **Website-owned.** It sits in a separate table, following the `ProductMerchantFacts` pattern, and catalog sync never
   reads or writes it.
@@ -133,11 +150,21 @@ the live pre-check, the advisory TypeScript read, the SQL twin, and Merchant. Th
 
 ```text
 effectivePolicy(stored, flags) =
-  if !flags.SELLING_MODES_ENABLED                 → STANDARD, floor 0          (reason: SELLING_MODES_DISABLED)
+  resolved = resolveSellingPolicy(stored)                       // step 1: validate first
+  if !resolved.valid                              → REFUSE_ALL                  (reason: INVALID_POLICY)
+  else if !flags.SELLING_MODES_ENABLED            → STANDARD, floor 0          (reason: SELLING_MODES_DISABLED)
   else if resolved.sellingMode == PREORDER
        && !flags.SELLING_MODE_PREORDER_ENABLED    → STANDARD, floor 0          (reason: PREORDER_DISABLED)
-  else                                            → resolveSellingPolicy(stored)
+  else                                            → resolved
 ```
+
+**Authority order: validation first, flags second.**
+
+- A stored row that fails validation makes every capacity decision on that product refuse `INVALID_POLICY`, whatever
+  the flags say.
+- No flag combination can bypass it: a disabled capability does **not** turn a corrupt row back into a `STANDARD` sale.
+- Only **valid** policies are then downgraded by the flags.
+- A missing row is valid (§4.2), so the common case is unaffected.
 
 - **Both flags default to off.**
   - `SELLING_MODES_ENABLED` gates the whole capability.
@@ -377,7 +404,9 @@ It prints no PII.
 
 - a missing row is `STANDARD` / `−20` / default;
 - an unknown mode is `STANDARD`, with the limit preserved;
-- an invalid limit returns `valid: false`, and every decision refuses `INVALID_POLICY`;
+- an invalid limit returns `valid: false`, and every decision refuses `INVALID_POLICY` **under all four flag
+  combinations**. This includes `SELLING_MODES_ENABLED` off, and a stored `PREORDER` with the preorder flag off;
+  neither flag turns the corrupt row into a `STANDARD` sale;
 - `STANDARD` ignores the limit;
 - boundary: `−19` → one more unit is allowed; `−20` → refused; a quantity of 2 at `−19` is refused;
 - per-variant independence: two variants of one product, one at the limit and one above it;
@@ -389,6 +418,12 @@ It prints no PII.
   above the limit, at the limit, and below it.
 
 **Database:**
+
+- **referential integrity (§4.1):**
+  - deleting a product deletes its `ProductSellingPolicy` row (cascade);
+  - deleting the `updatedBy` user keeps the policy and sets `updatedByUserId = null`;
+  - inserting a policy for a nonexistent product fails with a foreign-key error;
+  - a limit of `1` or `−100001` fails the CHECK;
 
 - concurrency at the limit: two buyers for the last oversell unit (`−19` → `−20`); exactly one succeeds;
 - a policy change racing checkout serializes (§7.2): a checkout holding the locks finishes under the old policy, and the
