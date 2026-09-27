@@ -259,6 +259,35 @@ Consequences for existing local order states:
 
 No elapsed-time TTL, process restart, local status label, or buyer retry may silently convert an unresolved hold into released capacity.
 
+> **Amendment — audited manual risk override (owner-approved).** One exception to "release only on definitive evidence"
+> is admitted: an operator may release the hold of a `SYNC_UNKNOWN` order through the audited override defined in
+> `docs/specs/core-kit-sync-unknown-reconciliation-v1.md` §9.3 (b), and only as that section defines it:
+>
+> - the order must be absence-confirmed by durable reconciliation evidence;
+> - the actor is an authenticated, authorized operator established by the trusted operator surface, never a
+>   caller-supplied name; with no such actor the override fails closed;
+> - the operator records a reason and the independent verification they performed, and the override proceeds only when
+>   that verification found no matching order;
+> - the override is never automated;
+> - the order stays under indefinite observation afterwards, and a later appearance is an incident.
+>
+> **Legacy and marker-less rows (owner-approved extension).** Two kinds of `SYNC_UNKNOWN` row have no marker and no id,
+> so they cannot be absence-confirmed:
+>
+> - a row that predates the reconciliation spec's R1, whose path is unknown;
+> - an A/C row created after R1 but before marker writing (R2).
+>
+> For these rows only, the first condition above is replaced by two others: the row is at least 7 days old, and the
+> independent verification covers the row's recorded time bounds, both as that spec's §10.1 defines them. Every other
+> condition applies unchanged. Such a row cannot be observed automatically, so it is listed permanently for manual review
+> instead. It is recorded as `MANUAL_RELEASE_OVERRIDE_LEGACY` or `MANUAL_RELEASE_OVERRIDE_MARKERLESS`. See that spec's
+> §10.1.
+>
+> The override is recorded as `MANUAL_RELEASE_OVERRIDE`. It is **not** definitive no-sale evidence and must never be
+> described or reused as such. Any automated release still requires definitive evidence as defined above. The amendment
+> takes effect when that reconciliation spec is approved and its R4 slice implements the override. Until then, no path
+> releases a `SYNC_UNKNOWN` hold.
+
 #### 5.4.2 What qualifies as mirror-handoff evidence
 
 Mirror handoff requires **causal evidence**, not numeric inference. The implementation must be able to prove both:
