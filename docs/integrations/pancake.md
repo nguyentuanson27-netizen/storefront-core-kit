@@ -152,6 +152,10 @@ What makes an observation "after acceptance":
 - a read that started before acceptance can return a pre-order snapshot however late it is stored, so it never
   retires a hold.
 
+Handoff therefore needs a catalog sync to actually run. Production runs one on a schedule through the `catalog-sync`
+Compose service (`pnpm pancake:catalog:sync --loop`, every `CATALOG_SYNC_INTERVAL_SECONDS`, default 300). Without it,
+every sale would stay locally held and sellable capacity could only fall.
+
 Pancake itself is not a concurrency authority: the same probe showed it accepts orders at zero and negative stock,
 and accepts both halves of a concurrent race. The local reservation ledger is therefore the only place the
 non-negative floor is enforced, before the create-order request is sent.

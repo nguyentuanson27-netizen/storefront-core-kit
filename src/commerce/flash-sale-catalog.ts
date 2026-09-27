@@ -1,3 +1,4 @@
+import { withAdvisorySellableStock } from "./capacity-reservation-repository.ts";
 import { buildVariantStockCte } from "./storefront-catalog.ts";
 import type { StorefrontDiscoveryQuery } from "./storefront-discovery.ts";
 import {
@@ -293,16 +294,20 @@ export function createFlashSaleCatalogRepository(client: PrismaClient) {
           },
           select: flashProductSelection,
         });
-    const byId = new Map(products.map((product) => [product.id, product]));
     const rowById = new Map(idRows.map((row) => [row.id, row]));
 
+    const flashProducts = await withAdvisorySellableStock(
+      client,
+      products.map((product) => toFlashProduct(product)),
+    );
+    const flashById = new Map(flashProducts.map((product) => [product.id, product]));
     const orderedProducts = ids.map((id) => {
-      const product = byId.get(id);
+      const product = flashById.get(id);
       const row = rowById.get(id);
       if (!product || !row) throw new Error("Flash Sale result changed during read");
 
       return {
-        ...toFlashProduct(product),
+        ...product,
         flashSale: Object.freeze({
           representativeVariantId: row.representativeVariantId,
           basePriceVnd: row.basePrice,

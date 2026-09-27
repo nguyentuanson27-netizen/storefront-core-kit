@@ -30,6 +30,7 @@
     "pancake:catalog:audit": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/pancake-catalog-audit.ts",
     "pancake:composite:discover": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/pancake-composite-discover.ts",
     "pancake:composite:invariants": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/pancake-composite-invariants.ts",
+    "pancake:catalog:sync": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/pancake-catalog-sync.ts",
     "pancake:catalog:accept": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/p17-live-catalog-acceptance.ts",
     "pancake:stock:probe": "node --env-file-if-exists=.env.local --experimental-strip-types scripts/pancake-stock-probe.ts",
     "pancake:order:inspect-openapi": "node --experimental-strip-types scripts/pancake-order-openapi-inspect.ts",

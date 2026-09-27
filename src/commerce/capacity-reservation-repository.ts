@@ -276,3 +276,21 @@ export async function readAdvisorySellableUnits(
   }
   return result;
 }
+
+/**
+ * Replaces each variant's raw mirrored `sellableStock` with its advisory sellable units, so a card,
+ * a cart line and a PDP option all advertise the same number for the same variant.
+ */
+export async function withAdvisorySellableStock<
+  V extends Readonly<{ id: string; sellableStock: number }>,
+  P extends Readonly<{ variants: readonly V[] }>,
+>(client: ReadClient, products: readonly P[]): Promise<P[]> {
+  const units = await readAdvisorySellableUnits(
+    client,
+    products.flatMap((product) => product.variants.map(({ id }) => id)),
+  );
+  return products.map((product) => ({
+    ...product,
+    variants: product.variants.map((variant) => ({ ...variant, sellableStock: units.get(variant.id) ?? 0 })),
+  }));
+}

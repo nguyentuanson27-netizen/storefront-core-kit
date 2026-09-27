@@ -69,7 +69,7 @@ Cloudflare remains DNS-only for the initial launch. If Cloudflare proxying is en
    bash deploy/vps/deploy.sh
    ```
 
-12. The helper validates Compose, builds exact-SHA images, starts/waits for PostgreSQL, runs production `release:check`, creates a pre-migration custom-format dump, **stops the currently serving app**, deploys Prisma migrations, starts the exact app/Caddy stack, and waits for `/shop` application health. Stopping the old app first means no old writer can create rows between a migration that establishes a new invariant and the new app starting; storefront writes pause for the length of the migration. If the migration fails, the helper restarts the exact stopped pre-release container (`docker compose start`, never a recreate from the new image) and exits non-zero; with no app running beforehand there is nothing to restart. `tests/integrations/vps-deploy-sequence.test.ts` runs the real script against a recording `docker` to pin this order.
+12. The helper validates Compose, builds exact-SHA images, starts/waits for PostgreSQL, runs production `release:check`, creates a pre-migration custom-format dump, **stops every running database writer (the app and the `catalog-sync` service)**, deploys Prisma migrations, starts the exact app/Caddy/catalog-sync stack, and waits for `/shop` application health. Stopping the old writers first means nothing old can create rows between a migration that establishes a new invariant and the new release starting. The cost is an outage, not just a write pause: with the app stopped, Caddy answers 502 for the whole storefront until the migration finishes and the new app is healthy, so schedule releases that carry migrations accordingly. If the migration fails, the helper restarts exactly the writers it stopped (`docker compose start`, never a recreate from the new image) and exits non-zero; what was not running beforehand is not started. `tests/integrations/vps-deploy-sequence.test.ts` runs the real script against a recording `docker` to pin this order.
 13. Verify public HTTPS and non-destructive buyer-flow smoke through **NPM -> Caddy -> app**.
 14. Verify Caddy exposes no host ports and client-IP/rate-limit behavior is not collapsed to the NPM container address.
 15. Review NPM/Caddy/application/PostgreSQL logs and container health.
@@ -138,6 +138,21 @@ Rollback:
   units may already be sold in Pancake. Resolve those orders against Pancake first;
 - `OrderMirror` and `VariantMirror` rows with reservations cannot be hard-deleted (`Restrict`); that refusal is the
   intended guard, not an error to work around.
+
+Holds clear only through a catalog sync, so the `catalog-sync` Compose service runs one every
+`CATALOG_SYNC_INTERVAL_SECONDS` (default 300) with the release's own `ops` image; `pnpm pancake:catalog:sync` runs a
+single sync by hand. If that service is stopped, sold units stay held and a Pancake restock is not offered until it runs
+again: check `docker compose ... logs catalog-sync` first when stock looks stuck.
+
+Liveness is a successful sync, not a running process. Each success writes a heartbeat inside the container, and the
+service's health check (`scripts/catalog-sync-health.ts`) is healthy only while the last success is at most two
+intervals plus two minutes old, so `docker compose ps` shows `unhealthy` for a loop that keeps failing (bad Pancake
+configuration, an outage) or has never succeeded. `deploy.sh` does not report success until that check turns healthy
+after the first sync of the new release; a failure there means the app is serving but stock will not refresh.
+
+`rollback.sh` stops the current `catalog-sync` before starting the previous app, so an older app never serves beside
+newer sync code. It then starts the previous release's own sync and waits for it to be healthy when that release shipped
+one, and otherwise leaves sync stopped with a warning.
 
 Operator view: units still locally held per variant are
 `SELECT "variantId", SUM("quantity") FROM "CapacityReservationResource" WHERE "mirroredAt" IS NULL GROUP BY 1;`.

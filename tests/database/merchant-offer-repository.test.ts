@@ -20,6 +20,8 @@ import type {
   PancakeCatalogField,
   PancakeParsedCatalogVariation,
 } from "../../src/integrations/pancake/catalog-contract.ts";
+import { reserveOrderCapacity } from "../../src/commerce/capacity-reservation-repository.ts";
+import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -442,4 +444,23 @@ test("M4 the loader stays inside the whole-generation query envelope as offer co
   );
 
   await counting.$disconnect();
+});
+
+test("M3 units other orders still hold are not advertised, matching the storefront", async () => {
+  await catalog.syncSnapshot({ shopId: SHOP_ID, variations: SNAPSHOT, syncedAt: SYNCED_AT });
+  await publishStorefront();
+  const xl = await prisma.variantMirror.findUniqueOrThrow({ where: { pancakeVariationId: "m3-variation-xl" } });
+  const order = await prisma.orderMirror.create({ data: { publicCode: "m3-capacity-hold" } });
+  try {
+    const reserved = await prisma.$transaction((tx) =>
+      reserveOrderCapacity(tx, { orderId: order.id, lines: [{ variantId: xl.id, quantity: 2 }] }),
+    );
+    assert.deepEqual(reserved, { ok: true, created: true });
+
+    // Both XL units are held by an order Pancake has not yet reflected: none is on offer.
+    const offer = (await read()).offers.find((candidate) => candidate.id === "m3-variation-xl");
+    assert.equal(offer?.availability, "out_of_stock");
+  } finally {
+    await deleteOrdersWithCapacity(prisma, { where: { id: order.id } });
+  }
 });
