@@ -343,7 +343,9 @@ release the sweep may ever perform automatically, behind a per-deployment flag t
 **(b) Manual risk override.** This is not a proof. It is an explicit, audited decision by a person to accept the risk of
 a late materialization.
 
-- It is available only through the operator command (§12), and only for an absence-confirmed order.
+- It is available only through the operator command (§12), and only for an absence-confirmed order. The exception is
+  legacy and marker-less rows, which can never be absence-confirmed. They use the §10.1 operator-only override instead,
+  with the same actor and verification rules.
 - **Trusted actor.** The actor recorded for the release is established by the operator surface, never asserted by the
   caller.
   - The command runs only in the trusted operator surface. For example: an admin action behind Core Kit's
@@ -415,7 +417,8 @@ A `FOUND(id)` (from §7 or §8) is applied in one transaction, as a compare-and-
 - **Events.** The confirmed-purchase event and any buyer notification behave as if the order had been confirmed at
   submission. They are emitted after the commit and never twice: the compare-and-set is the guard.
 
-Marker-less orders (anything sent before R2 ships) on path A or C can only be resolved by the operator command. The
+Marker-less orders on path A or C — legacy rows and rows sent between R1 and R2 (§10.1) — can only be resolved by the
+operator command. The
 command links a Pancake id the operator supplies. It first checks shop and existence against the reviewed detail read,
 and then the §8.3 agreement checks, once E3 has reviewed the fields they need. Until then the operator confirms lines and
 phone in the Pancake UI and the command records that they did. There is no search and no automatic release for these
@@ -425,35 +428,62 @@ For path B the id came from Pancake's own create response to this order, so the 
 the order exists in the same shop. No agreement check is needed. This applies **only** to a path-B row that R1 recorded
 with its `createResponseOrderId`. A legacy row never has one (§10.1).
 
-### 10.1 Path recording and legacy rows
+### 10.1 Path recording, legacy rows and marker-less rows
 
-**From R1 on**, the transition into `SYNC_UNKNOWN` records its path in an additive column, for example
-`unknownPath = A | B | C`, in the same write that sets the state:
+**From R1 on:**
 
-- path B also stores `createResponseOrderId`;
-- rows sent after R2 also carry `reconciliationMarker` and `submitAttemptedAt`.
+- the transaction that claims `POS_SUBMITTING` records `submitAttemptedAt`. It moved into R1 so that every post-R1 row
+  has it; it is only a timestamp and needs no Pancake evidence;
+- the transition into `SYNC_UNKNOWN` records its path in an additive column, for example `unknownPath = A | B | C`, in
+  the same write that sets the state;
+- path B also stores `createResponseOrderId`.
+
+**From R2 on**, the claim transaction also records `reconciliationMarker`.
+
+**Row classes.** Every unreleased `SYNC_UNKNOWN` row belongs to exactly one class. The class is derived from stored
+columns, never guessed:
+
+| Class | Definition | Resolved by |
+| --- | --- | --- |
+| **B-with-id** | `unknownPath = B` and `createResponseOrderId` present | the sweep: detail read (§7) |
+| **Marker-bearing** | `unknownPath ∈ {A, C}` and `reconciliationMarker` present | the sweep: marker search (§8, §9) |
+| **Marker-less** | `unknownPath ∈ {A, C}` and `reconciliationMarker` null. These are the A/C failures between R1 and R2, with a known path and `submitAttemptedAt`. | operator only, as below |
+| **Legacy** | `unknownPath = LEGACY` (§10.1 migration) | operator only, as below |
+
+Only B-with-id and marker-bearing rows are sweep work items (§11). **Marker-less and legacy rows are handled by the same
+operator-only contract below.** The differences between them are recorded, never guessed:
+
+- a marker-less row keeps its known path;
+- its age and time bounds come from `submitAttemptedAt` rather than `updatedAt`.
 
 **The R1 migration** sets `unknownPath = LEGACY` on every row that is `SYNC_UNKNOWN` at that moment. It never guesses A,
 B or C, and it never invents an id, a marker or a submit time. A legacy row has, and keeps, null
 `createResponseOrderId`, `reconciliationMarker` and `submitAttemptedAt`.
 
-**What a legacy row allows.**
+**What a legacy or marker-less row allows.**
 
-| Action | Legacy row |
+| Action | Legacy or marker-less row |
 | --- | --- |
 | Detail-read by id (§7) | **No.** No id exists. |
 | Marker search (§8), absence evidence (§9.2) | **No.** No marker exists, so it can never become absence-confirmed. |
 | Definitive release (§9.3 a), anything automatic | **Never.** |
-| Operator `--link <pancakeOrderId>` | **Yes**, on the marker-less terms of §10. The trusted actor (§9.3 b) is required. So is a structured independent verification whose outcome is `MATCHING_ORDER_FOUND` for that id: a search in the Pancake admin by the order's time (bounded by the row's `createdAt` and `updatedAt`), phone and items. The §8.3 agreement checks against the detail read apply once E3 has reviewed their fields. |
-| Operator `--release` | **Yes, as the legacy override** (owner decision §15 Q5: approved). It is the §9.3 (b) override with the absence-confirmed precondition replaced by the conditions below. It is recorded with `syncErrorCode = MANUAL_RELEASE_OVERRIDE_LEGACY`. |
+| Operator `--link <pancakeOrderId>` | **Yes**, on the marker-less terms of §10. The trusted actor (§9.3 b) is required. So is a structured independent verification whose outcome is `MATCHING_ORDER_FOUND` for that id: a search in the Pancake admin by phone and items within the row's time bounds (below). The §8.3 agreement checks against the detail read apply once E3 has reviewed their fields. |
+| Operator `--release` | **Yes, as the operator-only override** (owner decision §15 Q5: approved). It is the §9.3 (b) override with the absence-confirmed precondition replaced by the conditions below. It is recorded with `syncErrorCode = MANUAL_RELEASE_OVERRIDE_LEGACY` for a legacy row and `MANUAL_RELEASE_OVERRIDE_MARKERLESS` for a marker-less row. |
 
-**The legacy override.** `--release` on a legacy row proceeds only when **all** of these hold, and refuses otherwise:
+**Time bounds.**
+
+- **Legacy row:** from the row's `createdAt` to its `updatedAt`, and age is counted from `updatedAt`, the last local
+  transition, which is at or after the create attempt.
+- **Marker-less row:** from `submitAttemptedAt` to `updatedAt`, and age is counted from `submitAttemptedAt`.
+- Both are widened by `skewAllowance` on each side.
+
+**The operator-only override.** `--release` on a legacy or marker-less row proceeds only when **all** of these hold, and
+refuses otherwise:
 
 1. the trusted, authorized actor (§9.3 b) is established by the operator surface, never a caller-supplied name;
-2. the row is at least **7 days** old, counted from its `updatedAt` (the last local transition, which is at or after the
-   create attempt);
-3. a structured independent verification covers a search in the Pancake admin, trash included, bounded by the row's
-   `createdAt` and `updatedAt` plus `skewAllowance` on each side, by phone and items;
+2. the row is at least **7 days** old, counted as above;
+3. a structured independent verification covers a search in the Pancake admin, trash included, within the row's time
+   bounds, by phone and items;
 4. that verification's recorded outcome is `NO_MATCHING_ORDER`:
    - `MATCHING_ORDER_FOUND` refuses and directs the operator to `--link`;
    - `INCONCLUSIVE`, or any missing field, refuses and keeps the hold.
@@ -461,23 +491,25 @@ B or C, and it never invents an id, a marker or a submit time. A legacy row has,
 Like every override, it is never automated and is not proof of no-sale. It is the same atomic release transaction as
 §9.3.
 
-**After a legacy override.** A legacy row has no marker and no id, so the sweep **cannot** watch it for a late
+**After the override.** A legacy or marker-less row has no marker and no id, so the sweep **cannot** watch it for a late
 appearance, and the spec does not pretend otherwise. Instead:
 
-- the report keeps every legacy override permanently in a "released without automatic watch" section, with its time
+- the report keeps every such override permanently in a "released without automatic watch" section, with its time
   bounds, so a later manual review can find it;
 - the release-incident procedure (§9.4) applies if one is ever linked to a Pancake order after release. Linking a
   released row records an incident and re-takes no capacity.
 
 **Surfacing.**
 
-- The report (§12) lists legacy rows in their own section, first, marked "needs operator action: path unknown". It
-  shows each row's age, held units, and the time bounds the operator should search.
-- Legacy rows are **not sweep work items**, because nothing about them can be observed automatically. Their
-  `nextDueAt` stays null, and they do not count toward `ORDER_UNOBSERVED`.
-- Instead, the health command (§11.1) reports their count as a non-failing line (`LEGACY_UNRESOLVED: n`). They are
-  therefore visible, never silently skipped, and they do not hold reconciliation health red indefinitely for a condition
-  no sweep can fix.
+- The report (§12) lists these rows first, in their own section marked "needs operator action". Legacy rows say "path
+  unknown"; marker-less rows show their path. Each row shows its age, held units, and the time bounds the operator should
+  search.
+- Legacy and marker-less rows are **not sweep work items**, because nothing about them can be observed automatically.
+  Their `nextDueAt` stays null, whether they arrived by migration or by a new `SYNC_UNKNOWN` transition. They do not
+  count toward `ORDER_UNOBSERVED`.
+- Instead, the health command (§11.1) reports their counts as non-failing lines (`LEGACY_UNRESOLVED: n`,
+  `MARKERLESS_UNRESOLVED: n`). They are therefore visible and never silently skipped. They do not hold reconciliation
+  health red indefinitely for a condition no sweep can fix.
 
 ## 11. Runtime
 
@@ -488,10 +520,12 @@ appearance, and the spec does not pretend otherwise. Instead:
   - The sweep's failure must not fail the sync or the sync's heartbeat; catalog-sync health stays about catalog sync. The
     sweep has its own liveness signal instead (§11.1). Failures are logged with fixed, non-PII messages.
 - **Batch and fair scheduling.** Each tick handles at most `N` work items (default 20) under a per-tick Pancake request
-  budget. A work item is an unreleased `SYNC_UNKNOWN` order or a released order's watch entry (§9.4).
+  budget. A work item is an unreleased `SYNC_UNKNOWN` row of class B-with-id or marker-bearing (§10.1), or a released
+  order's watch entry (§9.4). Legacy and marker-less rows are never work items.
   - **`nextDueAt` on every item.**
     - Every work item carries a durable `nextDueAt`.
-    - A new `SYNC_UNKNOWN` order starts due immediately.
+    - A new `SYNC_UNKNOWN` row that is a work item starts due immediately. A new marker-less row gets `nextDueAt = null`
+      (§10.1).
     - After each observation, whatever its outcome, `nextDueAt = observedAt + cadence`. The cadence is `D` for an
       unreleased order, and the §9.4 decaying cadence for a watch entry.
     - An item **not attempted** because the tick's budget ran out before reaching it keeps its `nextDueAt`. It is
@@ -552,7 +586,8 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 ## 12. Operator surface
 
 - **Report.** `pnpm pancake:orders:unknown` lists every `SYNC_UNKNOWN` order with:
-  - its age, marker presence and path (A, B, C, or `LEGACY` in its own section first, §10.1);
+  - its age, marker presence, path and class. Legacy and marker-less rows come first, in their own "needs operator
+    action" section (§10.1);
   - its last observations;
   - whether it is absence-confirmed (an investigation status, not proof);
   - its held units.
@@ -561,12 +596,22 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - **Command.** `pnpm pancake:orders:reconcile <publicCode> [--link <pancakeOrderId> | --release]`.
   - With no flag it runs one observation now.
   - `--link` applies §10 after the agreement checks.
-  - `--release` applies the manual risk override (§9.3 b), approved as owner decision §15 Q4. It refuses unless all of
-    these hold:
-    - the order is absence-confirmed;
-    - the structured verification fields are supplied;
-    - the recorded verification outcome is `NO_MATCHING_ORDER`;
-    - an authenticated, authorized actor is established by the operator surface.
+  - `--release` branches on the row's class (§10.1). Each branch has its own complete preconditions, and the command
+    refuses unless every one holds:
+    - **Marker-bearing or B-with-id row: the §9.3 (b) override** (owner decision §15 Q4). It requires:
+      - the order is absence-confirmed;
+      - the structured verification fields are supplied;
+      - the recorded verification outcome is `NO_MATCHING_ORDER`;
+      - an authenticated, authorized actor is established by the operator surface.
+    - **Legacy or marker-less row: the §10.1 operator-only override** (owner decision §15 Q5). Absence-confirmed is *not*
+      required, because such a row can never reach it. Instead it requires:
+      - the row is at least 7 days old, counted as §10.1 defines;
+      - the verification covers the row's §10.1 time bounds;
+      - the structured verification fields are supplied;
+      - the recorded outcome is `NO_MATCHING_ORDER`;
+      - an authenticated, authorized actor is established by the operator surface.
+    - A B-with-id row in practice resolves by detail read (§7); the override applies to it only if that read stays
+      ambiguous.
   - `--link` and `--release` run only in the trusted operator surface (§9.3 b). Every use is recorded with that actor,
     the reason, and the verification outcome. A caller-supplied name is never the recorded actor.
 - **Docs.** `docs/operations/release-and-rollback.md` replaces "resolve by hand" with this procedure.
@@ -634,6 +679,23 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
 - `FOUND` after release is recorded as an incident and re-takes nothing;
 - the sweep never sends a create request.
 
+**Staged rollout (R1 before R2):**
+
+- an A or C failure after R1 and before R2 produces `unknownPath = A | C`, `submitAttemptedAt` set,
+  `reconciliationMarker` null, and `nextDueAt` null;
+- the sweep never selects it;
+- it is excluded from `ORDER_UNOBSERVED` and counted in `MARKERLESS_UNRESOLVED`;
+- it is listed in the report's "needs operator action" section with its path and its `submitAttemptedAt` time bounds;
+- `--link` on it requires the trusted actor and a `MATCHING_ORDER_FOUND` verification;
+- `--release` on it follows the §10.1 branch: age ≥ 7 days from `submitAttemptedAt`; recorded as
+  `MANUAL_RELEASE_OVERRIDE_MARKERLESS`;
+- a path-B row in the same window with `createResponseOrderId` is a work item and is detail-read.
+
+**Operator branch consistency:**
+
+- `--release` on a legacy row succeeds without absence-confirmed when the §10.1 conditions hold;
+- `--release` on a marker-bearing row without absence-confirmed is refused.
+
 **Migration and legacy rows:**
 
 - given an existing `SYNC_UNKNOWN` row created before R1 (`CREATE_OUTCOME_UNKNOWN`, no id, no marker), the R1
@@ -661,8 +723,8 @@ writer), and a deploy whose first sweep fails reports "order reconciliation has 
 | Slice | Content | Depends on |
 | --- | --- | --- |
 | **R0** — evidence | E1–E5 artifacts and docs only, and E6 if Pancake can supply it. Live verification is human-gated. | owner approval of this spec |
-| **R1** — path B | Record `unknownPath` and keep the returned id; the migration marking existing rows `LEGACY` (§10.1); detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. | none (reviewed detail contract) |
-| **R2** — marker write | Additive `reconciliationMarker` and `submitAttemptedAt`; written in the claim transaction; carrier per E1/E2. | R0 |
+| **R1** — path B | Record `unknownPath` and `submitAttemptedAt`, and keep the returned id; the §10.1 row classes, with marker-less rows as operator-only; the migration marking existing rows `LEGACY` (§10.1); detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. | none (reviewed detail contract) |
+| **R2** — marker write | Additive `reconciliationMarker`, written in the claim transaction; carrier per E1/E2. (`submitAttemptedAt` already ships in R1.) | R0 |
 | **R3** — search and `FOUND` | The reviewed list gateway; §8 classification; the sweep in `catalog-sync`; `FOUND`-only transitions. | R0, R2 |
 | **R4** — absence evidence and manual override | The §9.2 investigation status; `releasedAt` across every capacity read path; §9.4 observation of released orders; the operator `--release` override. | R3 (§15 Q4 approved) |
 | **R5** — definitive release (optional) | §9.3 (a) behind a flag that defaults off. | R4 + E4 **and E6** established + carrier rule 1 + owner decision §15 Q1. **Blocked until E6 exists.** |
@@ -682,7 +744,8 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
    not proof of no-sale. It stays operator-only, never automated, and the overridden order stays under indefinite
    observation (§9.4).
 5. **Legacy rows and the override (§10.1). Decided: approved by the owner.** The manual override is extended to legacy
-   `SYNC_UNKNOWN` rows on the terms in §10.1:
+   `SYNC_UNKNOWN` rows on the terms in §10.1. It applies equally to marker-less A/C rows created between R1 and R2,
+   which have the same evidence (no marker, no id) plus a known path and `submitAttemptedAt`. The terms are:
    - the trusted actor;
    - age of at least 7 days since `updatedAt`;
    - a `NO_MATCHING_ORDER` verification over the row's time bounds.

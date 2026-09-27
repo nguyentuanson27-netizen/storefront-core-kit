@@ -271,11 +271,16 @@ No elapsed-time TTL, process restart, local status label, or buyer retry may sil
 > - the override is never automated;
 > - the order stays under indefinite observation afterwards, and a later appearance is an incident.
 >
-> **Legacy rows (owner-approved extension).** A `SYNC_UNKNOWN` row that predates the reconciliation spec's R1 (path
-> unknown, no marker, no id) cannot be absence-confirmed. For such a row only, the first condition above is replaced by:
-> the row is at least 7 days old since its last local transition, and the independent verification covers the row's
-> recorded time bounds. Every other condition applies unchanged. Such a row cannot be observed automatically, so it is
-> listed permanently for manual review instead. It is recorded as `MANUAL_RELEASE_OVERRIDE_LEGACY`. See that spec's
+> **Legacy and marker-less rows (owner-approved extension).** Two kinds of `SYNC_UNKNOWN` row have no marker and no id,
+> so they cannot be absence-confirmed:
+>
+> - a row that predates the reconciliation spec's R1, whose path is unknown;
+> - an A/C row created after R1 but before marker writing (R2).
+>
+> For these rows only, the first condition above is replaced by two others: the row is at least 7 days old, and the
+> independent verification covers the row's recorded time bounds, both as that spec's §10.1 defines them. Every other
+> condition applies unchanged. Such a row cannot be observed automatically, so it is listed permanently for manual review
+> instead. It is recorded as `MANUAL_RELEASE_OVERRIDE_LEGACY` or `MANUAL_RELEASE_OVERRIDE_MARKERLESS`. See that spec's
 > §10.1.
 >
 > The override is recorded as `MANUAL_RELEASE_OVERRIDE`. It is **not** definitive no-sale evidence and must never be
