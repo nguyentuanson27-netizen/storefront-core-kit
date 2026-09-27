@@ -126,6 +126,32 @@ model ProductSellingPolicy {
 **Every consumer goes through this resolver.** A test enumerates the modules that read `ProductSellingPolicy`, and only
 the resolver's repository may.
 
+### 4.2.1 Effective policy: the capability flags are enforced here, not only in admin
+
+The stored policy is what the owner configured. The **effective policy** is what every sale decision uses: checkout,
+the live pre-check, the advisory TypeScript read, the SQL twin, and Merchant. There is exactly one function:
+
+```text
+effectivePolicy(stored, flags) =
+  if !flags.SELLING_MODES_ENABLED                 → STANDARD, floor 0          (reason: SELLING_MODES_DISABLED)
+  else if resolved.sellingMode == PREORDER
+       && !flags.SELLING_MODE_PREORDER_ENABLED    → STANDARD, floor 0          (reason: PREORDER_DISABLED)
+  else                                            → resolveSellingPolicy(stored)
+```
+
+- **Both flags default to off.**
+  - `SELLING_MODES_ENABLED` gates the whole capability.
+  - `SELLING_MODE_PREORDER_ENABLED` additionally gates `PREORDER`.
+- **A stored row outlives the flag that allowed it.** For example: the preorder flag is on, `PREORDER` is saved, then the
+  flag is turned off. The effective policy is then `STANDARD`, so no preorder sale can happen. The product keeps selling
+  from ready stock only, exactly as a `PREORDER` product above 0 already does.
+  - This downgrade is always in the conservative direction.
+  - It is explicit: the operator report lists every row whose stored mode differs from its effective mode, with the
+    reason.
+- The flags are read once per decision from server configuration. They are never read from the request.
+- The SQL twin receives both flags as bound parameters, so TypeScript and SQL stay in parity under every flag
+  combination.
+
 ### 4.3 The floor
 
 ```text
@@ -237,8 +263,27 @@ For each variant with product policy `P`:
 freeUnits     = mirroredUnits − activeReservedUnits          // may be negative
 sellableUnits = max(0, freeUnits − floor)                    // units that may still be accepted, per §5
 readyUnits    = max(0, freeUnits)                            // units that exist now
-isPreorderSale = P.mode == PREORDER && sellableUnits ≥ 1 && readyUnits < 1
+isPreorderSale = P.mode == PREORDER && sellableUnits ≥ 1 && readyUnits < 1     // "the next single unit is a preorder"
+
+acceptedAsPreorder(q) = P.mode == PREORDER && q > readyUnits                   // for a requested quantity q
 ```
+
+**Preorder classification is quantity-aware.** `isPreorderSale` answers only "is one more unit a preorder". It drives
+the card and PDP option marker. For any **line** — cart, checkout, and the order — the classification is
+`acceptedAsPreorder(line.quantity)`. That covers the case where some units are ready and the rest are not.
+
+Example: `freeUnits = 1`, limit `−20`:
+
+- `sellableUnits = 21`;
+- `isPreorderSale = false`, because the next single unit is ready;
+- buying 2 is allowed (`2 ≤ 21`), but `acceptedAsPreorder(2) = true`.
+
+So the cart and checkout line carries the preorder marker. It is never rendered as ordinary stock. This is the rule
+Lana's `resolveAcceptedPreorderState` exists for.
+
+In v1 the line classification is advisory: rendered in cart and checkout, and recomputed at checkout snapshot time.
+Preorder truth v1 moves the authoritative classification to the capacity acceptance boundary, evaluated under the lock,
+and persists it.
 
 - **Composite parents:** unchanged. The existing min over components uses component floor 0. A non-`STANDARD` parent
   has `sellableUnits = 0` (§6.1).
@@ -260,12 +305,18 @@ the string.
 | Surface | `STANDARD` / `OVERSELL` / `PREORDER` with ready stock | `PREORDER` preorder-sale (`isPreorderSale`) | At or below floor |
 | --- | --- | --- | --- |
 | Card, PDP option | Purchasable; no marker | Purchasable; marker next to the existing availability text | `OUT_OF_STOCK`, as today |
-| Cart and checkout line | Unchanged | Marker on the line | Refused, as today |
-| `/shop` `availability=in-stock` | Included when `sellableUnits ≥ 1` | **Excluded.** The filter means "ready now" (§14 Q4, decided) | Excluded |
+| Cart and checkout line | Unchanged, unless `acceptedAsPreorder(line.quantity)` | Marker on the line whenever `acceptedAsPreorder(line.quantity)`, including a line that starts with ready units (§8) | Refused, as today |
+| `/shop` `availability=in-stock` | Included when `sellableUnits ≥ 1`. This includes `OVERSELL` below 0 | **Excluded** | Excluded |
 | JSON-LD offer | `InStock` | **Offer omitted** in v1 (§14 Q2, decided) | `OutOfStock` |
 | Merchant feed | `in_stock` when `sellableUnits ≥ 1` | **Excluded** with reason `PREORDER_PROJECTION_PENDING` (§14 Q2, decided) | `out_of_stock` |
 
 For `OVERSELL`, "the customer can actually buy" is the feed truth, so an `OVERSELL` variant below 0 is `in_stock`.
+
+**The `availability=in-stock` filter means "buyable now without preorder"** (§14 Q4). A variant matches when
+`sellableUnits ≥ 1 && !isPreorderSale`. That includes `OVERSELL` below 0, which has no customer-facing difference from
+ready stock, and excludes preorder-sale variants. It deliberately does **not** mean "physically in stock"
+(`readyUnits ≥ 1`), and the spec, UI copy and docs must not describe it that way. The existing label `Chỉ còn hàng`
+("in stock only") is compatible with "buyable now".
 
 Rows 2–5 of the `PREORDER` column are placeholders that Preorder truth v1 replaces:
 
@@ -283,9 +334,14 @@ Rows 2–5 of the `PREORDER` column are placeholders that Preorder truth v1 repl
   1. requires the existing admin session and role; the actor is recorded from the session, never from the form;
   2. validates the limit as an integer in `[−100000, 0]`;
   3. refuses a non-`STANDARD` mode for a product with a composite parent variant, with an explanation;
-  4. refuses `PREORDER` unless the deployment flag `SELLING_MODE_PREORDER_ENABLED` is on;
+  4. refuses any non-`STANDARD` mode unless `SELLING_MODES_ENABLED` is on, and refuses `PREORDER` unless
+     `SELLING_MODE_PREORDER_ENABLED` is also on;
   5. performs the §7.2 locked upsert.
-- The flag defaults to **off** and is documented in `deploy/vps/env.example`. Preorder truth v1 is what turns it on.
+- Both flags default to **off** and are documented in `deploy/vps/env.example`.
+  - `SELLING_MODES_ENABLED` is turned on only after M3 has shipped (§13).
+  - `SELLING_MODE_PREORDER_ENABLED` is turned on only after Preorder truth v1 ships.
+- Admin gating is a convenience. **The authority is §4.2.1**, so a row saved while a flag was on stops affecting sales
+  the moment that flag is off.
 
 ### 10.2 Why `PREORDER` ships behind a flag
 
@@ -351,6 +407,26 @@ It prints no PII.
   - takes its actor from the session;
 - only the resolver's repository reads `ProductSellingPolicy`.
 
+**Flags (effective policy, §4.2.1):**
+
+- **flag on → save `PREORDER` → flag off → a preorder sale is impossible.** Checkout refuses beyond ready stock; the
+  advisory read shows `sellableUnits = readyUnits` and `isPreorderSale = false`; SQL agrees; the report lists
+  `PREORDER_DISABLED`;
+- `SELLING_MODES_ENABLED` off → an `OVERSELL` row behaves exactly as `STANDARD` in checkout, advisory TypeScript, SQL,
+  Merchant and the live pre-check;
+- TS/SQL parity holds under all four flag combinations.
+
+**Quantity-aware preorder (§8):**
+
+- `1 ready + buy 2` under `PREORDER`: the purchase is allowed; the card and PDP show no marker; the cart and checkout
+  line show the marker (`acceptedAsPreorder(2) = true`);
+- `2 ready + buy 2`: no marker anywhere.
+
+**Filter (§9):**
+
+- `OVERSELL` below 0 matches `availability=in-stock`; a preorder-sale variant does not; a `STANDARD` variant at 0 does
+  not.
+
 **Browser:**
 
 - an `OVERSELL` variant at `−3` is purchasable with no marker;
@@ -365,8 +441,16 @@ It prints no PII.
 | **M2** — checkout authority | §5, §6, §7: floors in `evaluatePlannedCapacity`, the policy read after lock, the locked policy write, the mode-aware live pre-check, reasons; hardening §5.1 amendment. | M1 |
 | **M3** — advisory and surfaces | §8 TypeScript and SQL with parity; `readyUnits`/`isPreorderSale` in view models; the §9 surface rules including Merchant exclusion and JSON-LD omission; the brand copy key; browser tests. | M2 |
 
-Each slice is its own pull request with the full gate set. After M3, `STANDARD` + `OVERSELL` are production-ready.
-`PREORDER` waits for Preorder truth v1.
+Each slice is its own pull request with the full gate set. **No slice changes production behavior on its own.**
+
+- `SELLING_MODES_ENABLED` stays off from M1 through M3, and the effective policy (§4.2.1) is `STANDARD` everywhere while
+  it is off. So the intermediate states cannot be observed in production:
+  - after M1, a policy can be stored but is never read for sales;
+  - after M2, checkout would honor `OVERSELL` while card, PDP, cart and SQL do not yet.
+- Every slice's tests run with the flag both off (asserting exact `STANDARD` behavior) and on.
+- The flag is turned on in production only after M3 is merged and its browser tests pass. That step is a documented
+  configuration change in `docs/operations/release-and-rollback.md`, not code.
+- After that, `STANDARD` + `OVERSELL` are live. `PREORDER` additionally waits for its own flag and Preorder truth v1.
 
 ## 14. Owner decisions — all four decided (approved as recommended)
 
@@ -376,8 +460,9 @@ Each slice is its own pull request with the full gate set. After M3, `STANDARD` 
    - their JSON-LD offer is omitted;
    - both apply only once the flag is on, and Preorder truth v1 replaces them with a dated preorder projection.
 3. **Default limit `−20`, product-level only.** Decided: yes. A per-variant override is out of scope.
-4. **Meaning of the `availability=in-stock` filter.** Decided: "ready now". It includes `OVERSELL` below 0 and
-   excludes preorder-sale variants.
+4. **Meaning of the `availability=in-stock` filter.** Decided: "buyable now without preorder"
+   (`sellableUnits ≥ 1 && !isPreorderSale`). It includes `OVERSELL` below 0 and excludes preorder-sale variants. It is
+   not "physically in stock" (§9).
 
 ## 15. Boundaries
 
