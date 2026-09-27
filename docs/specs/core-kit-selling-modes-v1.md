@@ -41,7 +41,7 @@ The limit is configured once per product and enforced **independently per varian
 - **No UI redesign.** Existing surfaces consume new view-model facts. The only new customer-facing element is a minimal
   preorder text marker rendered by existing components (§9).
 - **No preorder cycle, ETA, order-level preorder snapshot, or Merchant/JSON-LD preorder projection.** Those are
-  *Preorder truth v1*, the next spec. Until it ships, `PREORDER` cannot be enabled in production (§10, §14 Q1).
+  *Preorder truth v1*, the next spec. Until it ships, `PREORDER` cannot be enabled in production (§10, §14 Q1, decided).
 - **No oversell or preorder for composite parents** (§6).
 - No per-variant policy override, no scheduled mode changes, no automatic mode switching.
 - No change to Pancake: the policy is never written to Pancake, and catalog sync never writes it.
@@ -261,9 +261,9 @@ the string.
 | --- | --- | --- | --- |
 | Card, PDP option | Purchasable; no marker | Purchasable; marker next to the existing availability text | `OUT_OF_STOCK`, as today |
 | Cart and checkout line | Unchanged | Marker on the line | Refused, as today |
-| `/shop` `availability=in-stock` | Included when `sellableUnits ≥ 1` | **Excluded.** The filter means "ready now" (§14 Q4) | Excluded |
-| JSON-LD offer | `InStock` | **Offer omitted** in v1 (§14 Q2) | `OutOfStock` |
-| Merchant feed | `in_stock` when `sellableUnits ≥ 1` | **Excluded** with reason `PREORDER_PROJECTION_PENDING` (§14 Q2) | `out_of_stock` |
+| `/shop` `availability=in-stock` | Included when `sellableUnits ≥ 1` | **Excluded.** The filter means "ready now" (§14 Q4, decided) | Excluded |
+| JSON-LD offer | `InStock` | **Offer omitted** in v1 (§14 Q2, decided) | `OutOfStock` |
+| Merchant feed | `in_stock` when `sellableUnits ≥ 1` | **Excluded** with reason `PREORDER_PROJECTION_PENDING` (§14 Q2, decided) | `out_of_stock` |
 
 For `OVERSELL`, "the customer can actually buy" is the feed truth, so an `OVERSELL` variant below 0 is `in_stock`.
 
@@ -368,16 +368,16 @@ It prints no PII.
 Each slice is its own pull request with the full gate set. After M3, `STANDARD` + `OVERSELL` are production-ready.
 `PREORDER` waits for Preorder truth v1.
 
-## 14. Owner decisions
+## 14. Owner decisions — all four decided (approved as recommended)
 
-1. **`PREORDER` behind `SELLING_MODE_PREORDER_ENABLED` (default off) until Preorder truth v1.** Recommended: yes (§10.2).
-2. **Merchant and JSON-LD for preorder-sale variants in v1.** Recommended: exclude from Merchant
-   (`PREORDER_PROJECTION_PENDING`) and omit the JSON-LD offer. Emitting `in_stock`/`InStock` would be false, and a
-   `preorder` availability needs the date authority Preorder truth v1 defines. This only applies once the flag is on.
-3. **Default limit `−20`, product-level only.** Recommended: yes, matching Lana's owner-approved value. A per-variant
-   override is out of scope.
-4. **Meaning of the `availability=in-stock` filter.** Recommended: "ready now". It includes `OVERSELL` below 0, since
-   there is no customer-facing difference, and excludes preorder-sale variants.
+1. **`PREORDER` behind `SELLING_MODE_PREORDER_ENABLED` (default off) until Preorder truth v1.** Decided: yes (§10.2).
+2. **Merchant and JSON-LD for preorder-sale variants in v1.** Decided:
+   - preorder-sale variants are excluded from Merchant with reason `PREORDER_PROJECTION_PENDING`;
+   - their JSON-LD offer is omitted;
+   - both apply only once the flag is on, and Preorder truth v1 replaces them with a dated preorder projection.
+3. **Default limit `−20`, product-level only.** Decided: yes. A per-variant override is out of scope.
+4. **Meaning of the `availability=in-stock` filter.** Decided: "ready now". It includes `OVERSELL` below 0 and
+   excludes preorder-sale variants.
 
 ## 15. Boundaries
 
