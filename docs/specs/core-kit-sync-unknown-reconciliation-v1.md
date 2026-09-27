@@ -454,6 +454,9 @@ with its `createResponseOrderId`. A legacy row never has one (§10.1).
 - **no** successful detail or existence read is required for that id, because Pancake's own create response to this
   order already proved it existed;
 - the trusted, authorized actor (§9.3 b) and a recorded reason remain required;
+- **no independent verification outcome is recorded**, because none was performed. The audit record's evidence source
+  is `CREATE_RESPONSE_ID`, and its verification outcome is `NOT_APPLICABLE`. It never records `MATCHING_ORDER_FOUND` or
+  any other outcome that would claim a check that did not happen;
 - all normal protections still apply: the compare-and-set on `state = SYNC_UNKNOWN`, and `pancakeOrderId @unique` (an id
   already linked to another order refuses);
 - `acceptedAt` is the committed link instant, as above.
@@ -647,8 +650,18 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
       - an authenticated, authorized actor is established by the operator surface.
     - **B-with-id row: refused, always.** Pancake returned an id for it, so there is no no-sale to override (§7). The
       command points to `--link` and to the `B_ID_UNREADABLE` incident procedure.
-  - `--link` and `--release` run only in the trusted operator surface (§9.3 b). Every use is recorded with that actor,
-    the reason, and the verification outcome. A caller-supplied name is never the recorded actor.
+  - `--link` and `--release` run only in the trusted operator surface (§9.3 b). A caller-supplied name is never the
+    recorded actor.
+  - **The audit record has one schema, and its evidence fields depend on the action:**
+
+    | Action | Evidence source | Verification outcome |
+    | --- | --- | --- |
+    | `--link` of a legacy, marker-less or marker-bearing row, or of an id other than a stored `createResponseOrderId` | `INDEPENDENT_VERIFICATION` | `MATCHING_ORDER_FOUND` (required) |
+    | B-with-id recovery `--link` of the stored `createResponseOrderId` (§10) | `CREATE_RESPONSE_ID` | `NOT_APPLICABLE` |
+    | `--release` (§9.3 b or §10.1) | `INDEPENDENT_VERIFICATION` | `NO_MATCHING_ORDER` (required) |
+
+    Every record carries the actor and the reason. An outcome is recorded only when a verification was actually
+    performed.
 - **Docs.** `docs/operations/release-and-rollback.md` replaces "resolve by hand" with this procedure.
   `docs/integrations/pancake.md` records the reviewed marker and list contract.
 
@@ -712,6 +725,9 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   also refused when the stored id is already linked to another order, or the row is no longer `SYNC_UNKNOWN`;
 - **handoff boundary for a recovery link:** a catalog-sync stock observation that started before the link instant does
   not hand the hold off, while the next observation that starts after it does;
+- **the recovery link fabricates no verification:** its audit record has evidence source `CREATE_RESPONSE_ID` and
+  outcome `NOT_APPLICABLE`, never `MATCHING_ORDER_FOUND`. An ordinary `--link` without a recorded
+  `MATCHING_ORDER_FOUND` is refused;
 - operator `--release` without the structured verification fields is refused;
 - **operator `--release` whose recorded verification outcome is `MATCHING_ORDER_FOUND` is refused**, releases nothing,
   and points to `--link` or incident handling; `INCONCLUSIVE` is refused too;
@@ -767,10 +783,10 @@ writer), and a deploy whose first sweep fails reports "order reconciliation has 
 | Slice | Content | Depends on |
 | --- | --- | --- |
 | **R0** — evidence | E1–E5 artifacts and docs only, and E6 if Pancake can supply it. Live verification is human-gated. | owner approval of this spec |
-| **R1** — path B | Record `unknownPath` and `submitAttemptedAt`, and keep the returned id; the §10.1 row classes, with marker-less rows as operator-only; the migration marking existing rows `LEGACY` (§10.1); detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. | none (reviewed detail contract) |
+| **R1** — path B | Record `unknownPath` and `submitAttemptedAt`, and keep the returned id; the §10.1 row classes, with marker-less rows as operator-only; the migration marking existing rows `LEGACY` (§10.1); detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. **The operator surface these rows need:** the trusted, authorized actor (§9.3 b); the audit record schema (§12); `--link`, covering both the B-with-id recovery link (§10) and the ordinary link with independent verification for legacy and marker-less rows (§10.1); and incident acknowledgement for `B_ID_UNREADABLE`. Every incident R1 can raise is therefore resolvable in R1. | none (reviewed detail contract) |
 | **R2** — marker write | Additive `reconciliationMarker`, written in the claim transaction; carrier per E1/E2. (`submitAttemptedAt` already ships in R1.) | R0 |
 | **R3** — search and `FOUND` | The reviewed list gateway; §8 classification; the sweep in `catalog-sync`; `FOUND`-only transitions. | R0, R2 |
-| **R4** — absence evidence and manual override | The §9.2 investigation status; `releasedAt` across every capacity read path; §9.4 observation of released orders; the operator `--release` override. | R3 (§15 Q4 approved) |
+| **R4** — absence evidence and manual override | The §9.2 investigation status; `releasedAt` across every capacity read path; §9.4 observation of released orders; the operator `--release` override, for both the §9.3 (b) and §10.1 branches, reusing R1's trusted actor and audit schema. | R3 (§15 Q4 and Q5 approved) |
 | **R5** — definitive release (optional) | §9.3 (a) behind a flag that defaults off. | R4 + E4 **and E6** established + carrier rule 1 + owner decision §15 Q1. **Blocked until E6 exists.** |
 
 Each slice is its own pull request. R1 can ship before any new Pancake evidence exists.
