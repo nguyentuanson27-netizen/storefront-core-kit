@@ -65,7 +65,7 @@ async function readPlanningEdges(client: ReadClient, variantIds: readonly string
  * A hold counts until its resource has handed its accounting to the mirror (`mirroredAt`); there is
  * no other way out, so no timer, status label or retry can release capacity here.
  */
-async function readResourceFacts(
+export async function readResourceFacts(
   client: ReadClient,
   resourceVariantIds: readonly string[],
 ): Promise<Map<string, ResourceCapacityFact>> {
