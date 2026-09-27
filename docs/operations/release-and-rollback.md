@@ -159,6 +159,38 @@ Operator view: units still locally held per variant are
 A hold that never clears after syncs belongs to a `SYNC_UNKNOWN` order or to a composite component consumed more than
 once per set, whose handoff is not yet evidenced (`docs/integrations/pancake.md`).
 
+## Selling modes (`20260928090000_add_product_selling_policy`, `SELLING_MODES_ENABLED`)
+
+Spec: `docs/specs/core-kit-selling-modes-v1.md`. The migration only adds `ProductSellingPolicy`; no product has a row
+until an admin saves one, and a product without a row is `STANDARD` with limit −20, exactly the behaviour before
+selling modes.
+
+Two flags, both **off** by default in `deploy/vps/env.example`:
+
+- `SELLING_MODES_ENABLED` — the whole capability. While it is off every stored policy is effectively `STANDARD` in
+  checkout, the live Pancake pre-check, the storefront advisory read (TypeScript and SQL), the Merchant feed and
+  JSON-LD, and the admin form accepts only `STANDARD` or the default.
+- `SELLING_MODE_PREORDER_ENABLED` — `PREORDER` additionally. Keep it off until Preorder truth v1 ships: a preorder
+  accepted without its confirmed-order snapshot loses its preorder history for good.
+
+Turning `STANDARD` + `OVERSELL` on is a configuration change, not a deploy of new code:
+
+1. Confirm the release contains Selling Modes M1–M3 (`git log` shows M3b) and that its browser gate passed.
+2. Preview what will change: `pnpm catalog:selling-policy:report` lists every stored policy, its effective mode under
+   the current flags and each variant's free / sellable / ready units. Every row reads `SELLING_MODES_DISABLED` while
+   the flag is off; resolve any `INVALID_POLICY` or `COMPOSITE_MODE_UNSUPPORTED` row first.
+3. Set `SELLING_MODES_ENABLED=true` in the host env file and restart the app (and `catalog-sync`, which reads the same
+   env) with the current release: no migration, no rebuild.
+4. Verify: the report shows effective `OVERSELL` for the intended products and no `SELLING_MODES_DISABLED`; an
+   `OVERSELL` variant below zero is purchasable on its PDP with no preorder marker and appears in `/shop?availability=
+   in-stock`; the Merchant feed lists it `in_stock`.
+
+Rollback is the same switch in reverse and is safe in the conservative direction: set `SELLING_MODES_ENABLED=false`
+and restart. Every product sells as `STANDARD` again from the next decision; holds already taken below zero stay valid
+ledger rows and hand off to the mirror as usual; negative stock simply stops selling until it is positive again.
+Stored policies are kept, so turning the flag back on restores them. Never delete `ProductSellingPolicy` rows to "reset"
+a product: the admin "Mặc định" choice does that one product at a time and records who did it.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

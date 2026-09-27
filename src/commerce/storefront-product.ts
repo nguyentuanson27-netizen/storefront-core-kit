@@ -26,9 +26,10 @@ export type StorefrontVariantFacts = {
  * rather than on the total, because the total hides the defect — `[5, -3]` is an unusable pair of
  * rows that adds up to a perfectly ordinary 2.
  *
- * The rule matches M1's mirrored-stock aggregation (`merchant-offer-repository`), deliberately and
- * by value rather than by import: the Merchant feed and this catalog read are independent consumers
- * of the same mirror, and making one call into the other would couple two downstream publishers
+ * This is the `STANDARD` half of `isVariantAvailabilityPublishable` (`selling-mode-publication`), which
+ * the PDP read applies with the selling policy; listing reads keep this policy-free default. It
+ * matches M1's mirrored-stock aggregation deliberately and by value rather than by import: the
+ * Merchant feed and this catalog read are independent consumers of the same mirror, and making one call into the other would couple two downstream publishers
  * that are meant to converge on upstream facts. `docs/audits/merchant-jsonld-parity.md` records the
  * pairing, and `tests/domain/merchant-structured-data-parity.test.ts` proves the two agree.
  */

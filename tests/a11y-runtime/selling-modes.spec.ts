@@ -186,3 +186,14 @@ test("availability=in-stock keeps the OVERSELL variant and excludes the preorder
   await expect(card(page, oversell.name)).toBeVisible();
   await expect(card(page, preorder.name)).toHaveCount(0);
 });
+
+test("JSON-LD states OVERSELL below zero as InStock and publishes no offer for the preorder sale", async ({ page }) => {
+  const offersOf = async (slug: string) => {
+    await page.goto(`${BASE_URL}/shop/${slug}`, { waitUntil: "networkidle" });
+    const documents = await page.locator('script[type="application/ld+json"]').allTextContents();
+    const text = documents.join("\n");
+    return { hasOffer: text.includes('"@type":"Offer"'), inStock: text.includes("https://schema.org/InStock") };
+  };
+  expect(await offersOf(oversell.slug)).toEqual({ hasOffer: true, inStock: true });
+  expect(await offersOf(preorder.slug)).toEqual({ hasOffer: false, inStock: false });
+});

@@ -1,6 +1,9 @@
 # Spec — Core Kit Selling Modes v1
 
-Status: **PROPOSED. Human review is required before planning or implementation.**
+Status: **IMPLEMENTED behind flags (M1–M3).** Approved and merged as nguyentuanson27-netizen/storefront-core-kit#21;
+implemented by nguyentuanson27-netizen/storefront-core-kit#22 (M1), #23 (M2), #24 (M3a) and the M3b pull request. `SELLING_MODES_ENABLED` and `SELLING_MODE_PREORDER_ENABLED`
+remain off; turning on `STANDARD` + `OVERSELL` is the configuration step in `docs/operations/release-and-rollback.md`
+("Selling modes"). `PREORDER` waits for Preorder truth v1.
 
 Base: `storefront-core-kit/main@c3d421e` (after nguyentuanson27-netizen/storefront-core-kit#20).
 
