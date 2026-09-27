@@ -4,6 +4,8 @@ import {
   evaluatePlannedCapacity,
   planCapacityResources,
   wholeMirroredUnits,
+  type CapacityResource,
+  type CapacityResourceKind,
   type CompositeEdgeFact,
   type ResourceCapacityFact,
 } from "./capacity-resources.ts";
@@ -245,23 +247,47 @@ export async function readAdvisorySellableUnits(
   client: ReadClient,
   variantIds: readonly string[],
 ): Promise<Map<string, number>> {
-  const ids = [...new Set(variantIds)].sort();
+  const capacity = await readAdvisoryCapacityResources(client, variantIds);
   const result = new Map<string, number>();
+  for (const [id, resources] of capacity) {
+    result.set(id, resources ? advisorySellableUnits(resources) : 0);
+  }
+  return result;
+}
+
+export type AdvisoryCapacityResource = Readonly<{
+  variantId: string;
+  kind: CapacityResourceKind;
+  unitsPerLine: number;
+  fact: ResourceCapacityFact | undefined;
+}>;
+
+/**
+ * The resources one unit of each variant consumes, with their current facts: the variant itself
+ * when standalone, its components when it is a composite parent. `null` when the topology cannot
+ * be proven. This is the one read behind every advisory figure, so any surface that needs more than
+ * the clamped number (the selling-policy report) still reads capacity the way the storefront does.
+ */
+export async function readAdvisoryCapacityResources(
+  client: ReadClient,
+  variantIds: readonly string[],
+): Promise<Map<string, readonly AdvisoryCapacityResource[] | null>> {
+  const ids = [...new Set(variantIds)].sort();
+  const result = new Map<string, readonly AdvisoryCapacityResource[] | null>();
   if (ids.length === 0) return result;
 
   const edges = await readPlanningEdges(client, ids);
 
   const resourceIds = new Set<string>();
-  const plans = new Map<string, readonly Readonly<{ variantId: string; unitsPerLine: number }>[] | null>();
+  const plans = new Map<string, readonly CapacityResource[] | null>();
   for (const id of ids) {
     const plan = planCapacityResources([{ variantId: id, quantity: 1 }], edges);
     if (!plan.ok) {
       plans.set(id, null);
       continue;
     }
-    const resources = plan.lines[0].resources.map(({ variantId, unitsPerLine }) => ({ variantId, unitsPerLine }));
-    for (const resource of resources) resourceIds.add(resource.variantId);
-    plans.set(id, resources);
+    for (const resource of plan.lines[0].resources) resourceIds.add(resource.variantId);
+    plans.set(id, plan.lines[0].resources);
   }
 
   const facts = await readResourceFacts(client, [...resourceIds]);
@@ -270,8 +296,8 @@ export async function readAdvisorySellableUnits(
     result.set(
       id,
       resources
-        ? advisorySellableUnits(resources.map(({ variantId, unitsPerLine }) => ({ unitsPerLine, fact: facts.get(variantId) })))
-        : 0,
+        ? resources.map(({ variantId, kind, unitsPerLine }) => ({ variantId, kind, unitsPerLine, fact: facts.get(variantId) }))
+        : null,
     );
   }
   return result;

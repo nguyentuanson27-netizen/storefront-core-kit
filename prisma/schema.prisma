@@ -60,6 +60,12 @@ enum MerchantCondition {
   USED
 }
 
+enum SellingMode {
+  STANDARD
+  OVERSELL
+  PREORDER
+}
+
 enum PromotionCampaignKind {
   PROMOTION
   FLASH_SALE
@@ -84,6 +90,7 @@ model User {
   addresses     Address[]
   carts         Cart[]
   orders        OrderMirror[]
+  sellingPoliciesUpdated ProductSellingPolicy[] @relation("SellingPolicyUpdatedBy")
 
   @@map("user")
 }
@@ -174,6 +181,7 @@ model ProductMirror {
   variants          VariantMirror[]
   content           ProductContent?
   merchantFacts     ProductMerchantFacts?
+  sellingPolicy     ProductSellingPolicy?
   slugHistory       ProductSlugHistory[]
   promotionTargets  PromotionTarget[]
 
@@ -228,6 +236,22 @@ model ProductMerchantFacts {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   product   ProductMirror      @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+/// Website-owned selling policy (spec: docs/specs/core-kit-selling-modes-v1.md §4). Catalog sync never
+/// reads or writes it. A product with no row is `STANDARD` with the default limit; that answer belongs
+/// to `resolveSellingPolicy()`, not to a column default, because no row means no default was applied.
+/// `negativeStockLimit` is range-checked by a hand-written CHECK in the migration.
+model ProductSellingPolicy {
+  productId          String        @id
+  sellingMode        SellingMode
+  negativeStockLimit Int
+  updatedAt          DateTime      @updatedAt
+  updatedByUserId    String?
+  product            ProductMirror @relation(fields: [productId], references: [id], onDelete: Cascade)
+  updatedBy          User?         @relation("SellingPolicyUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
 }
 
 model CollectionDefinition {

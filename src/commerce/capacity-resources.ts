@@ -187,3 +187,22 @@ export function advisorySellableUnits(
   }
   return sets ?? 0;
 }
+
+/**
+ * Signed whole units a variant's resources can still supply: the fewest whole sets for a composite
+ * parent, the variant's own free units when standalone. Unlike `advisorySellableUnits` it is not
+ * clamped at zero, so an operator can see how far past zero a resource has gone; null when any
+ * resource's mirror cannot be trusted. `advisorySellableUnits` is `max(0, wholeFreeUnits)`, or 0 for null.
+ */
+export function wholeFreeUnits(
+  resources: readonly Readonly<{ unitsPerLine: number; fact: ResourceCapacityFact | undefined }>[],
+): number | null {
+  let sets: number | null = null;
+  for (const resource of resources) {
+    const fact = resource.fact;
+    if (!fact || fact.mirroredUnits === null || !isPositiveInteger(resource.unitsPerLine)) return null;
+    const supply = Math.floor((fact.mirroredUnits - fact.activeReservedUnits) / resource.unitsPerLine);
+    sets = sets === null ? supply : Math.min(sets, supply);
+  }
+  return sets;
+}
