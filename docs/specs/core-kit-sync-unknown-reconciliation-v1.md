@@ -320,8 +320,9 @@ a late materialization.
 
 The hardening spec's rule — no timer, label or retry may silently release an unresolved hold — is respected because the
 override is neither silent nor automatic. It is still an exception to the hardening spec's §5.4 requirement for definitive
-evidence before release. **This spec therefore proposes an amendment to hardening §5.4.1 that admits exactly this
-override, and it needs owner approval (§15 Q4).** Until that is approved, R4 ships without `--release`.
+evidence before release. **The owner approved an amendment to hardening §5.4.1 that admits exactly this override
+(§15 Q4, decided).** The amendment is recorded in `docs/specs/core-kit-production-hardening-v1.md` §5.4.1. It admits
+nothing broader than this section describes.
 
 Both releases are the same single atomic transaction. Only the recorded reason differs:
 
@@ -431,7 +432,7 @@ class of failure that nguyentuanson27-netizen/storefront-core-kit#17 closed for 
   - With no flag it runs one observation now.
   - `--link` applies §10 after the agreement checks.
   - `--release` applies the manual risk override (§9.3 b). It refuses unless the order is absence-confirmed **and** the
-    structured verification fields are supplied. It is not available until owner decision §15 Q4 is made.
+    structured verification fields are supplied (owner decision §15 Q4: approved).
   - Every use is recorded with the operator identity and reason.
 - **Docs.** `docs/operations/release-and-rollback.md` replaces "resolve by hand" with this procedure.
   `docs/integrations/pancake.md` records the reviewed marker and list contract.
@@ -493,7 +494,7 @@ writer), and a deploy whose first sweep fails reports "order reconciliation has 
 | **R1** — path B | Keep the returned id; detail-read reconciliation; `FOUND` → `CONFIRMED` + `acceptedAt`; the observation ledger; the sweep record and reconciliation health (§11.1), including deploy; the report command. | none (reviewed detail contract) |
 | **R2** — marker write | Additive `reconciliationMarker` and `submitAttemptedAt`; written in the claim transaction; carrier per E1/E2. | R0 |
 | **R3** — search and `FOUND` | The reviewed list gateway; §8 classification; the sweep in `catalog-sync`; `FOUND`-only transitions. | R0, R2 |
-| **R4** — absence evidence and manual override | The §9.2 investigation status; `releasedAt` across every capacity read path; §9.4 observation of released orders; the operator `--release` override. | R3 + owner decision §15 Q4 (without it, R4 ships without `--release`) |
+| **R4** — absence evidence and manual override | The §9.2 investigation status; `releasedAt` across every capacity read path; §9.4 observation of released orders; the operator `--release` override. | R3 (§15 Q4 approved) |
 | **R5** — definitive release (optional) | §9.3 (a) behind a flag that defaults off. | R4 + E4 **and E6** established + carrier rule 1 + owner decision §15 Q1. **Blocked until E6 exists.** |
 
 Each slice is its own pull request. R1 can ship before any new Pancake evidence exists.
@@ -506,10 +507,10 @@ Each slice is its own pull request. R1 can ship before any new Pancake evidence 
    off.
 3. **Buyer message while `CHECKING`.** Should tracking say more than it does today, for example "we are confirming your
    order with the shop"? This is copy only, and optional.
-4. **Manual risk override (§9.3 b).** Approve the amendment to hardening §5.4.1 that admits an audited operator override
-   with recorded independent verification. The override is explicitly not proof of no-sale. The alternative is to keep
-   today's rule: holds for orders that were never found stay held until Pancake support or the shop confirms the outcome
-   outside the system.
+4. **Manual risk override (§9.3 b). Decided: approved by the owner.** Hardening §5.4.1 is amended to admit an audited
+   operator override with recorded independent verification, exactly as §9.3 (b) specifies. The override is explicitly
+   not proof of no-sale. It stays operator-only, never automated, and the overridden order stays under indefinite
+   observation (§9.4).
 
 ## 16. Boundaries
 

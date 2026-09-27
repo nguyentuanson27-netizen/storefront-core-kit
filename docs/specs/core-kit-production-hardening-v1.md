@@ -259,6 +259,20 @@ Consequences for existing local order states:
 
 No elapsed-time TTL, process restart, local status label, or buyer retry may silently convert an unresolved hold into released capacity.
 
+> **Amendment — audited manual risk override (owner-approved).** One exception to "release only on definitive evidence"
+> is admitted: an operator may release the hold of a `SYNC_UNKNOWN` order through the audited override defined in
+> `docs/specs/core-kit-sync-unknown-reconciliation-v1.md` §9.3 (b), and only as that section defines it:
+>
+> - the order must be absence-confirmed by durable reconciliation evidence;
+> - the operator must record their identity, a reason, and the independent verification they performed;
+> - the override is never automated;
+> - the order stays under indefinite observation afterwards, and a later appearance is an incident.
+>
+> The override is recorded as `MANUAL_RELEASE_OVERRIDE`. It is **not** definitive no-sale evidence and must never be
+> described or reused as such. Any automated release still requires definitive evidence as defined above. The amendment
+> takes effect when that reconciliation spec is approved and its R4 slice implements the override. Until then, no path
+> releases a `SYNC_UNKNOWN` hold.
+
 #### 5.4.2 What qualifies as mirror-handoff evidence
 
 Mirror handoff requires **causal evidence**, not numeric inference. The implementation must be able to prove both:
