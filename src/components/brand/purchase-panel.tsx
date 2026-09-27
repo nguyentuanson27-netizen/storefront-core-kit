@@ -111,7 +111,7 @@ export function PurchasePanelView({ controller }: Readonly<{ controller: Variant
       </button>
 
       <p className="mt-3 min-h-6 text-sm text-black/65" role="status" aria-live="polite">
-        {message || view.unavailableMessage || (!view.hasPurchasableVariant ? "Không có lựa chọn khả dụng ở thời điểm hiện tại." : "")}
+        {message || view.unavailableMessage || view.preorderMessage || (!view.hasPurchasableVariant ? "Không có lựa chọn khả dụng ở thời điểm hiện tại." : "")}
       </p>
     </div>
   );

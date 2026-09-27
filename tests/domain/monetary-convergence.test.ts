@@ -654,6 +654,10 @@ describe("U39 / G1: Direct Meta Runtime Emission Paths (AddToCart & Purchase)", 
       warehouseStock: {
         findMany: async () => [{ variantId: "var-cuid-1", quantity: variantStock }],
       },
+      // No stored selling policy: the product sells under the default STANDARD.
+      productSellingPolicy: {
+        findMany: async () => [],
+      },
       $queryRaw: async () => [],
       promotionTarget: {
         findMany: async () =>

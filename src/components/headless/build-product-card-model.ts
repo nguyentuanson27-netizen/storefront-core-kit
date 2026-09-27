@@ -64,6 +64,12 @@ export type ProductCardModel = Readonly<{
   }>;
   flashSale: Readonly<{ remainingMs: number; countdownText: string | null }> | null;
   availability: "in-stock" | "out-of-stock" | "partial";
+  /**
+   * Every variant the card can sell right now is a preorder sale (selling modes spec §9): the card
+   * shows the brand's preorder marker. A product with any ready variant is not marked, because the
+   * card cannot say which option the shopper will pick; the PDP marks the option itself.
+   */
+  isPreorder: boolean;
   selectEvent: TrackingEvent | null;
 }>;
 
@@ -123,6 +129,11 @@ function resolveAvailability(
   const inStock = variants.filter((candidate) => candidate.sellableStock > 0).length;
   if (inStock === 0) return "out-of-stock";
   return inStock === variants.length ? "in-stock" : "partial";
+}
+
+function resolvePreorder(variants: readonly StorefrontVariantFacts[]): boolean {
+  const sellable = variants.filter((candidate) => candidate.sellableStock > 0);
+  return sellable.length > 0 && sellable.every((candidate) => candidate.isPreorderSale === true);
 }
 
 /** Distinct colours in first-seen order, each with the image its variant maps to, when known. */
@@ -210,6 +221,7 @@ export function buildProductCardModel(input: ProductCardModelInput): ProductCard
         })
       : null,
     availability: resolveAvailability(input.variants),
+    isPreorder: resolvePreorder(input.variants),
     selectEvent: input.selectEvent ?? null,
   });
 }

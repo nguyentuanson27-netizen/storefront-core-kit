@@ -1,5 +1,6 @@
 import type { PrismaClient } from "../generated/prisma/client.ts";
-import { readAdvisorySellableUnits } from "./capacity-reservation-repository.ts";
+import { readAdvisoryVariantCapacity, toAdvisoryStockFields } from "./capacity-reservation-repository.ts";
+import { readSellingModeFlags, type SellingModeFlags } from "./selling-policy.ts";
 import { createStorefrontCatalogRepository } from "./storefront-catalog.ts";
 import {
   buildStorefrontProductProjection,
@@ -23,8 +24,12 @@ function sumWarehouseStocks(stocks: readonly { quantity: number }[]): number {
   return total;
 }
 
-export function createStorefrontProductDetailRepository(client: PrismaClient) {
-  const catalog = createStorefrontCatalogRepository(client);
+export function createStorefrontProductDetailRepository(
+  client: PrismaClient,
+  options: Readonly<{ sellingModeFlags?: SellingModeFlags }> = {},
+) {
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
+  const catalog = createStorefrontCatalogRepository(client, { sellingModeFlags });
 
   async function getProductBySlug({
     shopId,
@@ -136,10 +141,10 @@ export function createStorefrontProductDetailRepository(client: PrismaClient) {
     });
     // The purchase panel advertises what the capacity read model says is free: a set is offered only
     // as many times as its components can still supply, and units other orders hold are not free.
-    const sellableUnits = await readAdvisorySellableUnits(client, pricedVariantIds);
+    const capacity = await readAdvisoryVariantCapacity(client, pricedVariantIds, sellingModeFlags);
     const withAdvisoryStock = <T extends { id: string; sellableStock: number }>(variant: T): T => ({
       ...variant,
-      sellableStock: sellableUnits.get(variant.id) ?? 0,
+      ...toAdvisoryStockFields(capacity.get(variant.id)),
     });
 
     return {

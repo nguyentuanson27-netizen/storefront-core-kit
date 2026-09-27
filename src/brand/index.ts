@@ -147,6 +147,11 @@ function validateMarket(brand: BrandConfig): void {
   }
 }
 
+function validateCopy(brand: BrandConfig): void {
+  const label = requireText(brand.copy?.preorderLabel, "copy.preorderLabel");
+  if (label !== label.trim() || label.includes("\n")) fail("copy.preorderLabel must be one trimmed line");
+}
+
 function validateSizeGuide(sizeGuide: SizeGuideConfig): void {
   requireText(sizeGuide.unit, "sizeGuide.unit");
   for (const [label, value] of Object.entries({
@@ -318,6 +323,7 @@ export function loadBrandConfig(
   validateContact(brand);
   validateMerchant(brand);
   validateMarket(brand);
+  validateCopy(brand);
   validateSizeGuide(sizeGuide);
   validateNavigation(navigation);
   validateFulfillment(fulfillment);

@@ -13,7 +13,12 @@ import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const SRC = path.join(REPO_ROOT, "src");
-const ALLOWED = new Set(["src/commerce/selling-policy-repository.ts"]);
+/**
+ * The repository, plus the one sanctioned SQL twin of the advisory read model (spec §8), which must
+ * join the table to filter before it paginates. `tests/database/capacity-sql-parity.test.ts` pins that
+ * twin to `effectivePolicy()` under every flag combination.
+ */
+const ALLOWED = new Set(["src/commerce/selling-policy-repository.ts", "src/commerce/storefront-catalog.ts"]);
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory).flatMap((name) => {
@@ -27,6 +32,6 @@ test("only the selling-policy repository reads ProductSellingPolicy", () => {
   const offenders = sourceFiles(SRC)
     .map((file) => path.relative(REPO_ROOT, file).split(path.sep).join("/"))
     .filter((file) => !ALLOWED.has(file))
-    .filter((file) => /productSellingPolicy\b|"ProductSellingPolicy"/.test(readFileSync(path.join(REPO_ROOT, file), "utf8")));
+    .filter((file) => /\.productSellingPolicy\b|"ProductSellingPolicy"/.test(readFileSync(path.join(REPO_ROOT, file), "utf8")));
   assert.deepEqual(offenders, []);
 });

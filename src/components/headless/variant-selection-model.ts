@@ -31,6 +31,11 @@ export type VariantSelectionViewInput = Readonly<{
   /** Product-level options only: composite components must not speak for the parent before selection. */
   productLevelOptions: readonly StorefrontProjectionOption[];
   selection: VariantSelectionState;
+  /**
+   * The brand's preorder marker (`copy.preorderLabel`), resolved on the server and passed in so this
+   * module stays free of brand config. Without it no preorder message is shown.
+   */
+  preorderLabel?: string;
 }>;
 
 function defaultPriceLabel(options: readonly StorefrontProjectionOption[]): string {
@@ -99,6 +104,16 @@ export function resolveVariantSelectionView(input: VariantSelectionViewInput) {
         ? currency.format(selection.selectedBasePriceVnd)
         : null,
     unavailableMessage,
+    /**
+     * The preorder marker next to the availability text when the selected option is a preorder sale
+     * (selling modes spec §9): the next single unit is not ready yet. Empty otherwise.
+     */
+    preorderMessage:
+      selection.selectedVariantId !== null
+      && selection.canAdd
+      && input.options.some((option) => option.id === selection.selectedVariantId && option.isPreorderSale === true)
+        ? input.preorderLabel ?? ""
+        : "",
     hasPurchasableVariant: input.options.some((option) => option.purchasable),
     initialDiscount,
     /** Lowest resolvable price, for the ViewContent pixel. `null` rather than 0 when unresolved. */

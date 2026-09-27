@@ -4,6 +4,7 @@ import { resolveStorefrontPromotionRefresh } from "./storefront-promotion-freshn
 import { Prisma, type PrismaClient } from "../generated/prisma/client.ts";
 import { withAdvisorySellableStock } from "./capacity-reservation-repository.ts";
 import { sortClothingSizes } from "./clothing-size.ts";
+import { readSellingModeFlags, type SellingModeFlags } from "./selling-policy.ts";
 import { resolveVariantAvailabilityFromWarehouseStocks } from "./storefront-product.ts";
 import {
   resolveStorefrontProductMedia,
@@ -229,20 +230,29 @@ function visibleProductWhere(shopId: number) {
 }
 
 /**
- * The SQL projection of the capacity read model (`readAdvisorySellableUnits`), for the surfaces that
- * must filter by availability before they paginate: `/shop`'s in-stock filter, collections and the
- * Flash Sale membership. A second implementation is justified only by that need, the same way the
- * pricing projection below is, and `tests/database/capacity-sql-parity.test.ts` pins it to the
- * TypeScript model on shared fixtures.
+ * The SQL projection of the capacity read model (`readAdvisoryVariantCapacity`), for the surfaces
+ * that must filter by availability before they paginate: `/shop`'s in-stock filter, collections and
+ * the Flash Sale membership. A second implementation is justified only by that need, the same way
+ * the pricing projection below is, and `tests/database/capacity-sql-parity.test.ts` pins it to the
+ * TypeScript model on shared fixtures, under every selling mode and flag combination.
  *
  * - `capacity_free`: whole mirrored units (floored; NULL when any row is non-finite or the variant
- *   is no longer present) minus units still locally held (`mirroredAt IS NULL`).
- * - `capacity_sellable`: a standalone variant offers `max(0, free)`; a composite parent offers the
- *   fewest whole sets its components can supply, and 0 when any component is untrusted, the edge
- *   quantity is not positive, or a component is itself a composite (unproven nesting). The parent's
- *   own mirrored stock is never read.
+ *   is no longer present) minus units still locally held (`mirroredAt IS NULL`). May be negative.
+ * - `capacity_policy`: the effective selling policy (selling modes spec §4.2.1), with the same
+ *   missing-row default and the same authority order as `effectivePolicy()`: an out-of-range limit
+ *   refuses whatever the flags say; with the capability off every mode is `STANDARD`; `PREORDER`
+ *   additionally needs its own flag. The flags arrive as bound parameters.
+ * - `capacity_sellable`:
+ *   - a standalone variant offers `max(0, free − floor)` and has `max(0, free)` ready;
+ *   - a composite parent offers the fewest whole sets its components can supply at component floor
+ *     0, and 0 when any component is untrusted, the edge quantity is not positive, a component is
+ *     itself a composite (unproven nesting), or the parent's product is not effectively `STANDARD`.
+ *     The parent's own mirrored stock is never read;
+ *   - an invalid policy offers 0;
+ *   - `isPreorderSale`: effective `PREORDER`, at least one sellable unit, none ready.
  */
-const CAPACITY_SELLABLE_CTES = Prisma.sql`
+function buildCapacitySellableCtes(flags: SellingModeFlags) {
+  return Prisma.sql`
   "capacity_mirrored" AS (
     SELECT
       v."id",
@@ -271,6 +281,22 @@ const CAPACITY_SELLABLE_CTES = Prisma.sql`
     FROM "capacity_mirrored" cm
     LEFT JOIN "capacity_held" ch ON ch."variantId" = cm."id"
   ),
+  "capacity_policy" AS (
+    SELECT
+      v."id",
+      CASE
+        WHEN sp."productId" IS NULL THEN 'STANDARD'
+        WHEN sp."negativeStockLimit" > 0 OR sp."negativeStockLimit" < -100000 THEN 'REFUSE'
+        WHEN sp."sellingMode" = 'OVERSELL' AND ${flags.sellingModesEnabled}::boolean THEN 'OVERSELL'
+        WHEN sp."sellingMode" = 'PREORDER'
+          AND ${flags.sellingModesEnabled}::boolean
+          AND ${flags.preorderEnabled}::boolean THEN 'PREORDER'
+        ELSE 'STANDARD'
+      END AS "mode",
+      COALESCE(sp."negativeStockLimit", 0)::numeric AS "limit"
+    FROM "VariantMirror" v
+    LEFT JOIN "ProductSellingPolicy" sp ON sp."productId" = v."productId"
+  ),
   "capacity_component" AS (
     SELECT
       e."parentVariantId",
@@ -288,18 +314,39 @@ const CAPACITY_SELLABLE_CTES = Prisma.sql`
     LEFT JOIN "capacity_free" cf ON cf."id" = e."componentVariantId"
     GROUP BY e."parentVariantId"
   ),
-  "capacity_sellable" AS (
+  "capacity_units" AS (
     SELECT
       cf."id",
+      cp."mode",
+      CASE
+        WHEN cp."mode" = 'REFUSE' THEN 0
+        WHEN cc."parentVariantId" IS NULL THEN COALESCE(
+          GREATEST(cf."freeUnits" - CASE WHEN cp."mode" = 'STANDARD' THEN 0 ELSE cp."limit" END, 0),
+          0
+        )
+        WHEN cc."unproven" THEN 0
+        WHEN cp."mode" <> 'STANDARD' THEN 0
+        ELSE COALESCE(cc."sets", 0)
+      END AS "sellableUnits",
       CASE
         WHEN cc."parentVariantId" IS NULL THEN COALESCE(GREATEST(cf."freeUnits", 0), 0)
         WHEN cc."unproven" THEN 0
         ELSE COALESCE(cc."sets", 0)
-      END AS "sellableUnits"
+      END AS "readyUnits"
     FROM "capacity_free" cf
+    JOIN "capacity_policy" cp ON cp."id" = cf."id"
     LEFT JOIN "capacity_component" cc ON cc."parentVariantId" = cf."id"
+  ),
+  "capacity_sellable" AS (
+    SELECT
+      cu."id",
+      cu."sellableUnits",
+      cu."readyUnits",
+      (cu."mode" = 'PREORDER' AND cu."sellableUnits" >= 1 AND cu."readyUnits" < 1) AS "isPreorderSale"
+    FROM "capacity_units" cu
   )
 `;
+}
 
 /**
  * The sanctioned SQL pricing projection.
@@ -318,9 +365,9 @@ const CAPACITY_SELLABLE_CTES = Prisma.sql`
  * `now` is the caller's request clock, so the count, the ordering, the page and transition
  * aggregation all decide window membership against one instant.
  */
-export function buildVariantStockCte(now: Date) {
+export function buildVariantStockCte(now: Date, flags: SellingModeFlags) {
   return Prisma.sql`
-  WITH ${CAPACITY_SELLABLE_CTES},
+  WITH ${buildCapacitySellableCtes(flags)},
   "variant_base" AS (
     SELECT
       v."id",
@@ -338,7 +385,8 @@ export function buildVariantStockCte(now: Date) {
         THEN v."pancakeRetailPrice"::int8::numeric
         ELSE NULL
       END AS "basePrice",
-      MAX(cs."sellableUnits")::float8 AS "sellableStock"
+      MAX(cs."sellableUnits")::float8 AS "sellableStock",
+      BOOL_OR(cs."isPreorderSale") AS "isPreorderSale"
     FROM "VariantMirror" v
     JOIN "capacity_sellable" cs ON cs."id" = v."id"
     WHERE v."isPresent" = TRUE AND v."isActive" = TRUE
@@ -373,13 +421,14 @@ export function buildVariantStockCte(now: Date) {
       vb."size",
       vb."basePrice",
       vb."sellableStock",
+      vb."isPreorderSale",
       COUNT(vc."campaignId") AS "candidateCount",
       MIN(vc."discountType") AS "discountType",
       MIN(vc."percentageValue") AS "percentageValue",
       MIN(vc."fixedPriceVnd") AS "fixedPriceVnd"
     FROM "variant_base" vb
     LEFT JOIN "variant_campaign" vc ON vc."variantId" = vb."id"
-    GROUP BY vb."id", vb."productId", vb."color", vb."size", vb."basePrice", vb."sellableStock"
+    GROUP BY vb."id", vb."productId", vb."color", vb."size", vb."basePrice", vb."sellableStock", vb."isPreorderSale"
   ),
   "variant_stock" AS (
     SELECT
@@ -388,6 +437,7 @@ export function buildVariantStockCte(now: Date) {
       vc."color",
       vc."size",
       vc."sellableStock",
+      vc."isPreorderSale",
       CASE
         WHEN vc."basePrice" IS NULL THEN NULL
         WHEN vc."candidateCount" <> 1 THEN vc."basePrice"
@@ -416,8 +466,10 @@ function buildVariantPredicate(discovery: StorefrontDiscoveryQuery) {
   if (discovery.size) {
     filters.push(Prisma.sql`LOWER(BTRIM(vf."size")) = LOWER(${discovery.size})`);
   }
+  // "Buyable now without preorder" (selling modes spec §9, §14 Q4): an OVERSELL variant below zero
+  // matches, a preorder-sale variant does not. It does not mean "physically in stock".
   if (discovery.availability === "in-stock") {
-    filters.push(Prisma.sql`vf."sellableStock" > 0`);
+    filters.push(Prisma.sql`vf."sellableStock" > 0 AND NOT vf."isPreorderSale"`);
   }
   if (discovery.minPriceVnd !== null) {
     filters.push(Prisma.sql`vf."resolvedPrice" >= ${discovery.minPriceVnd}`);
@@ -437,7 +489,7 @@ function buildTransitionVariantPredicate(discovery: StorefrontDiscoveryQuery) {
     filters.push(Prisma.sql`LOWER(BTRIM(vb."size")) = LOWER(${discovery.size})`);
   }
   if (discovery.availability === "in-stock") {
-    filters.push(Prisma.sql`vb."sellableStock" > 0`);
+    filters.push(Prisma.sql`vb."sellableStock" > 0 AND NOT vb."isPreorderSale"`);
   }
   // Price filters are intentionally absent. A promotion transition can make a product that is
   // currently outside the requested price band enter it; filtering transition candidates by the
@@ -541,7 +593,11 @@ function bigintToSafeNumber(value: bigint): number {
   return parsed;
 }
 
-export function createStorefrontCatalogRepository(client: PrismaClient) {
+export function createStorefrontCatalogRepository(
+  client: PrismaClient,
+  options: Readonly<{ sellingModeFlags?: SellingModeFlags }> = {},
+) {
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
   async function listProducts({ shopId, limit }: { shopId: number; limit: number }) {
     const products = await client.productMirror.findMany({
       where: visibleProductWhere(shopId),
@@ -558,6 +614,7 @@ export function createStorefrontCatalogRepository(client: PrismaClient) {
     return withAdvisorySellableStock(
       client,
       products.map((product) => toStorefrontProduct(product, collectionMap)),
+      sellingModeFlags,
     );
   }
 
@@ -593,6 +650,7 @@ export function createStorefrontCatalogRepository(client: PrismaClient) {
       products: await withAdvisorySellableStock(
         client,
         products.map((product) => toStorefrontProduct(product, collectionMap)),
+        sellingModeFlags,
       ),
       page,
       pageSize: safePageSize,
@@ -622,7 +680,7 @@ export function createStorefrontCatalogRepository(client: PrismaClient) {
     const transitionProductPredicate = buildTransitionProductPredicate(shopId, discovery);
     const sortPrice = buildSortPrice(variantFilters);
     const orderBy = buildDiscoveryOrder(discovery.sort);
-    const variantStockCte = buildVariantStockCte(now);
+    const variantStockCte = buildVariantStockCte(now, sellingModeFlags);
 
     const [countRows, idRows, transitionRows] = await Promise.all([
       client.$queryRaw<DiscoveryCountRow[]>(Prisma.sql`
@@ -693,6 +751,7 @@ export function createStorefrontCatalogRepository(client: PrismaClient) {
         if (!product) throw new Error("Storefront discovery result changed during read");
         return toStorefrontProduct(product, collectionMap);
       }),
+      sellingModeFlags,
     );
 
     const pageVariantIds = orderedProducts.flatMap((product) =>
@@ -786,7 +845,11 @@ export function createStorefrontCatalogRepository(client: PrismaClient) {
       : [];
     const collectionMap = await fetchPublishedCollectionMap(client, rawSlugs);
 
-    const [withStock] = await withAdvisorySellableStock(client, [toStorefrontProduct(product, collectionMap)]);
+    const [withStock] = await withAdvisorySellableStock(
+      client,
+      [toStorefrontProduct(product, collectionMap)],
+      sellingModeFlags,
+    );
     return withStock!;
   }
 

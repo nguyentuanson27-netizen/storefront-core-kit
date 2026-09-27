@@ -1,5 +1,6 @@
 import Image from "next/image";
 
+import { BRAND } from "@/brand";
 import { ProductSelectLink } from "@/components/analytics/product-select-link";
 import type { ProductCardModel } from "@/components/headless/build-product-card-model";
 
@@ -98,6 +99,12 @@ export function ProductCard({
           ) : (
             <p className="product-price">{price.displayText}</p>
           )}
+          {/* The one stock fact a card does state: that buying now is a preorder (selling modes §9). */}
+          {model.isPreorder ? (
+            <p className="mt-1 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-black" data-preorder-marker="">
+              {BRAND.copy.preorderLabel}
+            </p>
+          ) : null}
         </div>
       </ProductSelectLink>
     </article>

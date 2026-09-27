@@ -1,3 +1,4 @@
+import { BRAND } from "../brand/index.ts";
 import type { StorefrontCartLine } from "../commerce/storefront-cart.ts";
 import type { TrustedProductImage } from "../commerce/product-media.ts";
 
@@ -27,6 +28,8 @@ export type CartLineView = Readonly<{
   available: boolean;
   /** "Có thể mua", or the reason it is not. */
   availabilityLabel: string;
+  /** The brand's preorder marker when this line is a preorder (selling modes spec §9), else `null`. */
+  preorderMarker: string | null;
   /**
    * Whether the quantity field stays usable. Insufficient stock is editable on purpose: lowering
    * the quantity is the fix, so locking the field would trap the shopper on the row.
@@ -90,8 +93,11 @@ export function buildCartViewModel(
   input: Readonly<{
     lines: readonly StorefrontCartLine[];
     commerceTrackingEnabled: boolean;
+    /** The brand copy key `copy.preorderLabel`; injectable for tests. */
+    preorderLabel?: string;
   }>,
 ): CartViewModel {
+  const preorderLabel = input.preorderLabel ?? BRAND.copy.preorderLabel;
   const subtotal = cartAvailableSubtotal(input.lines);
   const hasUnavailableLines = input.lines.some((line) => !line.available);
 
@@ -111,6 +117,7 @@ export function buildCartViewModel(
           priceText: line.price === null ? "Giá đang cập nhật" : currency.format(line.price),
           available: line.available,
           availabilityLabel: line.available ? "Có thể mua" : cartUnavailableLabel(line),
+          preorderMarker: line.isPreorder ? preorderLabel : null,
           canUpdate: line.available || line.unavailableReason === "INSUFFICIENT_STOCK",
         }),
       ),

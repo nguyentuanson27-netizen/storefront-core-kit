@@ -118,6 +118,11 @@ function render(data: CheckoutViewModel) {
                   <p className="mt-1 text-xs leading-5 text-black/75">
                     {line.optionLabel} · SL {line.quantity}
                   </p>
+                  {line.preorderMarker ? (
+                    <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-black" data-preorder-marker="">
+                      {line.preorderMarker}
+                    </p>
+                  ) : null}
                 </div>
                 <p className="shrink-0 text-sm font-medium">{line.lineTotalText}</p>
               </div>

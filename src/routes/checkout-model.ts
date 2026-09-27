@@ -1,3 +1,4 @@
+import { BRAND } from "../brand/index.ts";
 import type { RenderedCheckoutQuoteFacts } from "../commerce/checkout-quote.ts";
 import type { StorefrontCartLine } from "../commerce/storefront-cart.ts";
 import type { TrustedProductImage } from "../commerce/product-media.ts";
@@ -36,6 +37,8 @@ export type CheckoutLineView = Readonly<{
   optionLabel: string;
   quantity: number;
   lineTotalText: string;
+  /** The brand's preorder marker when this line is a preorder (selling modes spec §9), else `null`. */
+  preorderMarker: string | null;
 }>;
 
 export type CheckoutTotalsView = Readonly<{
@@ -70,8 +73,11 @@ export function buildCheckoutViewModel(
     lines: readonly StorefrontCartLine[];
     totals: RenderedCheckoutQuoteFacts | null;
     quoteProof: string | null;
+    /** The brand copy key `copy.preorderLabel`; injectable for tests. */
+    preorderLabel?: string;
   }>,
 ): CheckoutViewModel {
+  const preorderLabel = input.preorderLabel ?? BRAND.copy.preorderLabel;
   if (input.lines.length === 0) {
     return Object.freeze({ state: "empty", lines: Object.freeze([]), totals: null, quoteProof: null });
   }
@@ -101,6 +107,7 @@ export function buildCheckoutViewModel(
           quantity: line.quantity,
           // `ready` means every line priced, so the fallback is unreachable rather than lenient.
           lineTotalText: currency.format((line.price ?? 0) * line.quantity),
+          preorderMarker: line.isPreorder ? preorderLabel : null,
         }),
       ),
     ),

@@ -34,6 +34,8 @@ export type UseVariantSelectionInput = Readonly<{
   initialSelection?: DeepLinkedVariantSelection | null;
   /** Server-resolved: a deployment that publishes no dataLayer must not have one created here. */
   commerceTrackingEnabled?: boolean;
+  /** Server-resolved brand copy `copy.preorderLabel` (selling modes spec §9). */
+  preorderLabel?: string;
 }>;
 
 /**
@@ -52,6 +54,7 @@ export function useVariantSelection({
   productLevelOptions,
   initialSelection = null,
   commerceTrackingEnabled = false,
+  preorderLabel,
 }: UseVariantSelectionInput) {
   const [state, setState] = useState<VariantSelectionState>({
     kindKey: initialSelection?.kindKey ?? null,
@@ -62,8 +65,8 @@ export function useVariantSelection({
   const [isPending, startTransition] = useTransition();
 
   const view = useMemo(
-    () => resolveVariantSelectionView({ options, productLevelOptions, selection: state }),
-    [options, productLevelOptions, state],
+    () => resolveVariantSelectionView({ options, productLevelOptions, selection: state, preorderLabel }),
+    [options, productLevelOptions, state, preorderLabel],
   );
 
   const entryPrice = view.entryPrice;

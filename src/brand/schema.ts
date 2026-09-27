@@ -79,11 +79,21 @@ export type BrandMerchant = Readonly<{
   defaultAgeGroup: MerchantAgeGroup;
 }>;
 
+/** Storefront copy the brand owns, so core never hardcodes a customer-facing phrase. */
+export type BrandCopy = Readonly<{
+  /**
+   * The marker shown next to a preorder sale on the card, PDP option, cart and checkout line
+   * (selling modes spec §9). Short, one line.
+   */
+  preorderLabel: string;
+}>;
+
 export type BrandConfig = Readonly<{
   identity: BrandIdentity;
   contact: BrandContact;
   merchant: BrandMerchant;
   market: Market;
+  copy: BrandCopy;
 }>;
 
 export type SizeChart = Readonly<{

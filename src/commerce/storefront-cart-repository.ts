@@ -1,8 +1,9 @@
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { ANONYMOUS_CART_MAX_DISTINCT_ITEMS } from "./anonymous-cart.ts";
-import { readAdvisorySellableUnits } from "./capacity-reservation-repository.ts";
+import { readAdvisoryVariantCapacity, toAdvisoryStockFields } from "./capacity-reservation-repository.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
 import type { PromotionCandidateReadClient } from "./promotion-candidate-repository.ts";
+import { readSellingModeFlags, type SellingModeFlags } from "./selling-policy.ts";
 import { buildStorefrontCartLines } from "./storefront-cart.ts";
 import { buildPromotionalStorefrontPricing } from "./storefront-promotion-projection.ts";
 
@@ -134,12 +135,16 @@ function toCartProduct(product: SelectedProduct) {
  */
 export type StorefrontCartReadClient = Pick<
   Prisma.TransactionClient,
-  "productMirror" | "variantMirror" | "compositeComponentMirror" | "warehouseStock" | "$queryRaw"
+  "productMirror" | "variantMirror" | "compositeComponentMirror" | "warehouseStock" | "productSellingPolicy" | "$queryRaw"
 > &
   PromotionCandidateReadClient;
 
-export function createStorefrontCartRepository(client: PrismaClient | StorefrontCartReadClient) {
+export function createStorefrontCartRepository(
+  client: PrismaClient | StorefrontCartReadClient,
+  options: Readonly<{ sellingModeFlags?: SellingModeFlags }> = {},
+) {
   const readClient = client as StorefrontCartReadClient;
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
 
   /**
    * Resolves current cart lines against the central effective-price authority.
@@ -176,15 +181,16 @@ export function createStorefrontCartRepository(client: PrismaClient | Storefront
 
     // Stock the cart may advertise comes from the capacity read model, not the raw mirror: a set's
     // figure is what its components can still supply, and units other orders hold are not free.
-    const sellableUnits = await readAdvisorySellableUnits(
+    const capacity = await readAdvisoryVariantCapacity(
       readClient,
       products.flatMap((product) => product.variants.map(({ id }) => id)),
+      sellingModeFlags,
     );
     const cartProducts = products.map(toCartProduct).map((product) => ({
       ...product,
       variants: product.variants.map((variant) => ({
         ...variant,
-        sellableStock: sellableUnits.get(variant.id) ?? 0,
+        ...toAdvisoryStockFields(capacity.get(variant.id)),
       })),
     }));
     const { campaignsByVariantId } = await readApplicablePromotionCampaignsBatched({

@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "../generated/prisma/client.ts";
 import { ANONYMOUS_CART_MAX_DISTINCT_ITEMS } from "./anonymous-cart.ts";
-import { readAdvisorySellableUnits } from "./capacity-reservation-repository.ts";
+import { readAdvisoryVariantCapacity, toAdvisoryStockFields } from "./capacity-reservation-repository.ts";
 import { parseGuestCheckoutInput } from "./guest-checkout-input.ts";
 import { calculateGuestShippingFeeVnd } from "./guest-shipping-policy.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
@@ -10,6 +10,7 @@ import type {
   RenderedQuoteProofRejection,
 } from "./checkout-quote-proof.ts";
 import type { PromotionPricingResult } from "./promotion-pricing.ts";
+import { readSellingModeFlags, type SellingModeFlags } from "./selling-policy.ts";
 import { buildStorefrontCartLines } from "./storefront-cart.ts";
 import { buildPromotionalStorefrontPricing } from "./storefront-promotion-projection.ts";
 
@@ -69,6 +70,8 @@ export type RenderedQuoteVerifier = (
 type GuestCheckoutSnapshotServiceOptions = Readonly<{
   checkoutInputValidated?: boolean;
   verifyRenderedQuote: RenderedQuoteVerifier;
+  /** The deployment's selling-mode flags. Defaults to the environment. */
+  sellingModeFlags?: SellingModeFlags;
 }>;
 
 const snapshotOrderSelection = {
@@ -300,6 +303,7 @@ export function createGuestCheckoutSnapshotService(
   options: GuestCheckoutSnapshotServiceOptions,
 ) {
   const checkoutInputValidated = options.checkoutInputValidated ?? false;
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
   const verifyRenderedQuote = options.verifyRenderedQuote;
   if (typeof verifyRenderedQuote !== "function") {
     throw new TypeError("Guest checkout snapshot requires a rendered-quote verifier");
@@ -387,9 +391,10 @@ export function createGuestCheckoutSnapshotService(
 
         // Advisory at snapshot time, from the same capacity read model as the cart and PDP. The
         // authoritative decision is the reservation taken when the order is submitted.
-        const sellableUnits = await readAdvisorySellableUnits(
+        const capacity = await readAdvisoryVariantCapacity(
           tx,
           products.flatMap((product) => product.variants.map(({ id }) => id)),
+          sellingModeFlags,
         );
         const storefrontProducts = [];
         for (const product of products) {
@@ -401,7 +406,7 @@ export function createGuestCheckoutSnapshotService(
             ...storefrontProduct,
             variants: storefrontProduct.variants.map((variant) => ({
               ...variant,
-              sellableStock: sellableUnits.get(variant.id) ?? 0,
+              ...toAdvisoryStockFields(capacity.get(variant.id)),
             })),
           });
         }

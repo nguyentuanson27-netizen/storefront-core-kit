@@ -34,6 +34,7 @@ export default defineConfig({
     "pdp-language.spec.ts",
     "pdp-promotion.spec.ts",
     "related-products.spec.ts",
+    "selling-modes.spec.ts",
     "storefront-commerce.spec.ts",
     "storefront-composite.spec.ts",
     "storefront-media.spec.ts",
