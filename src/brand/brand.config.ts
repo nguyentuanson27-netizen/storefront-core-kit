@@ -51,4 +51,8 @@ export const BRAND: BrandConfig = {
     defaultAgeGroup: "adult",
   },
   market: MARKET_VN,
+  // Selling modes spec §9 (owner-approved): the preorder marker's default wording.
+  copy: {
+    preorderLabel: "Đặt trước",
+  },
 };

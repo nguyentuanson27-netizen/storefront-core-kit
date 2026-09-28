@@ -1,5 +1,6 @@
 import { withAdvisorySellableStock } from "./capacity-reservation-repository.ts";
 import { buildVariantStockCte } from "./storefront-catalog.ts";
+import { readSellingModeFlags, type SellingModeFlags } from "./selling-policy.ts";
 import type { StorefrontDiscoveryQuery } from "./storefront-discovery.ts";
 import {
   resolveStorefrontProductMedia,
@@ -131,9 +132,9 @@ function toFlashProduct(product: SelectedFlashProduct) {
  * already-priced variant can actually be selected/bought and whether its one active campaign is a
  * valid Flash Sale.
  */
-function buildFlashSaleCte(now: Date) {
+function buildFlashSaleCte(now: Date, flags: SellingModeFlags) {
   return Prisma.sql`
-    ${buildVariantStockCte(now)},
+    ${buildVariantStockCte(now, flags)},
     "flash_variant_dimension" AS (
       SELECT
         vs.*,
@@ -207,7 +208,11 @@ function assertProjectedMoney(row: FlashSaleIdRow) {
   }
 }
 
-export function createFlashSaleCatalogRepository(client: PrismaClient) {
+export function createFlashSaleCatalogRepository(
+  client: PrismaClient,
+  options: Readonly<{ sellingModeFlags?: SellingModeFlags }> = {},
+) {
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
   async function listFlashSalePage({
     shopId,
     pageSize,
@@ -222,7 +227,7 @@ export function createFlashSaleCatalogRepository(client: PrismaClient) {
     const safeShopId = parseShopId(shopId);
     const safePageSize = parsePageSize(pageSize);
     const offset = parsePageOffset(discovery.page, safePageSize);
-    const cte = buildFlashSaleCte(now);
+    const cte = buildFlashSaleCte(now, sellingModeFlags);
 
     const [countRows, idRows] = await Promise.all([
       client.$queryRaw<FlashSaleCountRow[]>(Prisma.sql`
@@ -299,6 +304,7 @@ export function createFlashSaleCatalogRepository(client: PrismaClient) {
     const flashProducts = await withAdvisorySellableStock(
       client,
       products.map((product) => toFlashProduct(product)),
+      sellingModeFlags,
     );
     const flashById = new Map(flashProducts.map((product) => [product.id, product]));
     const orderedProducts = ids.map((id) => {

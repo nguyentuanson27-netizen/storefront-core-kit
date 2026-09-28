@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { PrismaPg } from "@prisma/adapter-pg";
+import { SELLING_MODE_FLAGS_OFF } from "../../src/commerce/selling-policy.ts";
 import { Prisma } from "../../src/generated/prisma/client.ts";
 
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
@@ -154,7 +155,7 @@ test("U16 the shipped SQL projection agrees with the TypeScript resolver on ever
     const ids = [...variantIdByKey.values()];
     const rows = await prisma.$queryRaw<Array<{ id: string; resolvedPrice: number | null }>>(
       Prisma.sql`
-        ${buildVariantStockCte(NOW)}
+        ${buildVariantStockCte(NOW, SELLING_MODE_FLAGS_OFF)}
         SELECT "id", "resolvedPrice" FROM "variant_stock" WHERE "id" = ANY(${ids}::text[])
       `,
     );
@@ -198,7 +199,7 @@ test("U16 the mandated rounding fixtures survive the SQL round trip exactly", as
     const ids = [...expected.keys()].map((key) => variantIdByKey.get(key)!);
     const rows = await prisma.$queryRaw<Array<{ id: string; resolvedPrice: number | null }>>(
       Prisma.sql`
-        ${buildVariantStockCte(NOW)}
+        ${buildVariantStockCte(NOW, SELLING_MODE_FLAGS_OFF)}
         SELECT "id", "resolvedPrice" FROM "variant_stock" WHERE "id" = ANY(${ids}::text[])
       `,
     );
@@ -248,7 +249,7 @@ test("U16 a PRODUCT target reaches the variant through its real owner", async ()
 
     const rows = await prisma.$queryRaw<Array<{ resolvedPrice: number | null }>>(
       Prisma.sql`
-        ${buildVariantStockCte(NOW)}
+        ${buildVariantStockCte(NOW, SELLING_MODE_FLAGS_OFF)}
         SELECT "resolvedPrice" FROM "variant_stock" WHERE "id" = ${variant.id}
       `,
     );
@@ -296,7 +297,7 @@ test("U16 one campaign covering a variant both directly and by product is one ca
 
     const rows = await prisma.$queryRaw<Array<{ resolvedPrice: number | null }>>(
       Prisma.sql`
-        ${buildVariantStockCte(NOW)}
+        ${buildVariantStockCte(NOW, SELLING_MODE_FLAGS_OFF)}
         SELECT "resolvedPrice" FROM "variant_stock" WHERE "id" = ${variant.id}
       `,
     );

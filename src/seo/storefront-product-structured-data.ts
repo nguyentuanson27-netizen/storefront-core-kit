@@ -98,6 +98,9 @@ function resolvePublishableOffer(
   availabilityResolved: boolean,
 ): Readonly<{ price: number; availability: StructuredDataAvailability }> | null {
   if (!availabilityResolved) return null;
+  // A preorder sale has no truthful schema.org availability until Preorder truth v1 supplies an
+  // availability date: the offer is omitted, never published as InStock (selling modes spec §9).
+  if (option.isPreorderSale === true) return null;
   const { price } = option;
   if (price === null || !Number.isFinite(price) || price <= 0) return null;
   if (option.purchasable) return { price, availability: "IN_STOCK" };
@@ -313,9 +316,15 @@ function resolveStandaloneSurvivor({
 function selectPublishableProductLevelOptions(
   product: StorefrontStructuredDataProduct,
 ): StorefrontProjectionOption[] {
-  return selectStorefrontProductLevelOptions(product.projection).filter(
+  const resolved = selectStorefrontProductLevelOptions(product.projection).filter(
     (option) => product.variantAvailabilityResolvedById[option.id] === true,
   );
+  // Preorder sales have no truthful availability yet (selling modes spec §9), so they never speak
+  // for the product. A ready sibling may still make it InStock; but when nothing ready is buyable,
+  // "OutOfStock" would deny a sale the page offers, so the product-level offer is omitted instead.
+  const ready = resolved.filter((option) => option.isPreorderSale !== true);
+  if (ready.length !== resolved.length && !ready.some((option) => option.purchasable)) return [];
+  return ready;
 }
 
 export function buildStorefrontProductStructuredData({

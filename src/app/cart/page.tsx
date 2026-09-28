@@ -121,6 +121,11 @@ function render(data: CartViewModel) {
                     <p className={`mt-1 text-xs uppercase tracking-[0.12em] ${line.available ? "text-black/70" : "font-semibold text-black"}`}>
                       {line.availabilityLabel}
                     </p>
+                    {line.preorderMarker ? (
+                      <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-black" data-preorder-marker="">
+                        {line.preorderMarker}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <BrandCartLineControls

@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { readAdvisorySellableUnits } from "../../src/commerce/capacity-reservation-repository.ts";
 import { createSellingPolicyRepository, readStoredSellingPolicies } from "../../src/commerce/selling-policy-repository.ts";
+import { SELLING_MODE_FLAGS_OFF } from "../../src/commerce/selling-policy.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import { buildSellingPolicyReport } from "../../src/operations/selling-policy-report.ts";
 import { readSellingPolicyReportRows } from "../../src/operations/selling-policy-report-repository.ts";
@@ -265,6 +266,6 @@ test("the report reads a composite parent's capacity from its components, not it
   assert.equal(variants.get(ids.top)?.sellableUnits, 5);
 
   // Same numbers the storefront advertises.
-  const advisory = await readAdvisorySellableUnits(prisma, [ids.set, ids.top, ids.skirt]);
+  const advisory = await readAdvisorySellableUnits(prisma, [ids.set, ids.top, ids.skirt], SELLING_MODE_FLAGS_OFF);
   for (const [variantId, units] of advisory) assert.equal(variants.get(variantId)?.sellableUnits, units, variantId);
 });

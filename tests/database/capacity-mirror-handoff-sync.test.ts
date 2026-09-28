@@ -66,11 +66,11 @@ test("catalog sync hands a hold to the mirror only when its read started after a
 
   // A sync whose read started before acceptance already shows the decrement, but proves nothing.
   await repository.syncSnapshot({ shopId, variations: [variation(8)], syncedAt: new Date("2026-04-01T11:59:00Z") });
-  assert.equal((await readAdvisorySellableUnits(prisma, [variantId])).get(variantId), 6);
+  assert.equal((await readAdvisorySellableUnits(prisma, [variantId], SELLING_MODE_FLAGS_OFF)).get(variantId), 6);
 
   // The next sync started after acceptance: the mirror now owns those two units.
   await repository.syncSnapshot({ shopId, variations: [variation(8)], syncedAt: new Date("2026-04-01T12:05:00Z") });
-  assert.equal((await readAdvisorySellableUnits(prisma, [variantId])).get(variantId), 8);
+  assert.equal((await readAdvisorySellableUnits(prisma, [variantId], SELLING_MODE_FLAGS_OFF)).get(variantId), 8);
   const resource = await prisma.capacityReservationResource.findFirstOrThrow({ where: { variantId } });
   assert.deepEqual(resource.mirrorObservationStartedAt, new Date("2026-04-01T12:05:00Z"));
 });

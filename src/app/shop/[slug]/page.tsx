@@ -113,6 +113,7 @@ function render(data: ProductRouteData) {
           productLevelOptions: data.productLevelOptions,
           initialSelection: data.deepLinkedSelection,
           commerceTrackingEnabled: data.commerceTrackingEnabled,
+          preorderLabel: BRAND.copy.preorderLabel,
         }}
         media={data.media}
         productName={data.name}

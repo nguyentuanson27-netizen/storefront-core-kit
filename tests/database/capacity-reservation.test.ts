@@ -88,7 +88,7 @@ function fixture(key: string) {
   }
 
   async function available(variantId: string) {
-    return (await readAdvisorySellableUnits(prisma, [variantId])).get(variantId);
+    return (await readAdvisorySellableUnits(prisma, [variantId], SELLING_MODE_FLAGS_OFF)).get(variantId);
   }
 
   return { cleanup, variant, edge, order, reserve, observe, accept, available };

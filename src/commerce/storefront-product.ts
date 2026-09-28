@@ -5,9 +5,16 @@ export type StorefrontVariantFacts = {
   pancakeVariationId: string;
   color: string | null;
   size: string | null;
+  /** Advisory `sellableUnits` once the capacity read has run (selling modes spec §8). */
   sellableStock: number;
   retailPrice: number | null;
   retailPriceAfterDiscount: number | null;
+  /** Units that exist now, `max(0, free)`. Absent before the advisory read, and then never a preorder. */
+  readyUnits?: number;
+  /** The next single unit of this variant would be a preorder: drives the card and PDP marker. */
+  isPreorderSale?: boolean;
+  /** Sells under an effective `PREORDER`: a line is a preorder when its quantity exceeds `readyUnits`. */
+  acceptsPreorder?: boolean;
 };
 
 /**
@@ -84,6 +91,7 @@ export type StorefrontSelectableOption = Pick<
   | "isDiscounted"
   | "purchasable"
   | "unavailableReason"
+  | "isPreorderSale"
 >;
 
 type StorefrontPriceFacts = Pick<
@@ -173,7 +181,7 @@ export function toStorefrontSelectableOptions(
   return options.map((
     {
       id, pancakeVariationId, color, size, price, basePriceVnd, isDiscounted,
-      purchasable, unavailableReason,
+      purchasable, unavailableReason, isPreorderSale,
     },
   ) => ({
     id,
@@ -185,6 +193,8 @@ export function toStorefrontSelectableOptions(
     isDiscounted,
     purchasable,
     unavailableReason,
+    // Only when true, so an option that can never be a preorder carries exactly the shape it always did.
+    ...(isPreorderSale === true ? { isPreorderSale: true } : {}),
   }));
 }
 

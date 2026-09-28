@@ -5,6 +5,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 
 import { readAdvisorySellableUnits } from "../../src/commerce/capacity-reservation-repository.ts";
 import { createPancakeOrderSubmissionService } from "../../src/commerce/pancake-order-submit.ts";
+import { SELLING_MODE_FLAGS_OFF } from "../../src/commerce/selling-policy.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import type { PancakeCatalogVariation } from "../../src/integrations/pancake/catalog-contract.ts";
 import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
@@ -116,7 +117,7 @@ test("the hold is taken with the POS_SUBMITTING claim and accepted with CONFIRME
   const reservation = await prisma.capacityReservation.findFirstOrThrow({ where: { orderId: order.id } });
   assert.ok(reservation.acceptedAt && reservation.acceptedAt >= before);
   // Confirmed but not yet reflected in the mirror: still held.
-  assert.equal((await readAdvisorySellableUnits(prisma, [tee])).get(tee), 1);
+  assert.equal((await readAdvisorySellableUnits(prisma, [tee], SELLING_MODE_FLAGS_OFF)).get(tee), 1);
   await cleanup();
 });
 
@@ -164,7 +165,7 @@ test("an ambiguous create keeps its hold and never records acceptance", async ()
   assert.equal((await service.submit({ publicCode: order.publicCode, shopId })).state, "SYNC_UNKNOWN");
   const reservation = await prisma.capacityReservation.findFirstOrThrow({ where: { orderId: order.id } });
   assert.equal(reservation.acceptedAt, null);
-  assert.equal((await readAdvisorySellableUnits(prisma, [tee])).get(tee), 1);
+  assert.equal((await readAdvisorySellableUnits(prisma, [tee], SELLING_MODE_FLAGS_OFF)).get(tee), 1);
   await cleanup();
 });
 
@@ -189,7 +190,7 @@ test("an order that returns to DRAFT or is rejected before the POST holds nothin
     await prisma.capacityReservation.count({ where: { orderId: { in: [repriced.id, rejected.id] } } }),
     0,
   );
-  assert.equal((await readAdvisorySellableUnits(prisma, [tee])).get(tee), 5);
+  assert.equal((await readAdvisorySellableUnits(prisma, [tee], SELLING_MODE_FLAGS_OFF)).get(tee), 5);
   await cleanup();
 });
 
@@ -216,7 +217,7 @@ test("a set line checks and reserves its components, not the parent's own Pancak
     },
   });
 
-  assert.equal((await readAdvisorySellableUnits(prisma, [set])).get(set), 1);
+  assert.equal((await readAdvisorySellableUnits(prisma, [set], SELLING_MODE_FLAGS_OFF)).get(set), 1);
   assert.equal((await service.submit({ publicCode: first.publicCode, shopId })).ok, true);
   const resources = await prisma.capacityReservationResource.findMany({
     where: { reservation: { orderId: first.id } },
@@ -227,7 +228,7 @@ test("a set line checks and reserves its components, not the parent's own Pancak
     { variantId: skirt, quantity: 1 },
     { variantId: top, quantity: 1 },
   ]);
-  assert.equal((await readAdvisorySellableUnits(prisma, [set])).get(set), 0);
+  assert.equal((await readAdvisorySellableUnits(prisma, [set], SELLING_MODE_FLAGS_OFF)).get(set), 0);
   assert.equal((await service.submit({ publicCode: second.publicCode, shopId })).state, "REJECTED");
   await cleanup();
 });

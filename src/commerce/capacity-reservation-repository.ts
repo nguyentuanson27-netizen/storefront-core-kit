@@ -1,12 +1,13 @@
 import { Prisma } from "../generated/prisma/client.ts";
 import {
-  advisorySellableUnits,
+  advisoryVariantCapacity,
   evaluatePlannedCapacity,
   planCapacityResources,
   resolveResourceFloors,
   wholeMirroredUnits,
   type CapacityResource,
   type CapacityResourceKind,
+  type AdvisoryVariantCapacity,
   type CompositeEdgeFact,
   type ResourceCapacityFact,
 } from "./capacity-resources.ts";
@@ -29,6 +30,7 @@ import { readEffectiveSellingPolicies } from "./selling-policy-repository.ts";
 
 type Tx = Prisma.TransactionClient;
 type ReadClient = Pick<Tx, "$queryRaw" | "compositeComponentMirror" | "warehouseStock" | "variantMirror">;
+type AdvisoryReadClient = ReadClient & Pick<Tx, "productSellingPolicy">;
 
 export type CapacityReservationRefusal =
   | "VARIANT_MISSING"
@@ -274,23 +276,41 @@ export async function handOffMirroredCapacity(tx: Pick<Tx, "$executeRaw">, hande
 }
 
 /**
- * Advisory sellable units for storefront surfaces (PDP, cart, checkout snapshot). Reads the same
- * resource facts as the reservation path but takes no lock and grants nothing: checkout acceptance
- * is decided only by `reserveOrderCapacity`.
+ * Advisory capacity for storefront surfaces (PDP, cart, checkout snapshot, listings), under the
+ * deployment's selling-mode flags (selling modes spec §8). Reads the same resource facts as the
+ * reservation path but takes no lock and grants nothing: checkout acceptance is decided only by
+ * `reserveOrderCapacity`.
  *
  * A composite parent's own mirrored stock is ignored; its figure is the fewest whole sets its
- * components can still supply. Unprovable topology or an untrusted mirror advertises zero.
+ * components can still supply, at component floor 0. Unprovable topology, an untrusted mirror or an
+ * invalid policy advertises zero.
  */
-export async function readAdvisorySellableUnits(
-  client: ReadClient,
+export async function readAdvisoryVariantCapacity(
+  client: AdvisoryReadClient,
   variantIds: readonly string[],
-): Promise<Map<string, number>> {
-  const capacity = await readAdvisoryCapacityResources(client, variantIds);
-  const result = new Map<string, number>();
-  for (const [id, resources] of capacity) {
-    result.set(id, resources ? advisorySellableUnits(resources) : 0);
+  flags: SellingModeFlags,
+): Promise<Map<string, AdvisoryVariantCapacity>> {
+  const [resources, policies] = await Promise.all([
+    readAdvisoryCapacityResources(client, variantIds),
+    readEffectiveSellingPolicies(client, variantIds, flags),
+  ]);
+  const result = new Map<string, AdvisoryVariantCapacity>();
+  for (const [id, planned] of resources) {
+    const policy = policies.get(id);
+    if (!policy) throw new Error(`No effective selling policy was read for ${id}`);
+    result.set(id, advisoryVariantCapacity(planned, policy));
   }
   return result;
+}
+
+/** `sellableUnits` alone, for callers that only clamp or refuse on quantity. */
+export async function readAdvisorySellableUnits(
+  client: AdvisoryReadClient,
+  variantIds: readonly string[],
+  flags: SellingModeFlags,
+): Promise<Map<string, number>> {
+  const capacity = await readAdvisoryVariantCapacity(client, variantIds, flags);
+  return new Map([...capacity].map(([id, { sellableUnits }]) => [id, sellableUnits]));
 }
 
 export type AdvisoryCapacityResource = Readonly<{
@@ -342,19 +362,35 @@ export async function readAdvisoryCapacityResources(
 }
 
 /**
- * Replaces each variant's raw mirrored `sellableStock` with its advisory sellable units, so a card,
- * a cart line and a PDP option all advertise the same number for the same variant.
+ * The variant view-model fields the advisory read fills in (selling modes spec §8): `sellableStock`
+ * becomes `sellableUnits`, so every surface that already reads it is mode-aware, and the preorder
+ * facts ride alongside it.
+ */
+export function toAdvisoryStockFields(capacity: AdvisoryVariantCapacity | undefined) {
+  return {
+    sellableStock: capacity?.sellableUnits ?? 0,
+    readyUnits: capacity?.readyUnits ?? 0,
+    isPreorderSale: capacity?.isPreorderSale ?? false,
+    acceptsPreorder: capacity?.acceptsPreorder ?? false,
+  };
+}
+
+/**
+ * Replaces each variant's raw mirrored `sellableStock` with its advisory sellable units, and adds
+ * the preorder facts, so a card, a cart line and a PDP option all advertise the same thing for the
+ * same variant.
  */
 export async function withAdvisorySellableStock<
   V extends Readonly<{ id: string; sellableStock: number }>,
   P extends Readonly<{ variants: readonly V[] }>,
->(client: ReadClient, products: readonly P[]): Promise<P[]> {
-  const units = await readAdvisorySellableUnits(
+>(client: AdvisoryReadClient, products: readonly P[], flags: SellingModeFlags): Promise<P[]> {
+  const capacity = await readAdvisoryVariantCapacity(
     client,
     products.flatMap((product) => product.variants.map(({ id }) => id)),
+    flags,
   );
   return products.map((product) => ({
     ...product,
-    variants: product.variants.map((variant) => ({ ...variant, sellableStock: units.get(variant.id) ?? 0 })),
+    variants: product.variants.map((variant) => ({ ...variant, ...toAdvisoryStockFields(capacity.get(variant.id)) })),
   }));
 }

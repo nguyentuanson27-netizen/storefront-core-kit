@@ -251,3 +251,66 @@ export function wholeFreeUnits(
   }
   return sets;
 }
+
+/**
+ * What a shopper can be offered for one variant under its effective selling policy (selling modes
+ * spec §8). Advisory: checkout acceptance is decided only by `reserveOrderCapacity`.
+ *
+ * - `sellableUnits = max(0, free − floor)`: what may still be accepted. A composite parent uses the
+ *   fewest whole sets at component floor 0, and offers nothing under a non-`STANDARD` mode (§6.1).
+ * - `readyUnits = max(0, free)`: what exists now.
+ * - `isPreorderSale`: the next single unit would be a preorder.
+ * - `acceptsPreorder`: the variant sells under an effective `PREORDER`, so a line of it is a
+ *   preorder as soon as its quantity exceeds `readyUnits` (`acceptedAsPreorder`).
+ *
+ * An invalid policy, an unprovable topology or an untrusted mirror offers nothing.
+ */
+export type AdvisoryVariantCapacity = Readonly<{
+  sellableUnits: number;
+  readyUnits: number;
+  isPreorderSale: boolean;
+  acceptsPreorder: boolean;
+}>;
+
+const NOTHING_OFFERED: AdvisoryVariantCapacity = Object.freeze({
+  sellableUnits: 0,
+  readyUnits: 0,
+  isPreorderSale: false,
+  acceptsPreorder: false,
+});
+
+export function advisoryVariantCapacity(
+  resources: readonly Readonly<{ kind: CapacityResourceKind; unitsPerLine: number; fact: ResourceCapacityFact | undefined }>[] | null,
+  policy: EffectiveSellingPolicy,
+): AdvisoryVariantCapacity {
+  if (resources === null) return NOTHING_OFFERED;
+  const free = wholeFreeUnits(resources);
+  if (free === null) return NOTHING_OFFERED;
+  const readyUnits = Math.max(0, free);
+  if (policy.kind === "REFUSE") return Object.freeze({ ...NOTHING_OFFERED, readyUnits });
+
+  const isSet = resources.some((resource) => resource.kind === "COMPONENT");
+  if (isSet && policy.mode !== "STANDARD") return Object.freeze({ ...NOTHING_OFFERED, readyUnits });
+
+  const floor = isSet ? 0 : policy.floor;
+  const sellableUnits = Math.max(0, free - floor);
+  const acceptsPreorder = policy.mode === "PREORDER";
+  return Object.freeze({
+    sellableUnits,
+    readyUnits,
+    isPreorderSale: acceptsPreorder && sellableUnits >= 1 && readyUnits < 1,
+    acceptsPreorder,
+  });
+}
+
+/**
+ * Whether a line of `quantity` units is a preorder (spec §8): quantity-aware, so a line that starts
+ * with ready units and runs past them is still a preorder line. A variant without the advisory
+ * fields never is.
+ */
+export function acceptedAsPreorder(
+  quantity: number,
+  capacity: Readonly<{ acceptsPreorder?: boolean; readyUnits?: number }>,
+): boolean {
+  return capacity.acceptsPreorder === true && quantity > (capacity.readyUnits ?? 0);
+}

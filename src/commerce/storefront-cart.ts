@@ -1,3 +1,4 @@
+import { acceptedAsPreorder } from "./capacity-resources.ts";
 import {
   resolveStorefrontProductMedia,
   type StorefrontProductMedia,
@@ -28,6 +29,10 @@ export type StorefrontCartVariant = {
   retailPrice: number | null;
   retailPriceAfterDiscount: number | null;
   imageUrls?: readonly string[];
+  /** Advisory preorder facts (selling modes spec §8); absent means the variant never sells as a preorder. */
+  readyUnits?: number;
+  isPreorderSale?: boolean;
+  acceptsPreorder?: boolean;
 };
 
 export type StorefrontCartProduct = {
@@ -74,6 +79,13 @@ export type StorefrontCartLine = {
   available: boolean;
   unavailableReason: StorefrontCartUnavailableReason | null;
   media: StorefrontProductMedia;
+  /**
+   * Present, and `true`, only on a buyable line whose quantity runs past the variant's ready units
+   * under an effective `PREORDER` (`acceptedAsPreorder`, selling modes spec §8). Advisory in v1:
+   * rendered in cart and checkout, recomputed on every read; Preorder truth v1 makes it
+   * authoritative at the capacity acceptance boundary.
+   */
+  isPreorder?: true;
 };
 
 function normalizedOptionValue(value: string | null): string | null {
@@ -235,6 +247,7 @@ export function buildStorefrontCartLines({
       price: option.price,
       available: option.purchasable,
       unavailableReason: option.unavailableReason,
+      ...(option.purchasable && acceptedAsPreorder(item.quantity, option) ? { isPreorder: true as const } : {}),
     };
   });
 }

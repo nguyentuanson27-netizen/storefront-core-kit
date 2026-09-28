@@ -764,3 +764,41 @@ test("U32a carries each variant's own SKU into its published node without gating
     "SKU wiring leaves the ADR 0008 MPNs exactly as they were",
   );
 });
+
+test("selling modes §9: a preorder-sale option publishes no Offer, exact or product-level", () => {
+  // Exact variants: the preorder sale is left out; its ready siblings keep their exact offers.
+  const family = JSON.stringify(
+    build({
+      projection: standaloneProjection([
+        option({ id: "cuid-a", pancakeVariationId: "pv-a", color: "Đen", size: "M" }),
+        option({ id: "cuid-b", pancakeVariationId: "pv-b", color: "Đen", size: "L", isPreorderSale: true }),
+        option({ id: "cuid-c", pancakeVariationId: "pv-c", color: "Kem", size: "M" }),
+      ]),
+    }),
+  );
+  assert.ok(family.includes("variant=pv-a"));
+  assert.ok(!family.includes("variant=pv-b"), "no exact offer for the preorder sale");
+
+  // Product level: with nothing ready to buy, neither InStock nor OutOfStock is stated.
+  const onlyPreorder = build({
+    variantMpnById: {},
+    projection: standaloneProjection([
+      option({ id: "cuid-a", pancakeVariationId: "pv-a", isPreorderSale: true }),
+      option({ id: "cuid-b", pancakeVariationId: "pv-b", size: "L", purchasable: false, unavailableReason: "OUT_OF_STOCK" }),
+    ]),
+  });
+  assert.equal("offers" in singleProductNode(onlyPreorder), false);
+
+  // A ready sibling still speaks for the product.
+  const withReady = build({
+    variantMpnById: {},
+    projection: standaloneProjection([
+      option({ id: "cuid-a", pancakeVariationId: "pv-a", isPreorderSale: true }),
+      option({ id: "cuid-b", pancakeVariationId: "pv-b", size: "L" }),
+    ]),
+  });
+  assert.equal(
+    (singleProductNode(withReady) as { offers?: { availability?: string } }).offers?.availability,
+    "https://schema.org/InStock",
+  );
+});
