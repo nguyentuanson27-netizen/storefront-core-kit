@@ -17,6 +17,9 @@ import { buildPromotionalStorefrontPricing } from "./storefront-promotion-projec
 import type { StorefrontVariantFacts } from "./storefront-product.ts";
 import { toMerchantApparelWireValues } from "./merchant-apparel-facts.ts";
 import { INHERITED_APPAREL_OVERRIDES } from "./product-merchant-facts-repository.ts";
+import { effectivePolicy, readSellingModeFlags, type EffectiveSellingPolicy, type SellingModeFlags } from "./selling-policy.ts";
+import { sellingPolicyJoinSql, storedPolicyFromJoinedRow } from "./selling-policy-repository.ts";
+import { resolvePublishableVariantStock } from "./selling-mode-publication.ts";
 
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
 export const MAX_MERCHANT_CANDIDATE_PRODUCTS = 5_000;
@@ -89,7 +92,11 @@ type ProductFactRow = Readonly<{
   merchantGender: SelectedMerchantFacts["gender"] | null;
   merchantAgeGroup: SelectedMerchantFacts["ageGroup"] | null;
   merchantCondition: SelectedMerchantFacts["condition"] | null;
+  sellingPolicyMode?: string | null;
+  sellingPolicyLimit?: number | null;
 }>;
+
+const SELLING_POLICY_JOIN = sellingPolicyJoinSql('p."id"');
 
 type JoinedPromotionRow = Readonly<{
   campaignId: string;
@@ -109,6 +116,8 @@ type LoadedCandidateVariant = SelectedVariant &
     warehouseStocks: readonly SelectedWarehouseStock[];
     /** Units still locally held by capacity reservations (`mirroredAt IS NULL`). */
     heldUnits: number;
+    /** The variant's effective selling policy under this deployment's flags. */
+    sellingPolicy: EffectiveSellingPolicy;
     isCompositeParent: boolean;
     isCompositeComponent: boolean;
   }>;
@@ -124,13 +133,6 @@ type LoadedMerchantCandidates = Readonly<{
   products: readonly MerchantCandidateProduct[];
   nextPricingTransitionAtMs: number | null;
 }>;
-
-function aggregateWarehouseStock(quantities: readonly number[]): number {
-  for (const quantity of quantities) {
-    if (!Number.isFinite(quantity) || quantity < 0) return Number.NaN;
-  }
-  return quantities.reduce((total, quantity) => total + quantity, 0);
-}
 
 function parseJsonStringArray(value: Prisma.JsonValue): readonly string[] {
   return Array.isArray(value)
@@ -234,12 +236,20 @@ function toCandidateProduct(
     })),
   });
   // Units other orders still hold are not on offer, the same as on the PDP whose structured data
-  // this feed must agree with. An untrusted mirror stays NaN (AVAILABILITY_UNRESOLVED).
-  const stockByVariantId = new Map(
+  // this feed must agree with. An untrusted mirror stays NaN (AVAILABILITY_UNRESOLVED). The selling
+  // policy decides whether a negative row is a defect (STANDARD) or the expected state (§9).
+  const publishableByVariantId = new Map(
     product.variants.map((variant) => [
       variant.id,
-      aggregateWarehouseStock(variant.warehouseStocks.map((stock) => stock.quantity)) - variant.heldUnits,
+      resolvePublishableVariantStock(
+        variant.warehouseStocks.map((stock) => stock.quantity),
+        variant.heldUnits,
+        variant.sellingPolicy,
+      ),
     ]),
+  );
+  const stockByVariantId = new Map(
+    [...publishableByVariantId].map(([variantId, { stockQuantity }]) => [variantId, stockQuantity]),
   );
   const parentVariants: StorefrontVariantFacts[] = product.variants.map((variant) => ({
     id: variant.id,
@@ -257,6 +267,7 @@ function toCandidateProduct(
     pancakeDisplayId: variant.pancakeDisplayId,
     isComposite: variant.isCompositeParent || variant.isCompositeComponent,
     stockQuantity: stockByVariantId.get(variant.id) ?? Number.NaN,
+    ...(publishableByVariantId.get(variant.id)?.preorderProjectionPending ? { preorderProjectionPending: true } : {}),
   }));
 
   return {
@@ -281,7 +292,11 @@ function toCandidateProduct(
   };
 }
 
-export function createMerchantOfferRepository(client: PrismaClient) {
+export function createMerchantOfferRepository(
+  client: PrismaClient,
+  options: Readonly<{ sellingModeFlags?: SellingModeFlags }> = {},
+) {
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
   async function loadCandidateProducts({
     shopId,
     now = new Date(),
@@ -323,7 +338,8 @@ export function createMerchantOfferRepository(client: PrismaClient) {
 
     const variantIds = variants.map((variant) => variant.id);
 
-    // 3/6 — both website-owned product-fact tables in one parameterized, product-bounded read.
+    // 3/6 — the website-owned product-fact tables in one parameterized, product-bounded read,
+    // including the selling policy (joined here so the feed stays inside its round-trip budget).
     const productFacts = await client.$queryRawUnsafe<ProductFactRow[]>(
       `SELECT
          p."id" AS "productId",
@@ -332,10 +348,12 @@ export function createMerchantOfferRepository(client: PrismaClient) {
          (m."id" IS NOT NULL) AS "merchantFactsPresent",
          m."gender"::text AS "merchantGender",
          m."ageGroup"::text AS "merchantAgeGroup",
-         m."condition"::text AS "merchantCondition"
+         m."condition"::text AS "merchantCondition",
+         ${SELLING_POLICY_JOIN.columns}
        FROM "ProductMirror" p
        LEFT JOIN "ProductContent" c ON c."productId" = p."id"
        LEFT JOIN "ProductMerchantFacts" m ON m."productId" = p."id"
+       ${SELLING_POLICY_JOIN.join}
        WHERE p."id" = ANY($1::text[])
        ORDER BY p."id"`,
       productIds,
@@ -402,6 +420,9 @@ export function createMerchantOfferRepository(client: PrismaClient) {
 
     const contentByProductId = new Map<string, SelectedProductContent>();
     const merchantFactsByProductId = new Map<string, SelectedMerchantFacts>();
+    const storedPolicyByProductId = new Map(
+      productFacts.map((row) => [row.productId, storedPolicyFromJoinedRow(row)]),
+    );
     for (const row of productFacts) {
       if (row.contentStatus !== null) {
         contentByProductId.set(row.productId, {
@@ -435,6 +456,7 @@ export function createMerchantOfferRepository(client: PrismaClient) {
         ...variant,
         warehouseStocks: stocksByVariantId.get(variant.id) ?? [],
         heldUnits: heldByVariantId.get(variant.id) ?? 0,
+        sellingPolicy: effectivePolicy(storedPolicyByProductId.get(variant.productId) ?? null, sellingModeFlags),
         isCompositeParent: compositeParentIds.has(variant.id),
         isCompositeComponent: compositeComponentIds.has(variant.id),
       };

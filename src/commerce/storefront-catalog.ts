@@ -5,6 +5,8 @@ import { Prisma, type PrismaClient } from "../generated/prisma/client.ts";
 import { withAdvisorySellableStock } from "./capacity-reservation-repository.ts";
 import { sortClothingSizes } from "./clothing-size.ts";
 import { readSellingModeFlags, type SellingModeFlags } from "./selling-policy.ts";
+import { readEffectiveSellingPolicies } from "./selling-policy-repository.ts";
+import { isVariantAvailabilityPublishable } from "./selling-mode-publication.ts";
 import { resolveVariantAvailabilityFromWarehouseStocks } from "./storefront-product.ts";
 import {
   resolveStorefrontProductMedia,
@@ -850,7 +852,27 @@ export function createStorefrontCatalogRepository(
       [toStorefrontProduct(product, collectionMap)],
       sellingModeFlags,
     );
-    return withStock!;
+    // Whether JSON-LD may state each variant's availability depends on its selling policy: under
+    // OVERSELL / PREORDER a negative mirrored row is the expected state, not a defect (§9). Decided by
+    // the same rule the Merchant feed uses, over the raw rows this read still holds.
+    const policies = await readEffectiveSellingPolicies(
+      client,
+      product.variants.map(({ id }) => id),
+      sellingModeFlags,
+    );
+    return {
+      ...withStock!,
+      variantAvailabilityResolvedById: Object.fromEntries(
+        product.variants.map((variant) => {
+          const policy = policies.get(variant.id);
+          return [
+            variant.id,
+            policy !== undefined
+              && isVariantAvailabilityPublishable(variant.warehouseStocks.map(({ quantity }) => quantity), policy),
+          ];
+        }),
+      ),
+    };
   }
 
   return {

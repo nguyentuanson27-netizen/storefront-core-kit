@@ -93,6 +93,8 @@ export type MerchantExclusionReason =
   | "LANDING_URL_UNRESOLVED"
   | "PRICE_UNRESOLVED"
   | "AVAILABILITY_UNRESOLVED"
+  /** A preorder sale: no truthful availability until Preorder truth v1 (selling modes spec §9). */
+  | "PREORDER_PROJECTION_PENDING"
   | "MEDIA_UNRESOLVED"
   | "TITLE_UNRESOLVED"
   | "DESCRIPTION_UNRESOLVED"
@@ -118,6 +120,7 @@ const REASON_ORDER: readonly MerchantExclusionReason[] = [
   "LANDING_URL_UNRESOLVED",
   "PRICE_UNRESOLVED",
   "AVAILABILITY_UNRESOLVED",
+  "PREORDER_PROJECTION_PENDING",
   "MEDIA_UNRESOLVED",
   "TITLE_UNRESOLVED",
   "DESCRIPTION_UNRESOLVED",
@@ -136,8 +139,13 @@ export type MerchantCandidateVariation = Readonly<{
   pancakeDisplayId: string | null;
   /** Parent of, or component in, a composite set. Either side is deferred in Merchant v1. */
   isComposite: boolean;
-  /** Summed warehouse stock under M1 availability semantics; `NaN` when any source is unsafe. */
+  /**
+   * The stock to classify, from `resolvePublishableVariantStock`: the M1 row sum minus holds under
+   * `STANDARD`, the advisory sellable units under `OVERSELL` / `PREORDER`; `NaN` when unsafe.
+   */
   stockQuantity: number;
+  /** A preorder sale, excluded as `PREORDER_PROJECTION_PENDING`. Absent means no. */
+  preorderProjectionPending?: boolean;
 }>;
 
 export type MerchantCandidateProduct = Readonly<{
@@ -481,6 +489,7 @@ function draftCandidate(
 
   const availabilityClass = classifyMerchantAvailability(variation.stockQuantity);
   if (availabilityClass === "AVAILABILITY_UNRESOLVED") reasons.add("AVAILABILITY_UNRESOLVED");
+  else if (variation.preorderProjectionPending === true) reasons.add("PREORDER_PROJECTION_PENDING");
 
   const { imageLink, additionalImageLinks } = resolveOfferImages(product, variation.variantId);
   if (imageLink === null) reasons.add("MEDIA_UNRESOLVED");

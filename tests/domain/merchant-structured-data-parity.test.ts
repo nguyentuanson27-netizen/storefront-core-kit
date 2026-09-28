@@ -47,6 +47,12 @@ import {
   VARIANT_QUERY_PARAM,
 } from "../../src/commerce/storefront-variant-deep-link.ts";
 import { buildStorefrontProductStructuredData } from "../../src/seo/storefront-product-structured-data.ts";
+import { advisoryVariantCapacity } from "../../src/commerce/capacity-resources.ts";
+import { effectivePolicy, type EffectiveSellingPolicy } from "../../src/commerce/selling-policy.ts";
+import {
+  isVariantAvailabilityPublishable,
+  resolvePublishableVariantStock,
+} from "../../src/commerce/selling-mode-publication.ts";
 
 const ORIGIN = "https://shop.example.test";
 const NOW = new Date("2026-09-05T09:00:00.000Z");
@@ -101,6 +107,11 @@ type CatalogVariant = Readonly<{
   retailPriceAfterDiscount: number | null;
   isComposite?: boolean;
   campaigns?: readonly ApplicablePromotionCampaign[];
+  /**
+   * The variant's effective selling policy (selling modes spec §9). When absent the variant is the
+   * pre-selling-modes STANDARD case every other fixture here describes, reduced exactly as before.
+   */
+  sellingPolicy?: EffectiveSellingPolicy;
 }>;
 
 type CatalogProduct = Readonly<{
@@ -195,15 +206,24 @@ function catalogProduct(overrides: Partial<CatalogProduct> = {}): CatalogProduct
  * price and stock-derived availability are decided exactly once, by the code the PDP renders with.
  */
 function buildSharedProjection(product: CatalogProduct): StorefrontProductProjection {
-  const parentVariants: StorefrontVariantFacts[] = product.variants.map((row) => ({
-    id: row.variantId,
-    pancakeVariationId: row.pancakeVariationId,
-    color: row.color,
-    size: row.size,
-    sellableStock: storefrontSellableStock(row),
-    retailPrice: row.retailPrice,
-    retailPriceAfterDiscount: row.retailPriceAfterDiscount,
-  }));
+  const parentVariants: StorefrontVariantFacts[] = product.variants.map((row) => {
+    const facts = {
+      id: row.variantId,
+      pancakeVariationId: row.pancakeVariationId,
+      color: row.color,
+      size: row.size,
+      sellableStock: storefrontSellableStock(row),
+      retailPrice: row.retailPrice,
+      retailPriceAfterDiscount: row.retailPriceAfterDiscount,
+    };
+    if (row.sellingPolicy === undefined) return facts;
+    // The storefront's advisory read (§8), exactly as the PDP computes it.
+    const capacity = advisoryVariantCapacity(
+      [{ kind: "SELF", unitsPerLine: 1, fact: { mirroredUnits: storefrontSellableStock(row), activeReservedUnits: 0 } }],
+      row.sellingPolicy,
+    );
+    return { ...facts, sellableStock: capacity.sellableUnits, isPreorderSale: capacity.isPreorderSale };
+  });
 
   const campaignsByVariantId = new Map<string, readonly ApplicablePromotionCampaign[]>(
     product.variants
@@ -230,13 +250,27 @@ function toMerchantCandidate(
   product: CatalogProduct,
   projection: StorefrontProductProjection,
 ): MerchantCandidateProduct {
-  const variations: MerchantCandidateVariation[] = product.variants.map((row) => ({
-    variantId: row.variantId,
-    pancakeVariationId: row.pancakeVariationId,
-    pancakeDisplayId: row.pancakeDisplayId,
-    isComposite: row.isComposite ?? false,
-    stockQuantity: merchantStockQuantity(row),
-  }));
+  const variations: MerchantCandidateVariation[] = product.variants.map((row) => {
+    const base = {
+      variantId: row.variantId,
+      pancakeVariationId: row.pancakeVariationId,
+      pancakeDisplayId: row.pancakeDisplayId,
+      isComposite: row.isComposite ?? false,
+      stockQuantity: merchantStockQuantity(row),
+    };
+    if (row.sellingPolicy === undefined) return base;
+    // The Merchant repository's own reduction under a selling policy.
+    const publishable = resolvePublishableVariantStock(
+      row.warehouseQuantities ?? [row.sellableStock],
+      0,
+      row.sellingPolicy,
+    );
+    return {
+      ...base,
+      stockQuantity: publishable.stockQuantity,
+      ...(publishable.preorderProjectionPending ? { preorderProjectionPending: true } : {}),
+    };
+  });
 
   return {
     pancakeProductId: product.pancakeProductId,
@@ -288,9 +322,12 @@ function toStructuredDataProduct(
     variantAvailabilityResolvedById: Object.fromEntries(
       product.variants.map((row) => [
         row.variantId,
-        resolveVariantAvailabilityFromWarehouseStocks(
-          (row.warehouseQuantities ?? [row.sellableStock]).map((quantity) => ({ quantity })),
-        ),
+        row.sellingPolicy === undefined
+          ? resolveVariantAvailabilityFromWarehouseStocks(
+              (row.warehouseQuantities ?? [row.sellableStock]).map((quantity) => ({ quantity })),
+            )
+          // The PDP catalog read's policy-aware rule (§9), the same function Merchant's rule shares.
+          : isVariantAvailabilityPublishable(row.warehouseQuantities ?? [row.sellableStock], row.sellingPolicy),
       ]),
     ),
     projection,
@@ -1158,5 +1195,56 @@ describe("Merchant feed ↔ U27 variant JSON-LD parity", () => {
     assert.deepEqual(publishedIds(merchant), ["pv-black-l", "pv-black-m"]);
     assert.deepEqual(publishedIds(jsonLd), publishedIds(merchant));
     assert.deepEqual(merchant, jsonLd);
+  });
+  it("selling modes: OVERSELL below zero is in stock and a preorder sale is withheld, on both sides", () => {
+    const ON = { sellingModesEnabled: true, preorderEnabled: true };
+    const over = effectivePolicy({ sellingMode: "OVERSELL", negativeStockLimit: -20 }, ON);
+    const pre = effectivePolicy({ sellingMode: "PREORDER", negativeStockLimit: -20 }, ON);
+    const product = (policies: { m: EffectiveSellingPolicy; l: EffectiveSellingPolicy; s: EffectiveSellingPolicy }) =>
+      catalogProduct({
+        variants: [
+          variant({ sellableStock: -3, warehouseQuantities: [-3], sellingPolicy: policies.m }),
+          variant({
+            variantId: "cuid-black-l",
+            pancakeVariationId: "pv-black-l",
+            pancakeDisplayId: "LA-OXF-BLK-L",
+            size: "L",
+            sellableStock: 0,
+            warehouseQuantities: [0],
+            sellingPolicy: policies.l,
+          }),
+          variant({
+            variantId: "cuid-black-s",
+            pancakeVariationId: "pv-black-s",
+            pancakeDisplayId: "LA-OXF-BLK-S",
+            size: "S",
+            sellableStock: -20,
+            warehouseQuantities: [-20],
+            sellingPolicy: policies.s,
+          }),
+        ],
+      });
+
+    // M at −3 under OVERSELL: buyable, so in stock. L at 0 under PREORDER: a preorder sale, withheld.
+    // S at the limit under OVERSELL: nothing more may be sold, so out of stock.
+    const enabled = runParity(product({ m: over, l: pre, s: over }));
+    assert.deepEqual(enabled.merchant, enabled.jsonLd);
+    assert.deepEqual(
+      enabled.merchant.map(({ variantExternalId, availability }) => [variantExternalId, availability]),
+      [["pv-black-m", "IN_STOCK"], ["pv-black-s", "OUT_OF_STOCK"]],
+    );
+    assert.deepEqual(enabled.merchantExclusions.get("pv-black-l"), ["PREORDER_PROJECTION_PENDING"]);
+
+    // With the capability off the same rows are STANDARD again: negative stock is unresolved on both
+    // sides, exactly the pre-selling-modes behaviour.
+    const standard = effectivePolicy({ sellingMode: "OVERSELL", negativeStockLimit: -20 }, {
+      sellingModesEnabled: false,
+      preorderEnabled: false,
+    });
+    const disabled = runParity(product({ m: standard, l: standard, s: standard }));
+    // One survivor collapses to a standalone Product, which carries no group id by design.
+    assert.deepEqual(publishedIds(disabled.merchant), publishedIds(disabled.jsonLd));
+    assert.deepEqual(publishedIds(disabled.merchant), ["pv-black-l"]);
+    assert.deepEqual(disabled.merchantExclusions.get("pv-black-m"), ["AVAILABILITY_UNRESOLVED"]);
   });
 });

@@ -12,17 +12,13 @@ import { prisma } from "../db/prisma.ts";
 
 import { MAX_MEDIA_CANDIDATES_SCANNED } from "./product-media.ts";
 import type { MerchantIdentityRow } from "./merchant-identity-audit.ts";
+import { effectivePolicy, readSellingModeFlags, type SellingModeFlags } from "./selling-policy.ts";
+import { readEffectiveSellingPolicies } from "./selling-policy-repository.ts";
+import { resolvePublishableVariantStock } from "./selling-mode-publication.ts";
 
 export const MAX_AUDITED_VARIATIONS = 50_000;
 
 export class MerchantIdentityAuditError extends Error {}
-
-function aggregateWarehouseStock(quantities: readonly number[]): number {
-  for (const quantity of quantities) {
-    if (!Number.isFinite(quantity) || quantity < 0) return Number.NaN;
-  }
-  return quantities.reduce((total, quantity) => total + quantity, 0);
-}
 
 /**
  * Mirrors storefront-catalog's JSON-string-array boundary while bounding the copied per-product
@@ -40,7 +36,9 @@ function appendBoundedVariantImageUrls(target: string[], raw: unknown): void {
 
 export async function readMerchantIdentityRows(
   pancakeShopId: number,
+  options: Readonly<{ sellingModeFlags?: SellingModeFlags }> = {},
 ): Promise<MerchantIdentityRow[]> {
+  const sellingModeFlags = options.sellingModeFlags ?? readSellingModeFlags();
   if (!Number.isSafeInteger(pancakeShopId) || pancakeShopId <= 0) {
     throw new MerchantIdentityAuditError("Pancake shop id must be a positive safe integer");
   }
@@ -48,6 +46,7 @@ export async function readMerchantIdentityRows(
   const rows = await prisma.variantMirror.findMany({
     where: { product: { pancakeShopId } },
     select: {
+      id: true,
       pancakeVariationId: true,
       pancakeDisplayId: true,
       isPresent: true,
@@ -87,6 +86,10 @@ export async function readMerchantIdentityRows(
     );
   }
 
+  // The same stock rule as the Merchant feed (selling modes spec §9): under OVERSELL / PREORDER a
+  // negative mirrored row is the expected state, not a defect.
+  const policies = await readEffectiveSellingPolicies(prisma, rows.map(({ id }) => id), sellingModeFlags);
+
   const activeVariantImagesByProductId = new Map<string, string[]>();
   for (const row of rows) {
     if (!row.isPresent || !row.isActive || !row.product.isPresent || !row.product.isActive) continue;
@@ -110,8 +113,13 @@ export async function readMerchantIdentityRows(
     retailPrice: row.pancakeRetailPrice,
     retailPriceAfterDiscount: row.pancakeRetailPriceAfterDiscount,
     // Reject the whole availability fact when any source row is invalid; summing first would let a
-    // positive warehouse hide a negative mirrored quantity (for example -3 + 4 => 1).
-    stockQuantity: aggregateWarehouseStock(row.warehouseStocks.map((stock) => stock.quantity)),
+    // positive warehouse hide a negative mirrored quantity (for example -3 + 4 => 1). Holds are not
+    // part of this identity audit, as before.
+    stockQuantity: resolvePublishableVariantStock(
+      row.warehouseStocks.map((stock) => stock.quantity),
+      0,
+      policies.get(row.id) ?? effectivePolicy(null, sellingModeFlags),
+    ).stockQuantity,
     primaryImageUrl: row.product.primaryImageUrl,
     // Product-level storefront semantics: every active/present sibling gets the same ordered,
     // bounded post-query variant-image candidate set. Hidden/inactive siblings never contribute.

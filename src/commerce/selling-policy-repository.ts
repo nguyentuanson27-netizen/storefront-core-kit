@@ -72,6 +72,28 @@ export async function readEffectiveSellingPolicies(
   return result;
 }
 
+/**
+ * For a read bound by a database round-trip budget (the Merchant feed): the policy as a `LEFT JOIN`
+ * onto a query that already reads products, instead of a separate read. The SQL text stays here, so
+ * this module remains the table's only reader; the caller turns each row back into a stored policy
+ * with `storedPolicyFromJoinedRow` and interprets it only through `effectivePolicy()`.
+ *
+ * `productIdColumn` must be a trusted column reference such as `p."id"`, never input.
+ */
+export function sellingPolicyJoinSql(productIdColumn: string): Readonly<{ join: string; columns: string }> {
+  return {
+    join: `LEFT JOIN "ProductSellingPolicy" sp ON sp."productId" = ${productIdColumn}`,
+    columns: `sp."sellingMode"::text AS "sellingPolicyMode", sp."negativeStockLimit" AS "sellingPolicyLimit"`,
+  };
+}
+
+export function storedPolicyFromJoinedRow(
+  row: Readonly<{ sellingPolicyMode?: string | null; sellingPolicyLimit?: number | null }>,
+): StoredSellingPolicy | null {
+  if (row.sellingPolicyMode === null || row.sellingPolicyMode === undefined) return null;
+  return { sellingMode: row.sellingPolicyMode, negativeStockLimit: Number(row.sellingPolicyLimit) };
+}
+
 /** A product with a stored policy, and its variants, for the operator report (§10.3). */
 export type SellingPolicyProductRow = Readonly<{
   productId: string;

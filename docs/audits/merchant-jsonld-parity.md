@@ -46,7 +46,12 @@ Neither consumer re-derives a fact it publishes, and this audit introduces no th
 | Manufacturer MPN | `VariantMirror.pancakeDisplayId` (ADR 0008) | `VariantMirror.pancakeDisplayId` (ADR 0008) |
 | Variant URL | `buildStandaloneVariantDeepLinkPath` (U12) | `buildStandaloneVariantDeepLinkPath` (U12) |
 | Price | storefront projection, promotion-aware | storefront projection, promotion-aware |
-| Availability | M1 `classifyMerchantAvailability` over mirrored stock | PDP projection `purchasable` / `unavailableReason` |
+| Availability | M1 `classifyMerchantAvailability` over `resolvePublishableVariantStock` | PDP projection `purchasable` / `unavailableReason`, gated by `isVariantAvailabilityPublishable` |
+
+Selling modes (`docs/specs/core-kit-selling-modes-v1.md` §9) keep one rule for both sides in
+`src/commerce/selling-mode-publication.ts`: under `STANDARD` (every product while `SELLING_MODES_ENABLED` is off) the
+M1 row rule is unchanged; under `OVERSELL` / `PREORDER` a negative row is expected and the stated stock is the advisory
+`sellableUnits`; a preorder sale is excluded from Merchant (`PREORDER_PROJECTION_PENDING`) and has no JSON-LD offer.
 
 Merchant paths: `src/commerce/merchant-offer-mapper.ts`, `merchant-offer-repository.ts`,
 `merchant-feed-serializer.ts`, `merchant-feed-service.ts`, `merchant-feed-http.ts`,
