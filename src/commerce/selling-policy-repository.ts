@@ -12,8 +12,14 @@
 
 import { Prisma, type PrismaClient } from "../generated/prisma/client.ts";
 
-import { readAdvisoryCapacityResources, type AdvisoryCapacityResource } from "./capacity-reservation-repository.ts";
-import type { SellingMode, SellingPolicyChange, StoredSellingPolicy } from "./selling-policy.ts";
+import {
+  effectivePolicy,
+  type EffectiveSellingPolicy,
+  type SellingMode,
+  type SellingModeFlags,
+  type SellingPolicyChange,
+  type StoredSellingPolicy,
+} from "./selling-policy.ts";
 
 type PolicyReadClient = Pick<Prisma.TransactionClient, "productSellingPolicy">;
 
@@ -36,23 +42,43 @@ export async function readStoredSellingPolicies(
   return result;
 }
 
-export type SellingPolicyReportVariant = Readonly<{
-  variantId: string;
-  isCompositeParent: boolean;
-  /**
-   * What one unit of this variant consumes, read exactly as the storefront's advisory capacity is:
-   * its own stock when standalone, its components when a composite parent (whose own mirrored stock
-   * is never consulted). `null` when the topology cannot be proven.
-   */
-  capacityResources: readonly AdvisoryCapacityResource[] | null;
-}>;
+/**
+ * The effective policy for each purchased variant, keyed by variant id (spec §4.2.1, §7.1).
+ *
+ * Checkout calls this inside its transaction after locking the variants' `VariantMirror` rows; the
+ * policy writer locks the same rows first, so what this returns is the policy committed before the
+ * lock, never a half-applied change. A variant this cannot find resolves to the default policy; the
+ * caller refuses a missing variant on its own terms.
+ */
+export async function readEffectiveSellingPolicies(
+  client: PolicyReadClient & Pick<Prisma.TransactionClient, "variantMirror">,
+  variantIds: readonly string[],
+  flags: SellingModeFlags,
+): Promise<Map<string, EffectiveSellingPolicy>> {
+  const ids = [...new Set(variantIds)];
+  const result = new Map<string, EffectiveSellingPolicy>();
+  if (ids.length === 0) return result;
 
-export type SellingPolicyReportRow = Readonly<{
+  const variants = await client.variantMirror.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, productId: true },
+  });
+  const productByVariant = new Map(variants.map(({ id, productId }) => [id, productId]));
+  const stored = await readStoredSellingPolicies(client, [...new Set(productByVariant.values())]);
+  for (const id of ids) {
+    const productId = productByVariant.get(id);
+    result.set(id, effectivePolicy(productId === undefined ? null : stored.get(productId), flags));
+  }
+  return result;
+}
+
+/** A product with a stored policy, and its variants, for the operator report (§10.3). */
+export type SellingPolicyProductRow = Readonly<{
   productId: string;
   productSlug: string;
   stored: StoredSellingPolicy;
   updatedAt: Date;
-  variants: readonly SellingPolicyReportVariant[];
+  variants: readonly Readonly<{ variantId: string; isCompositeParent: boolean }>[];
 }>;
 
 export function createSellingPolicyRepository(client: PrismaClient) {
@@ -109,8 +135,8 @@ export function createSellingPolicyRepository(client: PrismaClient) {
     });
   }
 
-  /** Every product with a stored row, with the capacity facts the operator report prints (§10.3). */
-  async function readSellingPolicyReport(): Promise<SellingPolicyReportRow[]> {
+  /** Every product with a stored row, with its variants (§10.3). Capacity is added by the report. */
+  async function readStoredPolicyProducts(): Promise<SellingPolicyProductRow[]> {
     const rows = await client.productSellingPolicy.findMany({
       orderBy: { productId: "asc" },
       select: {
@@ -130,11 +156,6 @@ export function createSellingPolicyRepository(client: PrismaClient) {
       },
     });
 
-    const capacity = await readAdvisoryCapacityResources(
-      client,
-      rows.flatMap((row) => row.product.variants.map((variant) => variant.id)),
-    );
-
     return rows.map((row) => ({
       productId: row.productId,
       productSlug: row.product.slug,
@@ -143,7 +164,6 @@ export function createSellingPolicyRepository(client: PrismaClient) {
       variants: row.product.variants.map((variant) => ({
         variantId: variant.id,
         isCompositeParent: variant.compositeComponents.length > 0,
-        capacityResources: capacity.get(variant.id) ?? null,
       })),
     }));
   }
@@ -153,6 +173,6 @@ export function createSellingPolicyRepository(client: PrismaClient) {
     productHasCompositeParent,
     readStoredPolicy,
     saveSellingPolicy,
-    readSellingPolicyReport,
+    readStoredPolicyProducts,
   };
 }

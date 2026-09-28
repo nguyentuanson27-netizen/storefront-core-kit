@@ -3,12 +3,15 @@ import {
   advisorySellableUnits,
   evaluatePlannedCapacity,
   planCapacityResources,
+  resolveResourceFloors,
   wholeMirroredUnits,
   type CapacityResource,
   type CapacityResourceKind,
   type CompositeEdgeFact,
   type ResourceCapacityFact,
 } from "./capacity-resources.ts";
+import type { SellingModeFlags } from "./selling-policy.ts";
+import { readEffectiveSellingPolicies } from "./selling-policy-repository.ts";
 
 /**
  * The one authoritative capacity path (spec: docs/specs/core-kit-production-hardening-v1.md §5).
@@ -32,7 +35,13 @@ export type CapacityReservationRefusal =
   | "INVALID_ORDER"
   | "TOPOLOGY_UNPROVEN"
   | "TOPOLOGY_CHANGED"
-  | "INSUFFICIENT_CAPACITY";
+  | "INSUFFICIENT_CAPACITY"
+  /** A resource with a negative floor (OVERSELL / PREORDER) would go past it. */
+  | "NEGATIVE_LIMIT_REACHED"
+  /** A purchased variant's stored policy is out of range; every sale of it refuses. */
+  | "INVALID_POLICY"
+  /** A composite parent whose product resolves to a non-`STANDARD` mode (selling modes spec §6.1). */
+  | "COMPOSITE_MODE_UNSUPPORTED";
 
 export type CapacityReservationResult =
   | { ok: true; created: boolean }
@@ -119,7 +128,16 @@ async function readResourceFacts(
  */
 export async function reserveOrderCapacity(
   tx: Tx,
-  { orderId, lines }: Readonly<{ orderId: string; lines: readonly Readonly<{ variantId: string; quantity: number }>[] }>,
+  {
+    orderId,
+    lines,
+    sellingModeFlags,
+  }: Readonly<{
+    orderId: string;
+    lines: readonly Readonly<{ variantId: string; quantity: number }>[];
+    /** The deployment's selling-mode flags. Required so no caller can forget them and sell on a default. */
+    sellingModeFlags: SellingModeFlags;
+  }>,
 ): Promise<CapacityReservationResult> {
   const existing = await tx.capacityReservation.findFirst({ where: { orderId }, select: { id: true } });
   if (existing) return { ok: true, created: false };
@@ -160,8 +178,28 @@ export async function reserveOrderCapacity(
   const unlocked = resourceIds.find((id) => !lockedIds.has(id));
   if (unlocked !== undefined) return { ok: false, reason: "TOPOLOGY_CHANGED", variantId: unlocked };
 
-  const decision = evaluatePlannedCapacity(plan.lines, await readResourceFacts(tx, resourceIds));
-  if (!decision.ok) return { ok: false, reason: "INSUFFICIENT_CAPACITY", variantId: decision.variantId };
+  // The selling policy is read only now, under the same lock the policy writer takes first (selling
+  // modes spec §7.2): this decision sees the policy committed before the lock, never a half-applied one.
+  const policies = await readEffectiveSellingPolicies(
+    tx,
+    plan.lines.map(({ variantId }) => variantId),
+    sellingModeFlags,
+  );
+  const floors = resolveResourceFloors(plan.lines, (variantId) => {
+    const policy = policies.get(variantId);
+    if (!policy) throw new Error(`No effective selling policy was read for ${variantId}`);
+    return policy;
+  });
+  if (!floors.ok) return { ok: false, reason: floors.reason, variantId: floors.variantId };
+
+  const decision = evaluatePlannedCapacity(plan.lines, await readResourceFacts(tx, resourceIds), floors.floors);
+  if (!decision.ok) {
+    return {
+      ok: false,
+      reason: decision.floor < 0 ? "NEGATIVE_LIMIT_REACHED" : "INSUFFICIENT_CAPACITY",
+      variantId: decision.variantId,
+    };
+  }
 
   for (const line of plan.lines) {
     await tx.capacityReservation.create({

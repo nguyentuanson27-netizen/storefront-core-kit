@@ -10,6 +10,8 @@
  * never consulted: Pancake reports it, but it is not the stock a set sale actually spends.
  */
 
+import type { EffectiveSellingPolicy } from "./selling-policy.ts";
+
 const MAX_POSTGRES_INTEGER = 2_147_483_647;
 
 export type CapacityResourceKind = "SELF" | "COMPONENT";
@@ -150,11 +152,17 @@ export type ResourceCapacityFact = Readonly<{
  *
  * Resources shared between lines (a direct sale of a child and a set that contains it) are summed
  * before comparison, so one order cannot pass two lines that each fit alone but not together.
+ *
+ * `floors` is the lowest free level each resource may reach (selling modes spec §4.3); a resource
+ * absent from it has floor 0, which is exactly the pre-selling-modes rule. The refusal reports the
+ * floor it was measured against, so the caller can tell an exhausted oversell allowance apart from
+ * ordinary exhaustion.
  */
 export function evaluatePlannedCapacity(
   lines: readonly CapacityLinePlan[],
   facts: ReadonlyMap<string, ResourceCapacityFact>,
-): { ok: true } | { ok: false; variantId: string } {
+  floors: ReadonlyMap<string, number> = new Map(),
+): { ok: true } | { ok: false; variantId: string; floor: number } {
   const demand = new Map<string, number>();
   for (const line of lines) {
     for (const resource of line.resources) {
@@ -162,11 +170,48 @@ export function evaluatePlannedCapacity(
     }
   }
   for (const [variantId, requested] of [...demand.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    const floor = floors.get(variantId) ?? 0;
     const fact = facts.get(variantId);
-    if (!fact || fact.mirroredUnits === null) return { ok: false, variantId };
-    if (fact.mirroredUnits - fact.activeReservedUnits - requested < 0) return { ok: false, variantId };
+    if (!fact || fact.mirroredUnits === null) return { ok: false, variantId, floor };
+    if (fact.mirroredUnits - fact.activeReservedUnits - requested < floor) return { ok: false, variantId, floor };
   }
   return { ok: true };
+}
+
+export type ResourceFloorRefusal = "INVALID_POLICY" | "COMPOSITE_MODE_UNSUPPORTED";
+
+/**
+ * The floor each resource of an order is measured against (selling modes spec §5, §6).
+ *
+ * - A `SELF` resource takes the floor of the purchased variant's effective policy.
+ * - A `COMPONENT` resource always takes 0: negative component accounting is unproven, so a set sale
+ *   never drives a component below zero, whatever the component's own product allows.
+ * - A variant consumed both ways in one order takes the stricter floor for its whole demand, which is
+ *   0, because `evaluatePlannedCapacity` sums the demand before comparing.
+ *
+ * Refuses the whole order when a purchased variant's policy is invalid, or when a composite parent's
+ * product resolves to a non-`STANDARD` mode: the owner configured something v1 cannot honor, and a
+ * quiet downgrade would hide it. `policyFor` must answer for every purchased variant.
+ */
+export function resolveResourceFloors(
+  lines: readonly CapacityLinePlan[],
+  policyFor: (variantId: string) => EffectiveSellingPolicy,
+): { ok: true; floors: Map<string, number> } | { ok: false; reason: ResourceFloorRefusal; variantId: string } {
+  const floors = new Map<string, number>();
+  for (const line of lines) {
+    const policy = policyFor(line.variantId);
+    if (policy.kind === "REFUSE") return { ok: false, reason: "INVALID_POLICY", variantId: line.variantId };
+    const isSet = line.resources.some((resource) => resource.kind === "COMPONENT");
+    if (isSet && policy.mode !== "STANDARD") {
+      return { ok: false, reason: "COMPOSITE_MODE_UNSUPPORTED", variantId: line.variantId };
+    }
+    for (const resource of line.resources) {
+      const floor = resource.kind === "COMPONENT" ? 0 : policy.floor;
+      const current = floors.get(resource.variantId);
+      floors.set(resource.variantId, current === undefined ? floor : Math.max(current, floor));
+    }
+  }
+  return { ok: true, floors };
 }
 
 /**

@@ -7,6 +7,7 @@ import { readAdvisorySellableUnits } from "../../src/commerce/capacity-reservati
 import { createSellingPolicyRepository, readStoredSellingPolicies } from "../../src/commerce/selling-policy-repository.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import { buildSellingPolicyReport } from "../../src/operations/selling-policy-report.ts";
+import { readSellingPolicyReportRows } from "../../src/operations/selling-policy-report-repository.ts";
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
@@ -201,7 +202,7 @@ test("composite parents and the operator report are read from the mirror", async
   await repository.saveSellingPolicy(plain, { kind: "SET", sellingMode: "OVERSELL", negativeStockLimit: -5 }, actor);
   await repository.saveSellingPolicy(set, { kind: "SET", sellingMode: "STANDARD", negativeStockLimit: 0 }, actor);
 
-  const report = (await repository.readSellingPolicyReport()).filter((row) => row.productId === plain || row.productId === set);
+  const report = (await readSellingPolicyReportRows(prisma)).filter((row) => row.productId === plain || row.productId === set);
   const byProduct = new Map(report.map((row) => [row.productId, row]));
   assert.deepEqual(byProduct.get(plain)?.stored, { sellingMode: "OVERSELL", negativeStockLimit: -5 });
   assert.deepEqual(
@@ -245,7 +246,7 @@ test("the report reads a composite parent's capacity from its components, not it
   }
 
   const flags = { sellingModesEnabled: false, preorderEnabled: false };
-  const rows = (await repository.readSellingPolicyReport()).filter((row) => [top, skirt, set].includes(row.productId));
+  const rows = (await readSellingPolicyReportRows(prisma)).filter((row) => [top, skirt, set].includes(row.productId));
   const variants = new Map(buildSellingPolicyReport(rows, flags).flatMap((line) => line.variants.map((v) => [v.variantId, v])));
 
   assert.deepEqual(

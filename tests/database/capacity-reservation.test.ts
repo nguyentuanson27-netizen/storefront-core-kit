@@ -9,6 +9,7 @@ import {
   readAdvisorySellableUnits,
   reserveOrderCapacity,
 } from "../../src/commerce/capacity-reservation-repository.ts";
+import { SELLING_MODE_FLAGS_OFF } from "../../src/commerce/selling-policy.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
 
@@ -70,7 +71,7 @@ function fixture(key: string) {
   }
 
   function reserve(orderId: string, lines: Array<{ variantId: string; quantity: number }>) {
-    return prisma.$transaction((tx) => reserveOrderCapacity(tx, { orderId, lines }));
+    return prisma.$transaction((tx) => reserveOrderCapacity(tx, { orderId, lines, sellingModeFlags: SELLING_MODE_FLAGS_OFF }));
   }
 
   /** A catalog sync's stock observation: new quantity, stamped with the instant its read started. */
@@ -107,7 +108,7 @@ test("last unit: two concurrent buyers cannot both spend the same standalone uni
 
   const firstTx = prisma.$transaction(
     async (tx) => {
-      const result = await reserveOrderCapacity(tx, { orderId: first, lines: [{ variantId: tee, quantity: 1 }] });
+      const result = await reserveOrderCapacity(tx, { orderId: first, lines: [{ variantId: tee, quantity: 1 }], sellingModeFlags: SELLING_MODE_FLAGS_OFF });
       signalFirstReserved();
       await firstMayCommit;
       return result;
@@ -118,7 +119,7 @@ test("last unit: two concurrent buyers cannot both spend the same standalone uni
 
   let secondSettled = false;
   const secondTx = prisma
-    .$transaction((tx) => reserveOrderCapacity(tx, { orderId: second, lines: [{ variantId: tee, quantity: 1 }] }), {
+    .$transaction((tx) => reserveOrderCapacity(tx, { orderId: second, lines: [{ variantId: tee, quantity: 1 }], sellingModeFlags: SELLING_MODE_FLAGS_OFF }), {
       timeout: 20_000,
     })
     .finally(() => (secondSettled = true));

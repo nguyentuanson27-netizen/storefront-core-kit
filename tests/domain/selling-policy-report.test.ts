@@ -3,8 +3,11 @@ import test from "node:test";
 
 import type { AdvisoryCapacityResource } from "../../src/commerce/capacity-reservation-repository.ts";
 import { advisorySellableUnits, wholeFreeUnits } from "../../src/commerce/capacity-resources.ts";
-import type { SellingPolicyReportRow } from "../../src/commerce/selling-policy-repository.ts";
-import { buildSellingPolicyReport, formatSellingPolicyReport } from "../../src/operations/selling-policy-report.ts";
+import {
+  buildSellingPolicyReport,
+  formatSellingPolicyReport,
+  type SellingPolicyReportRow,
+} from "../../src/operations/selling-policy-report.ts";
 
 function self(variantId: string, mirroredUnits: number | null, activeReservedUnits = 0): AdvisoryCapacityResource[] {
   return [{ variantId, kind: "SELF", unitsPerLine: 1, fact: { mirroredUnits, activeReservedUnits } }];

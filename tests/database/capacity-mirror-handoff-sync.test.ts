@@ -9,6 +9,7 @@ import {
   reserveOrderCapacity,
 } from "../../src/commerce/capacity-reservation-repository.ts";
 import { createCatalogMirrorRepository } from "../../src/commerce/catalog-mirror-repository.ts";
+import { SELLING_MODE_FLAGS_OFF } from "../../src/commerce/selling-policy.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 import type { PancakeParsedCatalogVariation } from "../../src/integrations/pancake/catalog-contract.ts";
 import { deleteOrdersWithCapacity } from "../support/order-cleanup.ts";
@@ -58,7 +59,7 @@ test("catalog sync hands a hold to the mirror only when its read started after a
   ).id;
   const order = await prisma.orderMirror.create({ data: { publicCode: PUBLIC_CODE } });
   const reserved = await prisma.$transaction((tx) =>
-    reserveOrderCapacity(tx, { orderId: order.id, lines: [{ variantId, quantity: 2 }] }),
+    reserveOrderCapacity(tx, { orderId: order.id, lines: [{ variantId, quantity: 2 }], sellingModeFlags: SELLING_MODE_FLAGS_OFF }),
   );
   assert.deepEqual(reserved, { ok: true, created: true });
   await prisma.$transaction((tx) => markOrderCapacityAccepted(tx, order.id, new Date("2026-04-01T12:00:00Z")));

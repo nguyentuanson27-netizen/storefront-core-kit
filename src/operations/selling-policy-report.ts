@@ -9,9 +9,22 @@
  * measured against floor 0 whatever the product's policy: component resources never oversell (§6.1).
  */
 
+import type { AdvisoryCapacityResource } from "../commerce/capacity-reservation-repository.ts";
 import { wholeFreeUnits } from "../commerce/capacity-resources.ts";
-import type { SellingPolicyReportRow } from "../commerce/selling-policy-repository.ts";
+import type { SellingPolicyProductRow } from "../commerce/selling-policy-repository.ts";
 import { effectivePolicy, type SellingModeFlags } from "../commerce/selling-policy.ts";
+
+export type SellingPolicyReportVariant = SellingPolicyProductRow["variants"][number] & Readonly<{
+  /**
+   * What one unit of this variant consumes, read exactly as the storefront's advisory capacity is:
+   * its own stock when standalone, its components when a composite parent (whose own mirrored stock
+   * is never consulted). `null` when the topology cannot be proven.
+   */
+  capacityResources: readonly AdvisoryCapacityResource[] | null;
+}>;
+
+export type SellingPolicyReportRow = Omit<SellingPolicyProductRow, "variants"> &
+  Readonly<{ variants: readonly SellingPolicyReportVariant[] }>;
 
 export type SellingPolicyReportFlag =
   | "INVALID_POLICY"

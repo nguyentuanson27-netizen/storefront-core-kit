@@ -175,7 +175,7 @@ parentCapacity = min(componentUnits for every required component)
 
 A reservation row may continue to exist for audit/idempotency after it stops contributing to `activeReservedUnits`. Whether a resource contributes is determined by the accounting-ownership contract in §5.4, not merely by the local order state's label.
 
-Core Kit has no oversell/preorder selling policy today: every sale is floored at non-negative mirrored stock. v1 keeps that single floor for standalone and composite lines alike. Introducing any oversell/preorder policy is an ask-first change (§15) and would need its own resource-level floor definition.
+**Floors per `docs/specs/core-kit-selling-modes-v1.md` (amended by Selling Modes M2).** Every resource is measured against a floor rather than a constant 0: a sale of `q` is allowed iff `mirrored − held − q ≥ floor`. A `SELF` resource takes the floor of the purchased variant's effective selling policy (0 for `STANDARD`, the product's negative limit for `OVERSELL`/`PREORDER`); a `COMPONENT` resource always takes 0, and a variant consumed both ways in one order is held to 0 for its whole demand. While `SELLING_MODES_ENABLED` is off every effective policy is `STANDARD`, so every floor is 0 — exactly the original rule. The advisory formulas above are unchanged until Selling Modes M3. Locking, the ledger, mirror handoff, `SYNC_UNKNOWN` holding and the `TOPOLOGY_CHANGED` guard are unchanged.
 
 ### 5.2 Additive persistence
 
