@@ -173,23 +173,44 @@ Two flags, both **off** by default in `deploy/vps/env.example`:
 - `SELLING_MODE_PREORDER_ENABLED` — `PREORDER` additionally. Keep it off until Preorder truth v1 ships: a preorder
   accepted without its confirmed-order snapshot loses its preorder history for good.
 
-Turning `STANDARD` + `OVERSELL` on is a configuration change, not a deploy of new code:
+Turning `STANDARD` + `OVERSELL` on is a configuration change, not a deploy of new code. Run from the repository root
+on the VPS, with the same Compose invocation `deploy.sh` uses:
+
+```sh
+compose() { docker compose --env-file deploy/vps/.env.production -f deploy/vps/compose.yml "$@"; }
+```
 
 1. Confirm the release contains Selling Modes M1–M3 (`git log` shows M3b) and that its browser gate passed.
-2. Preview what will change: `pnpm catalog:selling-policy:report` lists every stored policy, its effective mode under
-   the current flags and each variant's free / sellable / ready units. Every row reads `SELLING_MODES_DISABLED` while
-   the flag is off; resolve any `INVALID_POLICY` or `COMPOSITE_MODE_UNSUPPORTED` row first.
-3. Set `SELLING_MODES_ENABLED=true` in the host env file and restart the app (and `catalog-sync`, which reads the same
-   env) with the current release: no migration, no rebuild.
-4. Verify: the report shows effective `OVERSELL` for the intended products and no `SELLING_MODES_DISABLED`; an
-   `OVERSELL` variant below zero is purchasable on its PDP with no preorder marker and appears in `/shop?availability=
-   in-stock`; the Merchant feed lists it `in_stock`.
+2. Preview what will change: `compose run --rm ops pnpm catalog:selling-policy:report` lists every stored policy, its
+   effective mode under the flags in `.env.production` and each variant's free / sellable / ready units. Every row reads
+   `SELLING_MODES_DISABLED` while the flag is off; resolve any `INVALID_POLICY` or `COMPOSITE_MODE_UNSUPPORTED` row
+   first.
+3. Set `SELLING_MODES_ENABLED=true` in `deploy/vps/.env.production`, then **recreate** the containers that load that
+   file. A plain `docker compose restart` keeps each container's existing environment and would leave the flag off:
 
-Rollback is the same switch in reverse and is safe in the conservative direction: set `SELLING_MODES_ENABLED=false`
-and restart. Every product sells as `STANDARD` again from the next decision; holds already taken below zero stay valid
-ledger rows and hand off to the mirror as usual; negative stock simply stops selling until it is positive again.
-Stored policies are kept, so turning the flag back on restores them. Never delete `ProductSellingPolicy` rows to "reset"
-a product: the admin "Mặc định" choice does that one product at a time and records who did it.
+   ```sh
+   compose up -d --no-build --no-deps --force-recreate app catalog-sync
+   ```
+
+   `--no-build` keeps the current release's images: no migration, no rebuild. `catalog-sync` does not read the flag, but
+   it loads the same env file and is recreated with the app so the two never run on different configurations.
+4. Verify the running app actually has the value, not just the file:
+
+   ```sh
+   compose exec app node -e 'if (process.env.SELLING_MODES_ENABLED !== "true") process.exit(1)'
+   ```
+
+   Then the report (`compose run --rm ops pnpm catalog:selling-policy:report`) shows effective `OVERSELL` for the
+   intended products and no `SELLING_MODES_DISABLED`; an `OVERSELL` variant below zero is purchasable on its PDP with no
+   preorder marker and appears in `/shop?availability=in-stock`; the Merchant feed lists it `in_stock`.
+
+Rollback is the same switch in reverse and is safe in the conservative direction: set `SELLING_MODES_ENABLED=false`,
+run the same `compose up -d --no-build --no-deps --force-recreate app catalog-sync`, and verify with
+`compose exec app node -e 'if (process.env.SELLING_MODES_ENABLED === "true") process.exit(1)'`. Every product sells as
+`STANDARD` again from the next decision; holds already taken below zero stay valid ledger rows and hand off to the
+mirror as usual; negative stock simply stops selling until it is positive again. Stored policies are kept, so turning
+the flag back on restores them. Never delete `ProductSellingPolicy` rows to "reset" a product: the admin "Mặc định"
+choice does that one product at a time and records who did it.
 
 ## Pancake write safety during rollback
 
