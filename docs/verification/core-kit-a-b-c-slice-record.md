@@ -1,0 +1,58 @@
+# Core Kit reusable capabilities A/B/C — slice record (R00)
+
+Tracker for [plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md) and [checklist](../../tasks/core-kit-reusable-a-b-c-v1-todo.md).
+Normative source: [A/B/C umbrella spec](../specs/core-kit-reusable-capabilities-a-b-c-v1.md).
+
+This file records, per slice, the exact commit evidence, the compatibility with every new flag OFF, and the
+rollback. It is **evidence, not authorization**: no flag listed here is enabled, no migration is applied to any
+shared environment, and no external POS write is performed by recording a slice.
+
+## F00 — revalidation of the §2 gap matrix
+
+- **Baseline in the plan:** `main@1f71d610387f1e000c89bc11732a79426fa0dfb8` (spec #26).
+- **Revalidated at:** `main@a397e44dd6800481036e49d55fb2cfcdc885398b` (plan #27 merged).
+- **Drift in code:** none. `git diff 1f71d61..a397e44 --stat` changes only
+  `tasks/core-kit-reusable-a-b-c-v1-plan.md` and `tasks/core-kit-reusable-a-b-c-v1-todo.md`.
+- **Path check:** all 60 distinct source/test paths named in the plan's §2 matrix exist in the tree.
+- **Behavioural spot-checks against the matrix rows** (read from source at the SHA above):
+  - A1/A4: `src/commerce/checkout-quote-proof.ts` has `PROOF_FORMAT = "laq1"` only; no `laq2`, no `lineId`
+    anywhere under `src/`. `src/commerce/checkout-quote.ts` rejects a repeated `pancakeVariationId`
+    (`seenVariationIds` in `buildRenderedCheckoutQuoteFacts`), a repeated `variantExternalId` and a non-positive
+    unit price or quantity.
+  - A2: no upsell, gift, benefit, arrival, merchandising, suggestion or category module under `src/commerce/`.
+  - A3: `@@unique([orderId, variantId])` on `CapacityReservation` and `@@unique([cartId, variantId])` on `CartItem`
+    are unchanged.
+  - B1: `src/routes/new-arrivals.ts` still seals an empty view model (editorial-only).
+  - B5: `src/routes/search.ts` still seals an empty view model; results are owned by `/shop`.
+- **Result:** the matrix classifications and KEEP/ADAPT/REBUILD/SKIP decisions stand unchanged.
+- **Local baseline on that SHA** (PostgreSQL 16, migrations deployed): `pnpm prisma:validate`, `pnpm lint`
+  (0 errors, 12 pre-existing warnings), `pnpm typecheck`, `pnpm test` (1843 pass / 0 fail) and `pnpm test:db`
+  (478 pass / 0 fail) all pass.
+- **Reviewer acknowledgement:** recorded by the owner's instruction to the implementing agent to self-review and
+  merge qualifying PRs. The owner can still contest any row; nothing downstream relies on a gate that this record
+  does not grant (see below).
+
+## Gate and blocker status
+
+A gate is only satisfied by the artifact named in the plan. Merging planning or tracking documents satisfies none.
+
+| Gate | Needed by | Status | What unblocks it |
+| --- | --- | --- | --- |
+| G1 / F01 — owner-approved child contract (stacking, `lineId`/`laq2`, paid bases, capacity, rollback) | A01–A10, C04 | **BLOCKED — owner decision** | Approved child spec (`docs/specs/core-kit-benefit-quote-v1.md`) |
+| G2 — controlled Pancake readback of 0-VND gift, same-variation PAID+GIFT, differently priced PAID rows | A08 (and so A09, A10, C04) | **BLOCKED — no controlled POS evidence** | Approved test-environment readback evidence per enabled use case |
+| G3 — additive migration and old/new code coexistence | A02, A06, B01, B04, B05, B06, B09 | **BLOCKED — not approved** | Reviewed migration design per slice |
+| GB1 — B1 child spec (finite `pageSize`, pagination, empty state, ownership) | B01, B03 | **BLOCKED — owner decision** | Approved B1 child spec |
+| G4 — category vs collections | B08 → B09 | **BLOCKED — owner decision** | Reviewed ADR |
+| G5 — image delivery measurement and security decision | B10 → B11 | **BLOCKED — needs comparable real-image measurement** | Measurements plus security design review |
+
+Tasks with no unmet gate and no schema change: **B07, C01, C02, C03, C05** (after B07). These are built first.
+A05 is a pure function but its gate reads "Stacking must be approved", and the plan declares the stacking default
+open, so it is held with F01 rather than guessed.
+
+## Slice log
+
+Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and default, OFF compatibility, rollback.
+
+| Task | PR | Merged SHA | Exact-head CI | Flag (default) | OFF compatibility | Rollback |
+| --- | --- | --- | --- | --- | --- | --- |
+| F00 | _this PR_ | _recorded after merge_ | docs only | — | no code change | revert the PR |
