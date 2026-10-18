@@ -38,16 +38,19 @@ A gate is only satisfied by the artifact named in the plan. Merging planning or 
 
 | Gate | Needed by | Status | What unblocks it |
 | --- | --- | --- | --- |
-| G1 / F01 — owner-approved child contract (stacking, `lineId`/`laq2`, paid bases, capacity, rollback) | A01–A10, C04 | **BLOCKED — owner decision** | Approved child spec (`docs/specs/core-kit-benefit-quote-v1.md`) |
+| G1 / F01 — benefit quote contract | A01–A10, C04 | **Owner option A policy APPROVED; technical child-spec review PENDING** | [Owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md), [F01 draft](../specs/core-kit-benefit-quote-v1.md). Exact legacy-overlap predicate and technical review still block implementation |
 | G2 — controlled Pancake readback of 0-VND gift, same-variation PAID+GIFT, differently priced PAID rows | A08 (and so A09, A10, C04) | **BLOCKED — no controlled POS evidence** | Approved test-environment readback evidence per enabled use case |
-| G3 — additive migration and old/new code coexistence | A02, A06, B01, B04, B05, B06, B09 | **BLOCKED — not approved** | Reviewed migration design per slice |
-| GB1 — B1 child spec (finite `pageSize`, pagination, empty state, ownership) | B01, B03 | **BLOCKED — owner decision** | Approved B1 child spec |
-| G4 — category vs collections | B08 → B09 | **BLOCKED — owner decision** | Reviewed ADR |
+| G3 — additive migration and old/new code coexistence | A02, A06, B01, B04, B05, B06; B09 only if reopened | **Additive DESIGN DIRECTION approved; concrete migrations remain BLOCKED** | [Owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md). Each real schema/SQL diff, rollback, coexistence and tests require separate review |
+| GB1 — curated arrivals contract | B01, B03 | **Owner option A accepted (`pageSize=24`, max 500); technical child-spec review and G3 still BLOCKED** | [B1 draft](../specs/core-kit-new-arrivals-curation-v1.md); [owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) |
+| G4 — category vs collections | B08 → B09 | **OWNER ACCEPTED 2026-10-18: KEEP collections, B09 SKIPPED** | [ADR 0010](../decisions/0010-category-taxonomy-vs-collections.md); no new taxonomy implementation |
 | G5 — image delivery measurement and security decision | B10 → B11 | **BLOCKED — needs comparable real-image measurement** | Measurements plus security design review |
 
 Tasks with no unmet gate and no schema change: **B07, C01, C02, C03, C05** (after B07). These are built first.
-A05 is a pure function but its gate reads "Stacking must be approved", and the plan declares the stacking default
-open, so it is held with F01 rather than guessed.
+A05 pure eligibility now has an **owner-approved v1 stacking direction**, but the precise conflict predicate and the F01 technical child-spec review remain pending. A05 therefore stays gated on G1; policy approval alone is not a verified implementation.
+
+## Owner approval record — 2026-10-18
+
+The owner explicitly selected **option A for all four choices**. [Approval record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) keeps these scopes distinct: F01 and GB1 owner policies are accepted but technical child-spec review is pending; G3 approved drafting additive designs **only**, not specific migration SQL; G4 accepts [ADR 0010](../decisions/0010-category-taxonomy-vs-collections.md) and skips B09. G2 (Pancake readback) and G5 (real-CDN measurements/security) remain BLOCKED. This is a documentation update — no runtime test, POS write, DB migration or production flag enablement was performed for these approvals.
 
 ## Slice log
 
