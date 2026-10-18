@@ -5,6 +5,7 @@ const adminDesktopTests = [
   "admin-commerce-v3.spec.ts",
   "admin-editor.spec.ts",
   "admin-editor-compact.spec.ts",
+  "admin-new-arrivals.spec.ts",
 ];
 
 export default defineConfig({
@@ -16,6 +17,7 @@ export default defineConfig({
     "admin-commerce-v3.spec.ts",
     "admin-editor.spec.ts",
     "admin-editor-compact.spec.ts",
+    "admin-new-arrivals.spec.ts",
     "admin-promotions.spec.ts",
     "cart-drawer.spec.ts",
     "checkout.spec.ts",
