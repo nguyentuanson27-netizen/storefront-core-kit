@@ -78,6 +78,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | B06 size-guide chart images | #47 | `89d9b84` | 15/15 checks success on `b88ddad` | `SIZE_GUIDE_MEDIA_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `evergreen-pages` spec passes | set the flag `false` and recreate `app`; leave the table |
 | A02 benefit order persistence | #48 | `2a3c68c` | 15/15 checks success on `465493941ba1ff55f86fec806c2ec3dea2f2d163` | none (no code writes the columns yet) | additive nullable columns; legacy rows and old writers unchanged; rollback = leave the columns | revert before any v2 order exists; otherwise leave the columns |
 | A04 laq2 render/persist adapters (synthetic) | #49 | _recorded after merge_ | _recorded after CI_ | none (unwired) | no caller; legacy quotes and `laq1` untouched | revert the PR |
+| A06 benefit campaign admin lifecycle | #50 | _recorded after merge_ | _recorded after CI_ | none (nothing reads campaigns until A08) | additive tables; legacy `PromotionCampaign` untouched; legacy publish path unchanged | revert before any campaign matters; otherwise leave the tables |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -132,6 +133,10 @@ Six nullable columns on `OrderLineSnapshot`; on `OrderMirror` `quoteVersion` and
 ## A04 — laq2 adapters on synthetic fixtures
 
 `src/commerce/benefit-quote-adapters.ts` connects A05 (eligibility), A01 (proof), A02 (rows) and A03 (reservation input) without any caller. The property it exists to pin down: **the proof rendered from the evaluation equals, byte for byte, the proof rebuilt from the rows read back from the database** — for a gift quote, a tier discount, a grant that no line happens to carry (all lines legacy-discounted), and a no-grant order. Building A04 exposed that the stored order lacked the granted campaign's id and frozen facts; those columns were added to A02 before A02 shipped (see A02). Real buyer checkout does not use any of this until A08, which still needs controlled Pancake readback (G2).
+
+## A06 — benefit campaign admin lifecycle
+
+Four tables plus a revision row, independent of the legacy `PromotionCampaign` so legacy readers cannot misread them, and a `/admin/benefits` page. A campaign is created as a draft; it can be redefined only while it has never been enabled (guarded by a `version`); publishing is one transaction that takes `pg_advisory_xact_lock`, re-reads every other enabled benefit campaign and every enabled legacy campaign, and applies the accepted overlap rules before setting `isEnabled`; disabling is always allowed and deletes nothing. An enabled-then-disabled campaign is not re-enabled: the administrator makes a new one, so what was once live is never edited in place. **Decisions applied from the technical review:** a store-wide campaign intersects every other benefit campaign but skips the legacy refusal (decision 2); the runtime rules (A05) remain the backstop. **Recorded residual:** the legacy publish path does not take the benefit lock, so a legacy campaign enabled *after* a benefit campaign is not checked against it at publish; a legacy-discounted line never receives an A1 price benefit regardless. Fixed-amount tiers are not implemented (percentage only, per the delegated decision). Gift references in the form accept the internal id or the Pancake variation id; product scope is entered as slugs and resolved on the server, so an unknown one is refused and nothing is stored. The page states plainly that checkout does not read these campaigns yet.
 
 ## B07 — bounded search suggestions
 
