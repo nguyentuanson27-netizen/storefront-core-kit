@@ -1,6 +1,6 @@
-# Core Kit benefit quote v1 — F01 technical review (PROPOSED, for reviewer sign-off)
+# Core Kit benefit quote v1 — F01 technical review (ACCEPTED by owner 2026-10-18)
 
-**Status:** PROPOSAL. Closes nothing by itself. G1 stays open until a reviewer accepts the three decisions in §1–§3 and records the link in the [checklist](../../tasks/core-kit-reusable-a-b-c-v1-todo.md).
+**Status:** **ACCEPTED.** The owner approved proposals 1–5 on 2026-10-18 ("duyệt đề xuất 1-5"; see [decision addendum](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md#addendum--technical-review-decisions-2026-10-18)). This satisfies **G1** for A01 and A05. It does **not** satisfy G2 (Pancake readback) or any per-slice G3.
 **Child of:** [F01 child spec](./core-kit-benefit-quote-v1.md) §7 ("Review-required technical decisions"). **Owner policy** (single A1 campaign per checkout, no same-paid-line legacy stacking, `laq2` beside `laq1`) is taken as given from the [decision record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) and is **not** reopened here.
 
 Everything below is grounded in code on `main`: `src/commerce/promotion-pricing.ts` (`resolvePromotionPricing`), `src/commerce/checkout-quote-proof.ts` (`laq1`), `OrderLineSnapshot` and `CapacityReservation` in `prisma/schema.prisma`. No code, schema or flag changes accompany this document.
@@ -44,11 +44,11 @@ Detectable overlap is refused at publish, with the conflicting campaign named in
 - **Not granted at render:** a neutral line note on affected cart/checkout lines ("Ưu đãi … không áp dụng cùng giá khuyến mãi hiện có"), no error state, no reconfirm.
 - **Granted at render, ungrantable at submit** (e.g. legacy campaign started in between): this is a *material* quote change → existing reconfirm path (`PRICE_CHANGED`-style), buyer sees the new total before submitting. Stock-only refresh stays non-material.
 
-### 1.5 Questions the reviewer must answer (not decided here)
+### 1.5 Decisions (all ACCEPTED as recommended)
 
-1. **Basis rule (§1.2 rule 2).** Confirm that a legacy-discounted line should count toward an order-wide tier basis at its effective price (this is the literal owner text). The stricter alternative — exclude legacy-discounted lines from the basis too — is simpler to explain but makes tier eligibility depend on which products are on legacy sale. Recommendation: keep the literal reading.
-2. **Store-wide A1 scope vs. §1.3.** A store-wide tier campaign intersects *every* legacy target. Refusing publish for that would make store-wide tiers impossible whenever any legacy sale is on. Proposal: for store-wide scope, skip the A1-vs-legacy publish refusal and rely on the §1.2 runtime rules. Needs explicit confirmation.
-3. **Rule 4 granularity.** Whole-campaign refusal on one ambiguous line is conservative. Per-line exclusion would grant partial benefits and re-open the double-discount risk. Recommendation: whole-campaign.
+1. **Basis rule (§1.2 rule 2) — ACCEPTED.** Confirm that a legacy-discounted line should count toward an order-wide tier basis at its effective price (this is the literal owner text). The stricter alternative — exclude legacy-discounted lines from the basis too — is simpler to explain but makes tier eligibility depend on which products are on legacy sale. Recommendation: keep the literal reading.
+2. **Store-wide A1 scope vs. §1.3 — ACCEPTED.** A store-wide tier campaign intersects *every* legacy target. Refusing publish for that would make store-wide tiers impossible whenever any legacy sale is on. Proposal: for store-wide scope, skip the A1-vs-legacy publish refusal and rely on the §1.2 runtime rules. 
+3. **Rule 4 granularity — ACCEPTED (whole-campaign).** Whole-campaign refusal on one ambiguous line is conservative. Per-line exclusion would grant partial benefits and re-open the double-discount risk. Recommendation: whole-campaign.
 
 ## 2. `laq2` encoding and key separation
 
@@ -89,12 +89,12 @@ Vectors must be produced by an **independent reference computation** (e.g. a sho
 - `CapacityReservation` has `@@unique([orderId, variantId])`: PAID X×1 + GIFT X×1 **must** be summed into one reservation of quantity 2 *before* the existing locked reservation. This matches the spec; A03 must add the aggregation step and a test that two role lines never produce two reservation rows.
 - `OrderLineSnapshot` has no unique on `(orderId, variantId)` — same-variation role lines already round-trip; A02 only adds columns (see the [G3 proposals](../proposals/g3-additive-migration-proposals.md)).
 
-## 4. What this review does and does not close
+## 4. What this review closes
 
 | Item | After this proposal is accepted |
 | --- | --- |
-| Overlap predicate (spec §7 bullet 1) | Specified; becomes A05/A06 acceptance |
-| `laq2` encoding / key separation / vectors (spec §7 bullet 3) | Specified; vectors produced in A01 |
+| Overlap predicate (spec §7 bullet 1) | **Accepted**; A05/A06 acceptance |
+| `laq2` encoding / key separation / vectors (spec §7 bullet 3) | **Accepted**; vectors produced in A01 |
 | Schema (spec §7 bullet 2) | **Not closed** — per-slice [G3 proposals](../proposals/g3-additive-migration-proposals.md) |
 | G2 Pancake readback | **Not closed** — controlled readback still required before A08 |
 | A1/A2 enablement | Remains OFF; no production activation |

@@ -1,6 +1,6 @@
 # Core Kit benefit quote v1 — F01 child specification
 
-**Status:** OWNER BUSINESS POLICY APPROVED on 2026-10-18; **technical child-spec review pending**. G1 is not automatically satisfied by this draft. A01–A10 and C04 implementation continue to respect their approval/dependency gates.
+**Status:** OWNER BUSINESS POLICY APPROVED on 2026-10-18; **technical review ACCEPTED 2026-10-18** (see the `-technical-review` document). G1 is not automatically satisfied by this draft. A01–A10 and C04 implementation continue to respect their approval/dependency gates.
 **Parents:** [A/B/C umbrella spec](./core-kit-reusable-capabilities-a-b-c-v1.md) (`4/A1–A4), [implementation plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md) (F01, A01–A10), [owner decision record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md).
 
 ## 1. Purpose and boundaries
