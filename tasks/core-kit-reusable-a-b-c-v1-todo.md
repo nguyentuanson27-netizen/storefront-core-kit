@@ -83,10 +83,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: `pnpm test:domain` upsell proof/timeout/bounds and `pnpm test:db` candidate visibility.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **B01 — Persist curated new-arrivals membership and order** [B; deps: F00; BLOCKED: GB1 child spec + G3 migration approval before /build]
-  - [ ] Acceptance: **GB1 child spec + G3 schema/migration approval linked before any code**; approved finite `pageSize`, durable atomic manual selection/order, empty without created-at backfill and old-writer compatibility.
-  - [ ] Verification: Check signed-off child spec/migration links first, then `pnpm prisma:validate` and `pnpm test:db` curation/reorder/concurrency/migration.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **B01 — Persist curated new-arrivals membership and order** [B; deps: F00; BLOCKED: GB1 child spec + G3 migration approval before /build]
+  - [x] Acceptance: **GB1 child spec + G3 schema/migration approval linked before any code**; approved finite `pageSize`, durable atomic manual selection/order, empty without created-at backfill and old-writer compatibility.
+  - [x] Verification: Check signed-off child spec/migration links first, then `pnpm prisma:validate` and `pnpm test:db` curation/reorder/concurrency/migration.
+  - Evidence: PR #42; migration `20261018160000_add_new_arrivals_selection` (two new tables, additive, applied only to CI/local databases); `src/commerce/new-arrivals-selection-repository.ts`, `src/commerce/new-arrivals-paging.ts` (no caller, no route change, no flag needed: nothing reads it until B03). Tests: `tests/domain/new-arrivals-paging.test.ts` (6), `tests/database/new-arrivals-selection.test.ts` (11): round trip + dense positions, atomic full reversal, 500 accepted / 501 refused, DB-level CHECK/UNIQUE/FK, stale revision, two concurrent writers => one wins, cascade on product delete, admin removal keeps slot. `prisma migrate diff` after the migration is empty (no drift). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **B02 — Expose admin-only arrivals curator** [B; deps: B01; Admin auth review]
   - [ ] Acceptance: Only admins change selection, with reliable validation feedback and persisted ordering.
