@@ -67,7 +67,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | Review fixes (#29–#32) | #36 | `8b2132a` | 15/15 checks success on `6aa8df5` | none new | all five flags still default OFF; no migration; flag-OFF specs unchanged | revert the PR; the fixes are independent of each other |
 | Owner decision record (docs only) | #35 | `282ad83` | 13/13 checks success on `d6937d8` (owner branch with `main@8b2132a` merged in) | none | docs only; records policy, grants no gate | revert the PR |
 | G1/GB1 approval record (docs only) | #38 | `25d7e49` | 13/13 checks success on `73a29d5` | none | docs only | revert the PR |
-| A01 laq2 role lines and proof | #39 | _recorded after merge_ | _recorded after CI_ | none (unwired pure module) | no caller; `laq1` module untouched; no schema | revert the PR |
+| A01 laq2 role lines and proof | #39 | `384cab8` | 15/15 checks success on `d905ec7` | none (unwired pure module) | no caller; `laq1` module untouched; no schema | revert the PR |
+| A05 benefit eligibility and shipping basis | #40 | _recorded after merge_ | _recorded after CI_ | none (unwired pure module) | no caller; legacy pricing and shipping modules untouched | revert the PR |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -77,6 +78,13 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 - **Fail-closed validation at issue:** unique `lineId` (≤ 64), role money rules (gift free with campaign + entitlement; paid priced, no entitlement), exact `quantity × unit = total`, each role uses a variant once, derived totals recomputed from the lines, at most one grant (owner policy), tier index < 8, gift lines ≤ 5, paid lines ≤ 50, every named campaign granted.
 - **Cross-version:** an `laq1` token never verifies as `laq2` and the reverse; an `laq2` payload MAC'd under the `laq1` key is rejected.
 - **Not covered here (other tasks):** persistence (A02, G3), reservation aggregation (A03), render/submit adapters (A04), real checkout (A08, G2).
+
+## A05 — benefit eligibility and shipping basis (pure code)
+
+`src/commerce/benefit-eligibility.ts` implements the accepted [overlap predicate](../specs/core-kit-benefit-quote-v1-technical-review.md) §1 and the F01 §2 bases. Unwired: nothing calls it, `resolvePromotionPricing` and `calculateGuestShippingFeeVnd` are untouched. `classifyLegacyPricing` reads the verdict from the resolver's own result, so there is one definition of "legacy-discounted".
+
+- One campaign per checkout (two with in-scope lines => none, no ranking); a legacy-discounted line is basis-only; an ambiguous in-scope line refuses the campaign; `Q_paid_cart` counts all paid units, gifts none; tier chosen once from the frozen basis, then `S_final_paid` drives shipping through the existing function.
+- Assumption to revisit in A06 (not owner-specified): v1 price steps are **percentage** steps using the legacy rounding rule (a test compares it to the resolver); gift steps carry no price. Fixed-amount tiers are not implemented.
 
 ## B07 — bounded search suggestions
 
