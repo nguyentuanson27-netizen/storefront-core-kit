@@ -24,7 +24,7 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
 - **BLOCKED on G3 (migration approval):** A02, A06, B04, B05, B06 (each needs new persistence), and B01 additionally on GB1.
 - **BLOCKED on GB1:** B01, B02, B03.
 - **BLOCKED on owner/evidence decision:** B08 (G4) and so B09; B10 (G5, needs real-image measurement) and so B11.
-- **Proceeding (no unmet gate, no schema change):** B07, C01, C02, C03, then C05.
+- **Completed (no unmet gate, no schema change):** B07, C01, C02, C03, C05 — all behind default-OFF flags; see the release-readiness section of the slice record.
 
 ## Dependency-ordered task checklist
 
@@ -184,7 +184,7 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
 - [ ] CP-B2: B04/B05/B06/B07 independent merchandising and search gates.
 - [ ] CP-B3: B08 decision and B09 optional-only implementation.
 - [ ] CP-B4: B10 evidence and B11 optional-only implementation.
-- [ ] CP-C: C01–C05 independent headless/a11y gates; C02 PLP filter no B07; C05 optional search overlay depends B07; C03 drawer never blocks A10/C04.
+- [x] CP-C: C01–C05 independent headless/a11y gates; C02 PLP filter no B07; C05 optional search overlay depends B07; C03 drawer never blocks A10/C04. (PRs #29–#33; C04 remains blocked on A08 and is tracked above, not here.)
 - [ ] CP-R: R00 per-slice verified release/rollback, not a big-bang flag flip.
 
 ## Verification template for implementation PRs
