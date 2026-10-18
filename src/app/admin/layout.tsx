@@ -26,6 +26,9 @@ export default function AdminLayout({ children }: Readonly<{ children: React.Rea
           <Link className="border-b border-black/30 pb-1 focus-visible:outline-2 focus-visible:outline-offset-4" href="/admin/homepage-featured">
             Nổi bật
           </Link>
+          <Link className="border-b border-black/30 pb-1 focus-visible:outline-2 focus-visible:outline-offset-4" href="/admin/size-guide">
+            Ảnh bảng size
+          </Link>
           <Link className="border-b border-black/30 pb-1 focus-visible:outline-2 focus-visible:outline-offset-4" href="/">
             Xem cửa hàng
           </Link>

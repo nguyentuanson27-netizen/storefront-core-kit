@@ -8,6 +8,7 @@ const adminDesktopTests = [
   "admin-new-arrivals.spec.ts",
   "homepage-featured.spec.ts",
   "related-override.spec.ts",
+  "size-guide-media.spec.ts",
 ];
 
 export default defineConfig({
@@ -46,6 +47,7 @@ export default defineConfig({
     "related-products.spec.ts",
     "search-overlay.spec.ts",
     "selling-modes.spec.ts",
+    "size-guide-media.spec.ts",
     "storefront-commerce.spec.ts",
     "storefront-composite.spec.ts",
     "storefront-media.spec.ts",

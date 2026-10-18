@@ -168,6 +168,8 @@ test("admin curates the New Arrivals order with accessible feedback and persiste
   await expect(page.getByRole("heading", { level: 1, name: "Hàng mới" })).toBeVisible();
   await expect(page.getByText("Chưa có sản phẩm nào trong danh sách.")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+  await expect(page).toHaveTitle(/\S/);
   const emptyScan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -182,6 +184,8 @@ test("admin curates the New Arrivals order with accessible feedback and persiste
   expect(await storedOrder()).toEqual(productNames.map((name) => productIds.get(name)));
 
   await page.goto(`${BASE_URL}${path}`, { waitUntil: "networkidle" });
+  // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+  await expect(page).toHaveTitle(/\S/);
   const filledScan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -243,6 +247,8 @@ test("a stale editor gets an announced refusal and the newer order survives", as
   await expect(alert).toBeFocused();
   expect(await storedOrder()).toEqual(before);
 
+  // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+  await expect(page).toHaveTitle(/\S/);
   const errorScan = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();

@@ -370,6 +370,27 @@ Order of operations: deploy the migration, deploy the code with the flag off, cu
 `compose exec app node -e 'if (process.env.RELATED_PRODUCTS_OVERRIDE_ENABLED !== "true") process.exit(1)'`.
 Rollback: set it to `false` and recreate `app`; leave the table and rows in place.
 
+## Size-guide chart images (`SIZE_GUIDE_MEDIA_ENABLED`)
+
+A/B/C plan task B06. The migration `20261018190000_add_size_guide_media` adds **one new table** and alters nothing else, so
+it is safe to deploy with the flag off. Off by default in `.env.example` and `deploy/vps/env.example`; only the exact value
+`true` enables it. Off, `/size-guide` renders the approved tables exactly as before and the table is never read.
+
+On, an administrator can attach one image to each configured chart at `/admin/size-guide`. The image must pass the same
+trust rule as product photos — HTTPS, the single reviewed Pancake CDN host, no port or credentials, the reviewed path
+shape, `.jpg/.png/.webp` — so **no new image host is introduced** and image-delivery decisions (G5) are not touched. The
+chart id must exist in the brand size-guide configuration; alt text (1–300 characters) and pixel dimensions (1–8000) are
+required, and the database re-checks every bound. The stored URL is re-checked when the page renders, so a stale or
+hand-edited row can never put an untrusted image on the page. The image sits above its approved table and never replaces
+or alters a measurement. When any image is shown the table scrolls inside a labelled, keyboard-focusable region on narrow
+screens.
+
+Order of operations: deploy the migration, deploy the code with the flag off, attach images, then set
+`SIZE_GUIDE_MEDIA_ENABLED=true` in `deploy/vps/.env.production` and recreate `app` (`--no-build --no-deps
+--force-recreate`), then verify with
+`compose exec app node -e 'if (process.env.SIZE_GUIDE_MEDIA_ENABLED !== "true") process.exit(1)'`.
+Rollback: set it to `false` and recreate `app`; leave the table and rows in place.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

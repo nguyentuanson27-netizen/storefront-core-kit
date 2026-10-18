@@ -217,6 +217,8 @@ test.describe("flag ON", () => {
     await page.goto(`${url}/shop/${slugs[0]}`, { waitUntil: "networkidle" });
     expect(await relatedNames(page)).toEqual([name(1), name(2)]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+    await expect(page).toHaveTitle(/\S/);
     const scan = await new AxeBuilder({ page }).withTags(BUYER_AXE_TAGS).analyze();
     expect(scan.violations).toEqual([]);
   });
@@ -227,6 +229,8 @@ test.describe("flag ON", () => {
     const path = `/admin/products/${ids[0]}/related`;
     await page.goto(`${url}${path}`, { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { level: 1, name: "Sản phẩm liên quan thủ công" })).toBeVisible();
+    // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+    await expect(page).toHaveTitle(/\S/);
     const emptyScan = await new AxeBuilder({ page }).withTags(BUYER_AXE_TAGS).analyze();
     expect(emptyScan.violations).toEqual([]);
 
@@ -263,6 +267,8 @@ test.describe("flag ON", () => {
     expect((await stored()).slice(0, 3)).toEqual([ids[8], ids[1], ids[3]]);
     expect(await stored()).not.toContain(ids[2]);
 
+    // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+    await expect(page).toHaveTitle(/\S/);
     const filledScan = await new AxeBuilder({ page }).withTags(BUYER_AXE_TAGS).analyze();
     expect(filledScan.violations).toEqual([]);
   });
