@@ -61,7 +61,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | C01 | #31 | `ca8dceb` | 15/15 checks success on `9c82d26` | `PDP_MOBILE_INTERACTIONS_ENABLED` (OFF) | flag OFF renders the unchanged gallery and detail; unmodified `pdp-promotion`, `storefront-media`, `variant-deep-link` specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
 | C03 | #32 | `ebe7197` | 15/15 checks success on `05215fd` | `CART_DRAWER_ENABLED` (OFF) | flag OFF renders the plain header link; the server action answers `null` without a database read; unmodified cart/footer/not-found specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
 | C05 | #33 | `ec57980` | 15/15 checks success on `31c67f3` | `SEARCH_OVERLAY_ENABLED` (OFF; needs `SEARCH_SUGGESTIONS_ENABLED`) | flag OFF renders plain `/search` links; unmodified `editorial` and `evergreen-pages` specs pass against an OFF server | set either flag `false` and recreate `app`; no migration |
-| Review fixes (#29–#32) | #35 | _recorded after merge_ | _recorded after CI_ | none new | all five flags still default OFF; no migration; flag-OFF specs unchanged | revert the PR; the fixes are independent of each other |
+| Review fixes (#29–#32) | #36 | _recorded after merge_ | _recorded after CI_ | none new | all five flags still default OFF; no migration; flag-OFF specs unchanged | revert the PR; the fixes are independent of each other |
 
 ## B07 — bounded search suggestions
 
