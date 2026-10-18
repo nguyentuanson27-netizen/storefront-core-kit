@@ -424,6 +424,7 @@ model Cart {
   updatedAt DateTime   @updatedAt
   user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
   items     CartItem[]
+  giftSelections CartGiftSelection[]
 
   @@index([userId])
   @@index([expiresAt])
@@ -766,6 +767,7 @@ model BenefitCampaignGift {
   quantity   Int
   campaign   BenefitCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   variant    VariantMirror   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  selections CartGiftSelection[]
 
   @@unique([campaignId, variantId])
   @@unique([campaignId, position])
@@ -779,4 +781,22 @@ model BenefitRevision {
   id        String   @id @default("current")
   revision  BigInt   @default(0)
   updatedAt DateTime @updatedAt
+}
+
+/// The buyer's chosen gift for one benefit campaign (A07). Kept apart from the paid `CartItem` rows so a
+/// selection can never alter or corrupt the paid cart. The composite foreign key means the database
+/// itself refuses a gift the campaign does not offer, and removes the choice when the campaign stops
+/// offering it. Quantity is not stored: it is read fresh from the campaign's gift row at grant time.
+model CartGiftSelection {
+  id            String              @id @default(cuid())
+  cartId        String
+  campaignId    String
+  giftVariantId String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  cart          Cart                @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  gift          BenefitCampaignGift @relation(fields: [campaignId, giftVariantId], references: [campaignId, variantId], onDelete: Cascade)
+
+  @@unique([cartId, campaignId])
+  @@index([campaignId, giftVariantId])
 }

@@ -194,4 +194,4 @@ CHECKs: `char_length("guideKey") BETWEEN 1 AND 64`; `"imageUrl" ~ '^https://'` a
 - [ ] Deploy order written in `docs/operations/release-and-rollback.md`.
 - [x] Proposed bounds **confirmed by the owner 2026-10-18** (A06: 8 tiers / 5 gifts; B04: 12; B05: 8). The bounds are approved; the schema, SQL and rollback of each slice are still **not** approved.
 
-A07 (selected-gift state) is not in the G3 list; if it needs a table (`cartId`, `campaignId`, `giftVariantId`, `quantity`, unique on the triple) it gets its own proposal after A05/A06 settle the entitlement model.
+**A07 update:** reviewed and approved on 2026-10-18 under the delegation (see the [delegated record](../approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md), decision 3): table `CartGiftSelection` with a composite foreign key to `BenefitCampaignGift`, no stored quantity. Original note: A07 (selected-gift state) was not in the G3 list; if it needs a table (`cartId`, `campaignId`, `giftVariantId`, `quantity`, unique on the triple) it gets its own proposal after A05/A06 settle the entitlement model.
