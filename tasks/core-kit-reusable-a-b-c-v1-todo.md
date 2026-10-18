@@ -61,7 +61,7 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
   - [ ] Verification: `pnpm test:domain` gift-choice validation and `pnpm test:db` concurrency/revalidation.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **A08 — Prove POS create/readback parity and complete gated A1** [A; deps: A03, A04, A06, A07; External POS acceptance; default OFF]
+- [ ] **A08 — Prove POS create/readback parity and complete gated A1** [A; deps: A03, A04, A05, A06, A07; External POS acceptance; default OFF]
   - [ ] Acceptance: Controlled readback proves all accepted paid+gift rows and money; unsupported formats remain OFF and fail closed.
   - [ ] Verification: Approved Pancake live/test-environment readback; `pnpm test:db` order/capacity and existing integration tests.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
