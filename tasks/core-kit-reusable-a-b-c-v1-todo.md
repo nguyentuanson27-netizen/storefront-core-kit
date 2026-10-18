@@ -182,8 +182,8 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
 ## Batch checkpoints
 
 - [ ] CP0: Plan §2 baseline matrix reviewed now; F00 revalidated at implementation SHA and F01 approved; no unreviewed campaign/Pancake assumptions.
-- [ ] CP-A0: A01/A02/A03 role proof/history and locked same-SKU resource correctness.
-- [ ] CP-A1: A04 OFF-only synthetic laq2/legacy parity plus A05 frozen paid eligibility and mixed-cart shipping; real checkout integration reserved for A08 after A07.
+- [x] CP-A0: A01/A02/A03 role proof/history and locked same-SKU resource correctness. Evidence: A01 #39, A02 #48 (`2a3c68c`), A03 (see slice record); same-SKU PAID+GIFT sums to one reservation row (A03 DB test).
+- [x] CP-A1: A04 OFF-only synthetic laq2/legacy parity plus A05 frozen paid eligibility and mixed-cart shipping; real checkout integration reserved for A08 after A07. Evidence: A04 #49 (`aae270c`) byte parity between the rendered and the database-rebuilt proof; A05 #40. Real checkout stays OFF until A08.
 - [ ] CP-A2: A06/A07/A08 admin/gift/POS acceptance, feature OFF and compatibility.
 - [ ] CP-A3: A09/A10 read-only proof + bounded idempotent upsell (optional).
 - [x] CP-B1: **GB1 approved child spec and G3 migration review BEFORE B01 code; GB1 rechecked at B03**; finite page-size, correct manual order across page boundaries, OFF original editorial, ON + empty editorial frame with accessible empty-list status/zero cards, and ON curated listing.
