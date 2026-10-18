@@ -351,6 +351,25 @@ Order of operations: deploy the migration, deploy the code with the flag off, cu
 `compose exec app node -e 'if (process.env.HOMEPAGE_FEATURED_ENABLED !== "true") process.exit(1)'`.
 Rollback: set it to `false` and recreate `app`; leave the tables and rows in place.
 
+## Manual related products (`RELATED_PRODUCTS_OVERRIDE_ENABLED`)
+
+A/B/C plan task B05. The migration `20261018180000_add_related_product_override` adds **one new table** and alters nothing
+else, so it is safe to deploy with the flag off. Off by default in `.env.example` and `deploy/vps/env.example`; only the
+exact value `true` enables it. Off, the product page's related rail is the collection-projected one it has always been and
+the table is never read.
+
+On, an administrator can choose up to **8** related products per product at `/admin/products/<id>/related` (a database
+CHECK, not only an application rule; a product can never be its own related product; deleting either product removes the
+pair). The product page shows the first **4 currently visible** of them in the stored order, skipping hidden or inactive
+ones. If the product has no manual candidates, or none is currently visible, the page uses the collection-projected rail
+exactly as before — turning the flag on can never leave a product with fewer related products than it had.
+
+Order of operations: deploy the migration, deploy the code with the flag off, curate, then set
+`RELATED_PRODUCTS_OVERRIDE_ENABLED=true` in `deploy/vps/.env.production` and recreate `app`
+(`--no-build --no-deps --force-recreate`), then verify with
+`compose exec app node -e 'if (process.env.RELATED_PRODUCTS_OVERRIDE_ENABLED !== "true") process.exit(1)'`.
+Rollback: set it to `false` and recreate `app`; leave the table and rows in place.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

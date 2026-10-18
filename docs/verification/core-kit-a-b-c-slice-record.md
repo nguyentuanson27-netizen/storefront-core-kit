@@ -73,7 +73,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | B01 curated new-arrivals persistence | #42 | `beaabad` | 15/15 checks success on `a4d3165` (the first head `c7ee406` failed `verify`: two source comments tripped the U1 language inventory; fixed in `a4d3165`) | none needed (nothing reads the tables until B03) | additive migration: two new tables, no existing object altered; no caller | flag/route do not exist yet, so nothing to switch; revert the PR before any row exists, otherwise leave the tables |
 | B02 admin new-arrivals curator | #43 | `ecdcb1a` | 15/15 checks success on `20e7e4e` | none (admin-only page; public route untouched until B03) | admin surface only; no public read; no migration | revert the PR; data stays in the B01 tables |
 | B03 curated new-arrivals listing | #44 | `7688e3e` | 15/15 checks success on `29bba15` | `NEW_ARRIVALS_CURATION_ENABLED` (OFF) | flag OFF: same page and metadata, `?page=` ignored, no curated query; unmodified `editorial`/`evergreen-pages` specs pass against an OFF server | set the flag `false` and recreate `app`; leave the tables |
-| B04 homepage featured selection | #45 | _recorded after merge_ | _recorded after CI_ | `HOMEPAGE_FEATURED_ENABLED` (OFF) | flag OFF: the loader never reads the selection; automatic discovery unchanged | set the flag `false` and recreate `app`; leave the tables |
+| B04 homepage featured selection | #45 | `0f79c8b` | 15/15 checks success on `4ed3f30` | `HOMEPAGE_FEATURED_ENABLED` (OFF) | flag OFF: the loader never reads the selection; automatic discovery unchanged | set the flag `false` and recreate `app`; leave the tables |
+| B05 related-products override | #46 | _recorded after merge_ | _recorded after CI_ | `RELATED_PRODUCTS_OVERRIDE_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `related-products` spec passes | set the flag `false` and recreate `app`; leave the table |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -112,6 +113,10 @@ Migration `20261018160000_add_new_arrivals_selection`: `NewArrivalsSelection` (u
 ## B04 — homepage featured selection
 
 `HOMEPAGE_FEATURED_ENABLED` (default OFF). Two new tables with the B01 construction (unique product, unique deferrable position, `CHECK position < 12`, one revision row), an admin page `/admin/homepage-featured` that reuses the accepted planner with `maxItems = 12`, and one branch in `loadEdit` of the home loader. **Decisions taken under the delegation:** ON with an empty selection, or with no currently visible curated product, falls back to automatic discovery (the homepage is never blank because of curation); hidden products are dropped in place, never replaced; the selection never reads or writes `CollectionDefinition`.
+
+## B05 — manual related-products override
+
+`RELATED_PRODUCTS_OVERRIDE_ENABLED` (default OFF). One new table keyed by `(productId, relatedProductId)` with the self/ceiling checks in the database; a repository that row-locks the owning product so two editors of one product serialize (no revision token: last writer wins, and the page shows each save); an admin sub-page linked from the product editor. **Decisions taken under the delegation:** the rail shows the first **4 currently visible** of up to 8 stored candidates (so a hidden candidate is skipped and the next stored one takes its place — the one place a refill is intended, because this is a small recommendation rail, not a paginated list); with no visible manual candidate the unchanged collection-projected rail is used, so the flag can never leave a product with fewer related products than it had.
 
 ## B07 — bounded search suggestions
 

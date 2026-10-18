@@ -7,6 +7,7 @@ const adminDesktopTests = [
   "admin-editor-compact.spec.ts",
   "admin-new-arrivals.spec.ts",
   "homepage-featured.spec.ts",
+  "related-override.spec.ts",
 ];
 
 export default defineConfig({
@@ -41,6 +42,7 @@ export default defineConfig({
     "pdp-mobile-interactions.spec.ts",
     "pdp-promotion.spec.ts",
     "plp-filter-disclosure.spec.ts",
+    "related-override.spec.ts",
     "related-products.spec.ts",
     "search-overlay.spec.ts",
     "selling-modes.spec.ts",
