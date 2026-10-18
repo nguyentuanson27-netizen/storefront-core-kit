@@ -1,29 +1,29 @@
 # Core Kit reusable capabilities A/B/C — Execution checklist v1
 
-Status: **PROPOSED / NOT STARTED**. This plan-only PR creates no features. Check boxes only after actual implementation and exact-head verification.
+Status: **ACTIVE EXECUTION TRACKER**. Owner selected option A for F01, B1, G3 direction and G4 on 2026-10-18; this approval does not itself complete a feature, permit migration, POS writes or production release.
 
 Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umbrella spec](../docs/specs/core-kit-reusable-capabilities-a-b-c-v1.md); tasks: [detailed plan](./core-kit-reusable-a-b-c-v1-plan.md).
 
-## Approval and evidence gates (all unchecked by default)
+## Approval and evidence gates (do not infer gate completion from policy selection)
 
 - [ ] G0 Review this /plan's **completed** 13-capability source/test/reuse matrix (§2 of plan). F00 subsequently revalidates it at the implementation SHA; do not defer initial matrix until after plan approval.
-- [ ] G1 F01 child spec approved: stacking, role+lineId/laq2, paid quantities, order audit, capacity and rollback.
+- [ ] **G1 technical child-spec review remains required.** Owner approved option A F01 business policies (single A1 campaign, no same-line legacy stacking, `lineId`/`laq2`, paid bases). [Decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) and [F01 child-spec draft](../docs/specs/core-kit-benefit-quote-v1.md) must be technically reviewed/merged before the G1 implementation gate closes.
 - [ ] G2 Controlled Pancake acceptance/readback proves 0-VND gift, same-variation PAID+GIFT and differently-priced PAID rows **for each enabled use case**, or case remains OFF.
-- [ ] G3 Additive DB migration and old/new code coexistence approved.
-- [ ] G4 Category/collections decision before B09 (otherwise SKIP).
+- [ ] **G3 per-slice SQL/migration review remains BLOCKED.** Owner approved additive **design direction and drafting** only, not any concrete Prisma schema diff, migration SQL, rollback or deployment. [Decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md).
+- [x] **G4 OWNER DECISION ACCEPTED:** [ADR 0010](../docs/decisions/0010-category-taxonomy-vs-collections.md) keeps collections; B08 decided; B09 **SKIPPED, not implemented**.
 - [ ] G5 Image proxy measurements/security decision before B11 (otherwise SKIP).
 - [ ] G6 Human review + exact-head tests/runtime + release gate before enabling any new capability.
-- [ ] **GB1 — B1 child spec approval BEFORE B01/B03 /build:** approved bounded `pageSize` and pagination/URL/ordering/hidden/empty-state contract, curation data ownership and migration/rollback proposal, with reviewer link. **G3 schema/migration review must also pass before B01 writes Prisma schema, SQL or repository code.** Neither gate is granted by merging this plan.
+- [ ] **GB1 child-spec technical review BEFORE B01/B03 /build:** owner approved option A (`pageSize=24`, max 500 curated items, `?page=N`, invalid 404, stable slot pagination and accessible empty state). [B1 child-spec draft](../docs/specs/core-kit-new-arrivals-curation-v1.md); [owner decision](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md). Review/merge child spec and **separately approve G3 concrete schema/migration** before B01 code.
 
 ## Execution status — blocked tasks (gates are not waived)
 
 Gate evidence and per-slice records live in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- **BLOCKED on G1/F01 (owner contract):** F01, A01, A05, A06, A07, and transitively A02, A03, A04, A08, A09, A10, C04.
+- **F01 owner business choices selected; G1 technical review still BLOCKED:** F01, A01, A05, A06, A07 and transitively A02, A03, A04, A08, A09, A10, C04.
 - **BLOCKED on G2 (controlled POS readback):** A08, and transitively A09, A10, C04.
-- **BLOCKED on G3 (migration approval):** A02, A06, B04, B05, B06 (each needs new persistence), and B01 additionally on GB1.
-- **BLOCKED on GB1:** B01, B02, B03.
-- **BLOCKED on owner/evidence decision:** B08 (G4) and so B09; B10 (G5, needs real-image measurement) and so B11.
+- **G3 additive drafting direction accepted; concrete migration approval still BLOCKED:** A02, A06, B04, B05, B06 and B01 (also GB1).
+- **GB1 owner page/UX contract selected; technical review and G3 still BLOCK:** B01, B02, B03.
+- **G4 resolved:** B08 decision complete; B09 SKIPPED by accepted ADR 0010. **G5 remains BLOCKED:** B10 needs real CDN measurements/security review, so B11 is blocked.
 - **Completed (no unmet gate, no schema change):** B07, C01, C02, C03, C05 — all behind default-OFF flags; see the release-readiness section of the slice record.
 
 ## Dependency-ordered task checklist
@@ -36,7 +36,7 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
 - [ ] **F01 — Approve child contracts and POS evidence matrix** [Foundation; deps: F00; Human / external evidence gate]
   - [ ] Acceptance: Owner signs off on stacking/priority, paid/eligible/shipping bases, lineId, role, laq2 compatibility, reservation and rollback constraints.
   - [ ] Verification: Human design review plus controlled POS evidence plan; no API mutation in plan-only PR.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+  - Evidence: Owner policy selected 2026-10-18: [approval record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md), [technical F01 draft](../docs/specs/core-kit-benefit-quote-v1.md); **G1 not yet cleared**.
 
 - [ ] **A01 — Design/test v2 role lines and laq2 proof** [A; deps: F01; Approved A contract]
   - [ ] Acceptance: PAID X + GIFT X are distinct signed lines; invalid duplicate IDs/roles/prices fail closed.
@@ -118,15 +118,15 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: `pnpm test:domain` discovery/search and `pnpm test:db` suggestions visibility/price tests.
   - Evidence: PR #29; code `src/commerce/storefront-search-suggestions.ts`, `src/routes/search-suggestions-model.ts`, `src/routes/search-suggestions.ts` (server action); flag `SEARCH_SUGGESTIONS_ENABLED` default OFF. Local on base `main@81438ef`: lint 0 errors, typecheck, `pnpm test` 1862 pass, `tests/database/search-suggestions.test.ts` 6 pass, `pnpm build` OK. Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [ ] **B08 — Decide category taxonomy versus current collections** [B; deps: F00; Owner/architecture gate]
-  - [ ] Acceptance: Reviewed ADR chooses KEEP collections or ADD separate taxonomy, with exact ownership, keys, indexation and orphan rules.
-  - [ ] Verification: Owner/SEO architecture review; inspect route manifest, sitemap and current collection tests.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **B08 — Decide category taxonomy versus current collections** [B; deps: F00; owner decision ACCEPTED]
+  - [x] Acceptance: [ADR 0010](../docs/decisions/0010-category-taxonomy-vs-collections.md) chooses KEEP collections and defer taxonomy; no second membership/route authority.
+  - [x] Verification: existing route/SEO architecture evidence in ADR reviewed for owner decision, not a runtime implementation test.
+  - Evidence: [owner decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md); accepted ADR 0010. B09 is SKIPPED.
 
-- [ ] **B09 — Implement category identity and membership if approved** [B; deps: B08; Conditional: only when B08 approves]
-  - [ ] Acceptance: Taxonomy consistency enforced across config, route and sitemap; invalid or orphaned data fails closed.
-  - [ ] Verification: `pnpm test:domain` taxonomy/SEO; `pnpm test:db` membership; indexation runtime.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **B09 — Implement category identity and membership if approved** [B; deps: B08; **SKIPPED BY OWNER — not implemented**]
+  - [ ] Acceptance: not applicable while accepted ADR 0010 keeps collections; reopening requires amended owner approval and G3.
+  - [ ] Verification: not run; no taxonomy feature was implemented.
+  - Evidence: [accepted ADR 0010](../docs/decisions/0010-category-taxonomy-vs-collections.md); skip is not implementation completion.
 
 - [ ] **B10 — Measure whether trusted image proxy is justified** [B; deps: F00; Security/performance evidence gate]
   - [ ] Acceptance: Baseline numbers, alternatives, origin/redirect/SSRF and cache-key/CPU/bandwidth budgets documented.
@@ -182,7 +182,7 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
 - [ ] CP-A3: A09/A10 read-only proof + bounded idempotent upsell (optional).
 - [ ] CP-B1: **GB1 approved child spec and G3 migration review BEFORE B01 code; GB1 rechecked at B03**; finite page-size, correct manual order across page boundaries, OFF original editorial, ON + empty editorial frame with accessible empty-list status/zero cards, and ON curated listing.
 - [ ] CP-B2: B04/B05/B06/B07 independent merchandising and search gates.
-- [ ] CP-B3: B08 decision and B09 optional-only implementation.
+- [x] CP-B3: B08 owner decision accepted through ADR 0010; B09 SKIPPED (not implemented). No category schema/SEO/route changes.
 - [ ] CP-B4: B10 evidence and B11 optional-only implementation.
 - [x] CP-C: C01–C05 independent headless/a11y gates; C02 PLP filter no B07; C05 optional search overlay depends B07; C03 drawer never blocks A10/C04. (PRs #29–#33; C04 remains blocked on A08 and is tracked above, not here.)
 - [ ] CP-R: R00 per-slice verified release/rollback, not a big-bang flag flip.
