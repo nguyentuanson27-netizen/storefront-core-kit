@@ -65,7 +65,7 @@ laq2|{Q_paid_cart}|{S_final_paid}|{shippingFeeVnd}|{totalVnd}|{lineCount}
   |{len(lineId)}:{lineId}:{PAID|GIFT}:{len(variantId)}:{variantId}:{quantity}:{unitPriceVnd}:{lineTotalVnd}:{len(campaignId)}:{campaignId}:{len(entitlementKey)}:{entitlementKey}
 |{grantCount}
   per grant, sorted by campaignId:
-  |{len(campaignId)}:{campaignId}:{Q_paid_eligible}:{S_basis}:{tierIndexOrMinus1}:{giftEntitlementCount}
+  |{len(campaignId)}:{campaignId}:{Q_paid_eligible}:{S_basis}:{tierIndexOrMinus1}:{giftLineCount}
 ```
 
   `campaignId`/`entitlementKey` are the empty string (length `0`) for lines without a benefit.
