@@ -12,25 +12,39 @@ Transfer brand-reusable commerce (A), merchandising (B) and headless interaction
 
 **Do not overwrite** `tasks/plan.md` and `tasks/todo.md`: they already own LA Clothing Productization V2. Feature-named plans/todos are the existing repository convention. Tasks should fit one focused session where feasible; PR splitting follows [ADR 0005](../docs/decisions/0005-pr-scope-reviewability.md): atomicity/effective changed lines/test cohesion, **not** a mandatory 5-file threshold. Do not split code from the tests that prove it.
 
-## 2. Verified starting facts and provisional gap map
+## 2. Audited baseline gap matrix — delivered in this /plan PR
 
-Base paths inspected at the exact planning SHA. F00 must pin detailed function/test ownership and resolve provisional classifications before build.
+**Pinned evidence:** `main@1f71d610387f1e000c89bc11732a79426fa0dfb8` (squash-merged spec #26). All **13** capability entries below name existing Core Kit **source and test** paths, checked against the full pinned tracked Git tree and inspected in the owning code/tests. Paths are repository-root-relative. These characterization tests validate **existing** behavior, not the proposed feature. No local runtime test is claimed.
 
-| Feature | Existing Core Kit ownership / gap | Classification |
-| --- | --- | --- |
-| A1 Gift/Tier | `promotion-pricing.ts` only PROMOTION/FLASH_SALE; legacy `checkout-quote.ts` rejects 0 price + repeated variation IDs | **MISSING** benefit, reuse current pricing/checkout |
-| A2 Upsell | Cart/quote exist, no upsell resolver | **MISSING**, only after A1 |
-| A3 Inventory | `capacity-resources.ts` + locked `capacity-reservation-repository.ts` + selling modes | **EXISTS core / PARTIAL gifts**: preserve ledger, aggregate demand |
-| A4 Checkout quote | `checkout-quote-proof.ts` is `laq1`; immutable order snapshots and guest checkout exist | **PARTIAL for benefit roles**, add versioned laq2 |
-| B1 New Arrivals | `src/routes/new-arrivals.ts` intentionally returns an empty editorial model | **MISSING curated listing**, new flagged read model |
-| B2 Merchandising | `ProductContent`, `CollectionDefinition`, homepage automatic discovery and collection-derived related products | **PARTIAL**; add only missing website curation |
-| B3 Categories | Collections and canonical `storefront-discovery.ts` exist | **DECISION**, do not copy La.Na taxonomy |
-| B4 Size-guide media | `src/brand/size-guide.config.ts` text/measurements | **PARTIAL**, optional trusted artwork |
-| B5 Search suggestions | Existing canonical shop/search route | **PARTIAL**, add bounded suggestions not new URL/price owner |
-| B6 Images | `product-media.ts` and existing trusted media delivery | **CONDITIONAL** on measured problem |
-| C1 PDP | Headless variant selection and gallery behavior already exist | **PARTIAL**, add only missing mobile behavior |
-| C2 PLP | `storefront-discovery.ts`, `shop-model.ts`, no-JS GET filter form exist | **PARTIAL**, add optional interaction models |
-| C3 Cart UX | Authoritative cart/checkout read model; no shared drawer model | **PARTIAL**, optional drawer and gated gift UI |
+Classification: **EXISTS** = requested baseline authority exists; **PARTIAL** = related authority exists but portable behavior is incomplete; **MISSING** = equivalent capability not found in the inspected Core Kit tree; **BRAND-ONLY** = La.Na-specific composition/vocabulary excluded from shared code. Adoption decision: **KEEP**, **ADAPT**, **REBUILD**, **SKIP**. Compound rows describe shared adoption; the explanation explicitly marks existing subcomponents that must remain authoritative.
+
+| Capability | Classification | Decision | Verified Core Kit source paths | Existing test paths (baseline-only) | Gap / reuse boundary |
+| --- | --- | --- | --- | --- | --- |
+| **A1 — Gift / Quantity Tier** | **PARTIAL** | **ADAPT** | `src/commerce/promotion-pricing.ts`; `src/commerce/checkout-quote.ts` | `tests/domain/promotion-pricing.test.ts`; `tests/domain/checkout-quote.test.ts`; `tests/domain/guest-shipping-policy.test.ts` | Legacy PROMOTION/FLASH_SALE and paid quote exist; no benefit resolver and duplicate variation rejected. Extend canonical pricing. |
+| **A2 — Smart Upsell** | **MISSING** | **ADAPT** | `src/commerce/storefront-cart-actions.ts`; `src/commerce/checkout-quote.ts` | `tests/database/storefront-cart-update-concurrency.test.ts`; `tests/domain/checkout-quote.test.ts` | Canonical cart/quote exist, no upsell module in the pinned tree. Adapt read-only proof semantics after A1. |
+| **A3 — Gift-aware Capacity** | **PARTIAL** | **ADAPT** | `src/commerce/capacity-resources.ts`; `src/commerce/capacity-reservation-repository.ts`; `prisma/schema.prisma` | `tests/domain/capacity-resources.test.ts`; `tests/database/capacity-reservation.test.ts`; `tests/database/capacity-mirror-handoff-sync.test.ts` | KEEP existing locks/ledger, ADAPT paid+gift demand aggregation under unique (orderId,variantId) reservation. |
+| **A4 — Benefit-aware Quote/Proof** | **PARTIAL** | **ADAPT** | `src/commerce/checkout-quote-proof.ts`; `src/commerce/guest-checkout-snapshot.ts` | `tests/domain/checkout-quote-proof.test.ts`; `tests/database/guest-checkout-p9a-quote-proof.test.ts`; `tests/database/guest-checkout-snapshot-schema.test.ts` | laq1 and legacy snapshot exist; missing role/lineId/laq2. Stage OFF-only adapters, real checkout after gift/eligibility. |
+| **B1 — Curated New Arrivals** | **MISSING** | **REBUILD** | `src/routes/new-arrivals.ts`; `src/app/new-arrivals/page.tsx`; `src/routes/shop.ts` | `tests/a11y-runtime/editorial.spec.ts`; `tests/domain/route-manifest.test.ts` | Route is editorial-only; add flagged curated read model, reuse /shop catalog, never add second price/filter owner. |
+| **B2 — Merchandising/Admin** | **PARTIAL** | **ADAPT** | `src/commerce/collection-definition-repository.ts`; `src/routes/home.ts`; `src/commerce/storefront-related-products.ts` | `tests/database/collection-definition-repository.test.ts`; `tests/a11y-runtime/homepage-taxonomy.spec.ts`; `tests/a11y-runtime/related-products.spec.ts` | Collection homepage positions and related fallback already exist; adopt only missing product-level curation. |
+| **B3 — Category Taxonomy** | **PARTIAL** | **KEEP** | `src/commerce/collection-definition.ts`; `src/routes/collection.ts`; `src/commerce/storefront-discovery.ts` | `tests/domain/collection-definition.test.ts`; `tests/domain/collection-discovery-url.test.ts`; `tests/domain/route-manifest.test.ts` | KEEP website-owned collections; separate taxonomy requires B08 approval, otherwise skip B09. |
+| **B4 — Size-guide Media** | **PARTIAL** | **ADAPT** | `src/brand/size-guide.config.ts`; `src/routes/size-guide.ts` | `tests/a11y-runtime/evergreen-pages.spec.ts` | Size tables and approved measurements exist, optional media absent; tables must remain the fallback. |
+| **B5 — Search Suggestions** | **PARTIAL** | **ADAPT** | `src/routes/search.ts`; `src/app/search/page.tsx`; `src/commerce/storefront-discovery.ts`; `src/commerce/storefront-catalog.ts` | `tests/domain/storefront-discovery.test.ts`; `tests/database/shop-effective-price-discovery.test.ts`; `tests/a11y-runtime/editorial.spec.ts` | /search form delegates results to /shop. Add bounded suggestions; never fork canonical URLs or prices. |
+| **B6 — Product-image Delivery** | **EXISTS** | **KEEP** | `src/commerce/product-media.ts`; `src/components/brand/product-gallery.tsx` | `tests/domain/product-media.test.ts`; `tests/a11y-runtime/storefront-media.spec.ts` | Trusted HTTPS media/gallery already exists; proxy SKIP unless B10 evidence warrants B11. |
+| **C1 — PDP Mobile Headless** | **PARTIAL** | **ADAPT** | `src/components/headless/variant-selection-model.ts`; `src/components/headless/resolve-gallery-model.ts`; `src/components/brand/product-detail.tsx` | `tests/domain/variant-selection-model.test.ts`; `tests/domain/gallery-model.test.ts`; `tests/a11y-runtime/pdp-promotion.spec.ts` | Selection and gallery decisions exist; add only missing interaction and accessibility contracts, not La.Na layout. |
+| **C2 — PLP Filters/Search UX** | **PARTIAL** | **ADAPT** | `src/commerce/storefront-discovery.ts`; `src/routes/shop-model.ts`; `src/components/brand/listing-refine-form.tsx` | `tests/domain/storefront-discovery.test.ts`; `tests/a11y-runtime/discovery.spec.ts` | Canonical filters/chips/GET form exist. C02 filter behavior independent of B07; C05 overlay consumes B07. |
+| **C3 — Cart/Checkout Headless** | **PARTIAL** | **ADAPT** | `src/routes/cart-model.ts`; `src/routes/checkout-model.ts`; `src/commerce/storefront-cart-actions.ts` | `tests/domain/cart-route-model.test.ts`; `tests/domain/checkout-route-model.test.ts`; `tests/a11y-runtime/checkout.spec.ts` | Existing server cart/checkout models; optional C03 drawer not a prerequisite for A10 or C04. |
+
+**Explicit BRAND-ONLY / SKIP parts** (La.Na reference paths verified present; none is a Core Kit business requirement):
+
+| Scope | Classification | Decision | La.Na source evidence | Core Kit seam and regression |
+| --- | --- | --- | --- | --- |
+| B3 fashion-specific category vocabulary/paths | **BRAND-ONLY** | **SKIP** | `la.na_design_storefront/src/brand/category.config.ts` | `src/commerce/collection-definition.ts` / `tests/domain/collection-definition.test.ts`; B08 decides independently whether generic categories are needed |
+| C1 La.Na imagery/gallery art direction | **BRAND-ONLY** | **SKIP** | `la.na_design_storefront/src/components/brand/product-media-stage.tsx` | `src/components/headless/resolve-gallery-model.ts` / `tests/domain/gallery-model.test.ts` |
+| C3 La.Na drawer visuals, copy and CSS | **BRAND-ONLY** | **SKIP** | `la.na_design_storefront/src/components/brand/cart-drawer.tsx` | `src/routes/cart-model.ts` / `tests/domain/cart-route-model.test.ts` |
+
+**Additional verified La.Na implementation evidence (not authority):** `src/commerce/gift-quantity-gate.ts`, `src/commerce/promotion-upsell.ts`, `src/commerce/new-arrivals-selection.ts`, `src/commerce/merchandising-admin.ts`, `src/components/headless/plp-filter-model.ts`. Do not transplant La.Na owner decisions, stock ledger, price resolver or migrations into Core Kit.
+
+**/plan gap-matrix gate:** source/test traceability + classification + adoption intent are **complete for this pinned baseline**. Open decisions (stacking, POS readback, schema, categories, image proxy) remain explicit gates before implementation. **F00 is revalidation of this existing matrix at the future /build SHA, not the deferred first gap-matrix deliverable.**
 
 ## 3. Dependency graph and execution order
 
