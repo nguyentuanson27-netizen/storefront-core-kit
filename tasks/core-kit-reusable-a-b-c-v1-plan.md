@@ -24,9 +24,9 @@ Classification: **EXISTS** = requested baseline authority exists; **PARTIAL** = 
 | **A2 — Smart Upsell** | **MISSING** | **ADAPT** | `src/commerce/storefront-cart-actions.ts`; `src/commerce/checkout-quote.ts` | `tests/database/storefront-cart-update-concurrency.test.ts`; `tests/domain/checkout-quote.test.ts` | Canonical cart/quote exist, no upsell module in the pinned tree. Adapt read-only proof semantics after A1. |
 | **A3 — Gift-aware Capacity** | **PARTIAL** | **ADAPT** | `src/commerce/capacity-resources.ts`; `src/commerce/capacity-reservation-repository.ts`; `prisma/schema.prisma` | `tests/domain/capacity-resources.test.ts`; `tests/database/capacity-reservation.test.ts`; `tests/database/capacity-mirror-handoff-sync.test.ts` | KEEP existing locks/ledger, ADAPT paid+gift demand aggregation under unique (orderId,variantId) reservation. |
 | **A4 — Benefit-aware Quote/Proof** | **PARTIAL** | **ADAPT** | `src/commerce/checkout-quote-proof.ts`; `src/commerce/guest-checkout-snapshot.ts` | `tests/domain/checkout-quote-proof.test.ts`; `tests/database/guest-checkout-p9a-quote-proof.test.ts`; `tests/database/guest-checkout-snapshot-schema.test.ts` | laq1 and legacy snapshot exist; missing role/lineId/laq2. Stage OFF-only adapters, real checkout after gift/eligibility. |
-| **B1 — Curated New Arrivals** | **MISSING** | **REBUILD** | `src/routes/new-arrivals.ts`; `src/app/new-arrivals/page.tsx`; `src/routes/shop.ts` | `tests/a11y-runtime/editorial.spec.ts`; `tests/domain/route-manifest.test.ts` | Route is editorial-only; add flagged curated read model, reuse /shop catalog, never add second price/filter owner. |
+| **B1 — Curated New Arrivals** | **MISSING** | **ADAPT** | `src/routes/new-arrivals.ts`; `src/app/new-arrivals/page.tsx`; `src/routes/shop.ts` | `tests/a11y-runtime/editorial.spec.ts`; `tests/domain/route-manifest.test.ts` | MISSING applies **only to curated selection/listing**, not the existing route. ADAPT the current editorial route: OFF preserves its page and view model; ON adds an ordered curated read model reusing `/shop` catalog, pricing and availability, without a second search/filter authority. |
 | **B2 — Merchandising/Admin** | **PARTIAL** | **ADAPT** | `src/commerce/collection-definition-repository.ts`; `src/routes/home.ts`; `src/commerce/storefront-related-products.ts` | `tests/database/collection-definition-repository.test.ts`; `tests/a11y-runtime/homepage-taxonomy.spec.ts`; `tests/a11y-runtime/related-products.spec.ts` | Collection homepage positions and related fallback already exist; adopt only missing product-level curation. |
-| **B3 — Category Taxonomy** | **PARTIAL** | **KEEP** | `src/commerce/collection-definition.ts`; `src/routes/collection.ts`; `src/commerce/storefront-discovery.ts` | `tests/domain/collection-definition.test.ts`; `tests/domain/collection-discovery-url.test.ts`; `tests/domain/route-manifest.test.ts` | KEEP website-owned collections; separate taxonomy requires B08 approval, otherwise skip B09. |
+| **B3 — Category Taxonomy** | **PARTIAL** | **KEEP** | `src/commerce/collection-definition.ts`; `src/routes/collection.ts`; `src/commerce/storefront-discovery.ts` | `tests/domain/collection-definition.test.ts`; `tests/domain/collection-discovery-url.test.ts`; `tests/domain/route-manifest.test.ts` | **KEEP only the baseline collections/discovery authority.** This is **not** the decision for or against a distinct taxonomy; B08 must independently approve/defer a generic taxonomy before B09, with no La.Na brand keys copied. |
 | **B4 — Size-guide Media** | **PARTIAL** | **ADAPT** | `src/brand/size-guide.config.ts`; `src/routes/size-guide.ts` | `tests/a11y-runtime/evergreen-pages.spec.ts` | Size tables and approved measurements exist, optional media absent; tables must remain the fallback. |
 | **B5 — Search Suggestions** | **PARTIAL** | **ADAPT** | `src/routes/search.ts`; `src/app/search/page.tsx`; `src/commerce/storefront-discovery.ts`; `src/commerce/storefront-catalog.ts` | `tests/domain/storefront-discovery.test.ts`; `tests/database/shop-effective-price-discovery.test.ts`; `tests/a11y-runtime/editorial.spec.ts` | /search form delegates results to /shop. Add bounded suggestions; never fork canonical URLs or prices. |
 | **B6 — Product-image Delivery** | **EXISTS** | **KEEP** | `src/commerce/product-media.ts`; `src/components/brand/product-gallery.tsx` | `tests/domain/product-media.test.ts`; `tests/a11y-runtime/storefront-media.spec.ts` | Trusted HTTPS media/gallery already exists; proxy SKIP unless B10 evidence warrants B11. |
@@ -174,7 +174,7 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 
 ### F00: Revalidate audited matrix and ownership at implementation SHA
 
-**Intent:** The initial 13-capability gap matrix, verified code/test paths and KEEP/ADAPT/REBUILD/SKIP decisions are **already delivered in `2** for this /plan PR. At each /build SHA, compare that review baseline against current code/test owners, record drift and resolve any contract-breaking differences before applying implementation tasks. This is not another postponed initial audit.
+**Intent:** The initial 13-capability gap matrix, verified code/test paths and KEEP/ADAPT/REBUILD/SKIP decisions are **already delivered in §2** for this /plan PR. At each /build SHA, compare that review baseline against current code/test owners, record drift and resolve any contract-breaking differences before applying implementation tasks. This is not another postponed initial audit.
 
 **Dependencies:** None. **Gate:** Revalidation gate; approve the matrix **now** while reviewing this plan.
 
@@ -183,10 +183,10 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 - [ ] Pin the new SHA and reviewer acknowledgement, with no parallel pricing, stock, checkout, collection or URL authority introduced.
 
 **Verification (future implementation, not this PR):**
-- [ ] Review current tree and owner modules versus `2; run relevant focused characterization tests only when required, recording their real exact-head CI evidence.
+- [ ] Review current tree and owner modules versus §2; run relevant focused characterization tests only when required, recording their real exact-head CI evidence.
 
 **Likely touched/reviewed files** (not exact diff promises):
-- `tasks/core-kit-reusable-a-b-c-v1-plan.md` (`2 baseline matrix)
+- `tasks/core-kit-reusable-a-b-c-v1-plan.md` (§2 baseline matrix)
 - `docs/specs/core-kit-reusable-capabilities-a-b-c-v1.md` (approved source)
 - `tests/domain/route-boundary.test.ts` (boundary verification)
 
