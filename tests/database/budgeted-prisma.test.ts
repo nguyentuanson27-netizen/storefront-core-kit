@@ -21,8 +21,9 @@ import {
 } from "../../src/db/search-suggestions-prisma.ts";
 import { PrismaClient } from "../../src/generated/prisma/client.ts";
 
-const connectionString = process.env.DATABASE_URL;
-if (!connectionString) throw new Error("DATABASE_URL is required for database smoke tests");
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) throw new Error("DATABASE_URL is required for database smoke tests");
+const connectionString: string = databaseUrl;
 
 const observer = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 const created: PrismaClient[] = [];

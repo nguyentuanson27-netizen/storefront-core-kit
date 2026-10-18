@@ -288,14 +288,17 @@ test("scrolling past the product detail hides the bar, so it never covers the fo
   // The last footer link is reachable and nothing is painted over it.
   const footerLinks = page.locator("footer a[href]");
   const last = footerLinks.last();
+  await last.scrollIntoViewIfNeeded();
   await last.focus();
   await expect(last).toBeFocused();
-  const covered = await last.evaluate((element) => {
+  await expect(bar(page)).toBeHidden();
+  const probe = await last.evaluate((element) => {
     const box = element.getBoundingClientRect();
+    const inViewport = box.top >= 0 && box.bottom <= window.innerHeight;
     const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-    return hit !== element && !element.contains(hit);
+    return { inViewport, reachable: hit === element || element.contains(hit) };
   });
-  expect(covered).toBe(false);
+  expect(probe).toEqual({ inViewport: true, reachable: true });
   await assertQuality(page);
 
   // Coming back up to the product, the bar returns.
