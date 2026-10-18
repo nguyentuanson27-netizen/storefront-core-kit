@@ -151,7 +151,7 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 | A05 | Implement pure paid-only tier eligibility and shipping basis | F01 | Stacking must be approved |
 | A06 | Add benefit campaign admin lifecycle and persistence | A05, F01 | Admin/schema approval |
 | A07 | Persist selected gift state and enforce fresh entitlement | A01, A05, A06 | Approved gift choice contract |
-| A08 | Prove POS create/readback parity and complete gated A1 | A03, A04, A06, A07 | External POS acceptance; default OFF |
+| A08 | Prove POS create/readback parity and complete gated A1 | A03, A04, A05, A06, A07 | External POS acceptance; default OFF |
 | A09 | Build bounded read-only promotion upsell evaluator | A05, A08 | Optional/default OFF |
 | B01 | Persist curated new-arrivals membership and order | F00 | Required for B1 |
 | B02 | Expose admin-only arrivals curator | B01 | Admin auth review |
@@ -344,7 +344,7 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 
 **Intent:** After A05 canonical eligibility and A07 gift selection exist, connect the **real buyer** benefit-aware render/quote, checkout DRAFT/submit and accepted order to A04's OFF-only adapters and the existing Pancake gateway. Only vendor-evidenced role combinations may be enabled; preserve exact quantities, totals and idempotency.
 
-**Dependencies:** A03, A04, A06, A07. **Gate:** External POS acceptance; default OFF.
+**Dependencies:** A03, A04, A05, A06, A07. **Gate:** External POS acceptance; default OFF.
 
 **Acceptance:**
 - [ ] Controlled readback proves all accepted paid+gift rows and money; unsupported formats remain OFF and fail closed.
