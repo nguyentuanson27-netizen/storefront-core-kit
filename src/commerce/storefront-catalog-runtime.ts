@@ -72,6 +72,17 @@ export async function listConfiguredStorefrontProductPage({
   return createStorefrontCatalogRepository(prisma).listProductPage({ shopId, page, pageSize });
 }
 
+export async function listConfiguredStorefrontProductsByIds({
+  productIds,
+  now,
+}: {
+  productIds: readonly string[];
+  now?: Date;
+}) {
+  const shopId = readPancakeShopId();
+  return createStorefrontCatalogRepository(prisma).listProductsByIds({ shopId, productIds, now });
+}
+
 export async function listConfiguredStorefrontDiscoveryPage({
   discovery,
   pageSize,

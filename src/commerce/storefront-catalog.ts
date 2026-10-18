@@ -1,7 +1,10 @@
 import { buildPromotionalStorefrontPricing } from "./storefront-promotion-projection.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
 import type { PromotionCandidateReadClient } from "./promotion-candidate-repository.ts";
-import { resolveStorefrontPromotionRefresh } from "./storefront-promotion-freshness.ts";
+import {
+  resolveStorefrontPromotionRefresh,
+  resolveStorefrontPromotionRefreshFromCampaigns,
+} from "./storefront-promotion-freshness.ts";
 import { Prisma, type PrismaClient } from "../generated/prisma/client.ts";
 import { withAdvisorySellableStock } from "./capacity-reservation-repository.ts";
 import { sortClothingSizes } from "./clothing-size.ts";
@@ -596,6 +599,9 @@ function bigintToSafeNumber(value: bigint): number {
   return parsed;
 }
 
+/** One curated-arrivals page is 24 slots; the bound leaves headroom without allowing an unbounded read. */
+const MAX_PRODUCTS_BY_IDS = 100;
+
 export function createStorefrontCatalogRepository(
   client: PrismaClient,
   options: Readonly<{ sellingModeFlags?: SellingModeFlags }> = {},
@@ -786,6 +792,69 @@ export function createStorefrontCatalogRepository(
     };
   }
 
+  /**
+   * Products by explicit id, in the order given, for surfaces whose membership and order are curated
+   * elsewhere (the curated new-arrivals selection). Visibility, stock projection, media and prices are the
+   * ones every other listing uses; what differs is only the membership.
+   *
+   * A product that is hidden, inactive or gone is dropped in place and the remaining products keep
+   * their order. Nothing is added to fill the hole. The ids are bounded to one page.
+   */
+  async function listProductsByIds({
+    shopId,
+    productIds,
+    now = new Date(),
+  }: {
+    shopId: number;
+    productIds: readonly string[];
+    now?: Date;
+  }) {
+    const ids = [...new Set(productIds)];
+    if (ids.length > MAX_PRODUCTS_BY_IDS) {
+      throw new RangeError("Too many product ids for one listing read");
+    }
+    if (ids.length === 0) {
+      return {
+        products: [],
+        pricingRule: buildPromotionalStorefrontPricing({ campaignsByVariantId: new Map(), now }),
+        refreshAfterMs: resolveStorefrontPromotionRefreshFromCampaigns({ now, campaigns: [] }).refreshAfterMs,
+      };
+    }
+
+    const rows = await client.productMirror.findMany({
+      where: { ...visibleProductWhere(shopId), id: { in: ids } },
+      select: productSelection,
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const present = ids.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [row] : [];
+    });
+
+    const allSlugs = present.flatMap((p) =>
+      p.content ? parseJsonStringArray(p.content.collectionSlugs) : [],
+    );
+    const collectionMap = await fetchPublishedCollectionMap(client, allSlugs);
+    const products = await withAdvisorySellableStock(
+      client,
+      present.map((product) => toStorefrontProduct(product, collectionMap)),
+      sellingModeFlags,
+    );
+
+    const { campaignsByVariantId } = await readApplicablePromotionCampaignsBatched({
+      variantIds: products.flatMap((product) => product.variants.map((variant) => variant.id)),
+      client: client as unknown as PromotionCandidateReadClient,
+    });
+    return {
+      products,
+      pricingRule: buildPromotionalStorefrontPricing({ campaignsByVariantId, now }),
+      refreshAfterMs: resolveStorefrontPromotionRefreshFromCampaigns({
+        now,
+        campaigns: [...campaignsByVariantId.values()].flat(),
+      }).refreshAfterMs,
+    };
+  }
+
   async function listDiscoveryFacets({ shopId }: { shopId: number }) {
     const safeShopId = parseShopId(shopId);
     const [colorRows, sizeRows, collectionRows] = await Promise.all([
@@ -883,6 +952,7 @@ export function createStorefrontCatalogRepository(
     listProducts,
     listProductPage,
     listDiscoveryPage,
+    listProductsByIds,
     listDiscoveryFacets,
     getProductBySlug,
   };

@@ -311,6 +311,27 @@ Rollback is either switch in reverse (overlay off keeps suggestions available to
 overlay); there is nothing to migrate. The suggestion action has no dedicated rate limit, the same exposure as `GET /shop?q=`
 (see the B07 residual in the slice record); decide on one before enabling this in production.
 
+## Curated new arrivals (`NEW_ARRIVALS_CURATION_ENABLED`)
+
+A/B/C plan tasks B01–B03. The migration `20261018160000_add_new_arrivals_selection` adds two **new** tables and alters
+nothing else, so it is safe to deploy with the flag off and before any code that reads it. Off by default in
+`.env.example` and `deploy/vps/env.example`; only the exact value `true` enables it. Off, `/new-arrivals` renders the
+same editorial page and metadata as before, ignores `?page=`, and issues no curated-listing query.
+
+On, the page also lists the selection an administrator keeps at `/admin/new-arrivals` (at most 500 products, 24 stored
+slots per page, `?page=N`). Pages are cut from the **stored** order first; a product that is hidden, inactive or gone is
+dropped from its own page and the hole is not refilled. An empty selection, or a page whose slots are all hidden, keeps
+the editorial frame with an accessible status line. A malformed, repeated or out-of-range `page` is a 404 (values above
+21 are refused before any read). Price, availability, media and links come from the same projection as `/shop`.
+
+Order of operations: deploy the migration, deploy the code with the flag off, curate the list at `/admin/new-arrivals`,
+then set `NEW_ARRIVALS_CURATION_ENABLED=true` in `deploy/vps/.env.production` and recreate `app`
+(`--no-build --no-deps --force-recreate`), then verify with
+`compose exec app node -e 'if (process.env.NEW_ARRIVALS_CURATION_ENABLED !== "true") process.exit(1)'`.
+
+Rollback is the switch in reverse: set it to `false` and recreate `app`. Leave the tables and their rows in place; they
+are never dropped once they hold data, and an older build ignores them.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.
