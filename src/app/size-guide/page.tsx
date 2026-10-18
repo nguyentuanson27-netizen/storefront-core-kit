@@ -1,9 +1,13 @@
+import Image from "next/image";
 import Link from "next/link";
 
 import { BRAND } from "@/brand";
 import { createStorefrontRoute } from "@/routes/factory";
-import { loadSizeGuideRoute, type SizeGuideRouteProps } from "@/routes/size-guide";
-import type { SizeGuideViewModel } from "@/routes/evergreen-model";
+import {
+  loadSizeGuideRoute,
+  type SizeGuideRouteProps,
+  type SizeGuideRouteViewModel,
+} from "@/routes/size-guide";
 import { buildSizeGuideMetadata } from "@/routes/metadata/size-guide";
 
 /**
@@ -16,7 +20,9 @@ import { buildSizeGuideMetadata } from "@/routes/metadata/size-guide";
  * beyond B3 approved facts is authored here.
  */
 
-function render(data: SizeGuideViewModel) {
+function render(data: SizeGuideRouteViewModel) {
+  const hasMedia = Object.keys(data.media).length > 0;
+
   return (
     <div className="mx-auto min-h-[65vh] max-w-[1600px] px-6 py-16 md:py-24">
       <p className="eyebrow">Thông tin sản phẩm</p>
@@ -42,7 +48,13 @@ function render(data: SizeGuideViewModel) {
 
       <div className="mt-16 grid max-w-5xl gap-16">
         {data.charts.map((chart) => (
-          <section key={chart.id} aria-labelledby={`chart-${chart.id}-heading`}>
+          <section
+            key={chart.id}
+            // When any chart carries an image every grid item must be allowed to shrink, or the column grows
+            // to the widest of them and overflows narrow screens. Without images the markup is unchanged.
+            className={hasMedia ? "min-w-0" : undefined}
+            aria-labelledby={`chart-${chart.id}-heading`}
+          >
             <h2 id={`chart-${chart.id}-heading`} className="font-serif text-3xl tracking-[-0.03em]">
               {chart.title}
             </h2>
@@ -50,7 +62,27 @@ function render(data: SizeGuideViewModel) {
               Đơn vị đo: {data.unit}. Dung sai: {data.toleranceText}.
             </p>
 
-            <div className="mt-6 overflow-x-auto">
+            {data.media[chart.id] ? (
+              <figure className="mt-6">
+                <Image
+                  src={data.media[chart.id]!.url}
+                  alt={data.media[chart.id]!.alt}
+                  width={data.media[chart.id]!.width}
+                  height={data.media[chart.id]!.height}
+                  className="h-auto max-w-full"
+                  sizes="(min-width: 1024px) 960px, 100vw"
+                />
+              </figure>
+            ) : null}
+
+            <div
+              className="mt-6 overflow-x-auto"
+              // Once the section can shrink the table scrolls inside this box, so the box must be
+              // reachable and named for keyboard and screen-reader users.
+              {...(hasMedia
+                ? { tabIndex: 0, role: "region", "aria-label": `Bảng số đo ${chart.title}` }
+                : {})}
+            >
               <table className="w-full min-w-[560px] border-collapse text-left text-sm">
                 <caption className="sr-only">{chart.title}</caption>
                 <thead>
@@ -99,7 +131,7 @@ function render(data: SizeGuideViewModel) {
   );
 }
 
-const route = createStorefrontRoute<SizeGuideRouteProps, SizeGuideViewModel>({
+const route = createStorefrontRoute<SizeGuideRouteProps, SizeGuideRouteViewModel>({
   load: loadSizeGuideRoute,
   // A direct call to the canonical builder: the route contract accepts no other shape here.
   metadata: (props) => buildSizeGuideMetadata(props),

@@ -94,6 +94,7 @@ model User {
   newArrivalsUpdated NewArrivalsSelection[] @relation("NewArrivalsUpdatedBy")
   homepageFeaturedUpdated HomepageFeaturedProduct[] @relation("HomepageFeaturedUpdatedBy")
   relatedOverridesUpdated RelatedProductOverride[] @relation("RelatedOverrideUpdatedBy")
+  sizeGuideMediaUpdated SizeGuideMedia[] @relation("SizeGuideMediaUpdatedBy")
 
   @@map("user")
 }
@@ -647,5 +648,23 @@ model RelatedProductOverride {
   @@unique([productId, relatedProductId])
   @@unique([productId, position])
   @@index([relatedProductId])
+  @@index([updatedByUserId])
+}
+
+/// Optional trusted image for one configured size-guide chart (A/B/C plan B06). Website-owned.
+/// `guideKey` is a chart id from the brand `sizeGuide` config; the config is code, not a table, so
+/// unknown keys are refused in the application rather than by a foreign key. The URL is validated by
+/// `parseTrustedProductImageUrl` (HTTPS, the single reviewed host, reviewed path shape) before it is
+/// stored, and the migration bounds every column again at the database.
+model SizeGuideMedia {
+  guideKey        String   @id
+  imageUrl        String
+  altText         String
+  width           Int
+  height          Int
+  updatedByUserId String?
+  updatedAt       DateTime @updatedAt
+  updatedBy       User?    @relation("SizeGuideMediaUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
   @@index([updatedByUserId])
 }

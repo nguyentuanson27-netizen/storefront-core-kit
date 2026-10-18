@@ -108,10 +108,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: `pnpm test:domain` override/fallback + `pnpm test:db` admin operation.
   - Evidence: PR #46; migration `20261018180000_add_related_product_override` (one new table: `CHECK productId <> relatedProductId`, `CHECK position < 8`, unique deferrable `(productId, position)`, unique pair, both FKs cascade; `prisma migrate diff` empty); `src/commerce/related-product-override{,-repository}.ts`; admin `/admin/products/<id>/related` (linked from the product editor); flag `RELATED_PRODUCTS_OVERRIDE_ENABLED` (default OFF) read in `listConfiguredRelatedStorefrontProducts`: OFF never reads the table; ON shows the first 4 currently visible manual candidates in stored order, else the unchanged collection-projected fallback. Tests: `tests/domain/related-product-override.test.ts` (6), `tests/database/related-product-override.test.ts` (7), `tests/a11y-runtime/related-override.spec.ts` (6: order with a hidden candidate skipped, fallback when none/all hidden, axe at 390px, admin add up to 8 and a refused ninth with a focused alert, reorder/remove, self never offered, unauthenticated redirect, OFF ignores overrides); the unmodified `related-products` spec passes. Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [ ] **B06 — Add optional trusted media for configured size guides** [B; deps: F00; Optional/default OFF]
-  - [ ] Acceptance: Unknown guide IDs and untrusted images rejected; writes require authenticated admin role.
-  - [ ] Verification: `pnpm test:domain` validation, `pnpm test:db` storage; PDP browser/a11y fallback.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **B06 — Add optional trusted media for configured size guides** [B; deps: F00; Optional/default OFF]
+  - [x] Acceptance: Unknown guide IDs and untrusted images rejected; writes require authenticated admin role.
+  - [x] Verification: `pnpm test:domain` validation, `pnpm test:db` storage; PDP browser/a11y fallback.
+  - Evidence: PR #47; migration `20261018190000_add_size_guide_media` (one new table with CHECKs on https URL ≤ 2048, alt 1–300, dimensions 1–8000, key length; `prisma migrate diff` empty); `src/commerce/size-guide-media{,-repository}.ts` (trust rule = the existing `parseTrustedProductImageUrl`, no new host); admin `/admin/size-guide`; flag `SIZE_GUIDE_MEDIA_ENABLED` (default OFF) read in `src/routes/size-guide.ts`. Tests: `tests/domain/size-guide-media.test.ts` (8), `tests/database/size-guide-media.test.ts` (3), `tests/a11y-runtime/size-guide-media.spec.ts` (5: untrusted image refused with a focused alert and nothing stored, trusted image stored, image beside its table only for that chart, no horizontal overflow and axe clean at 390px, a stale untrusted row never rendered, unauthenticated redirect, OFF ignores stored images); the unmodified `evergreen-pages` spec passes. Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [x] **B07 — Add bounded search suggestion read model** [B; deps: F00; Independent]
   - [x] Acceptance: Hidden/stale products omitted; suggestions count, input length, latency and DB query volume bounded.
@@ -187,7 +187,7 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
 - [ ] CP-A2: A06/A07/A08 admin/gift/POS acceptance, feature OFF and compatibility.
 - [ ] CP-A3: A09/A10 read-only proof + bounded idempotent upsell (optional).
 - [x] CP-B1: **GB1 approved child spec and G3 migration review BEFORE B01 code; GB1 rechecked at B03**; finite page-size, correct manual order across page boundaries, OFF original editorial, ON + empty editorial frame with accessible empty-list status/zero cards, and ON curated listing.
-- [ ] CP-B2: B04/B05/B06/B07 independent merchandising and search gates.
+- [x] CP-B2: B04/B05/B06/B07 independent merchandising and search gates.
 - [x] CP-B3: B08 owner decision accepted through ADR 0010; B09 SKIPPED (not implemented). No category schema/SEO/route changes.
 - [ ] CP-B4: B10 evidence and B11 optional-only implementation.
 - [x] CP-C: C01–C05 independent headless/a11y gates; C02 PLP filter no B07; C05 optional search overlay depends B07; C03 drawer never blocks A10/C04. (PRs #29–#33; C04 remains blocked on A08 and is tracked above, not here.)
