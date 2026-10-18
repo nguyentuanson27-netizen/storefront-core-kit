@@ -33,6 +33,7 @@ export default defineConfig({
     "footer-support.spec.ts",
     "homepage-taxonomy.spec.ts",
     "merchant-return-policy.spec.ts",
+    "new-arrivals-curation.spec.ts",
     "not-found-recovery.spec.ts",
     "pdp-language.spec.ts",
     "pdp-mobile-interactions.spec.ts",

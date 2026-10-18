@@ -71,7 +71,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | A05 benefit eligibility and shipping basis | #40 | `dfa98a5` | 15/15 checks success on `3fa4804` | none (unwired pure module) | no caller; legacy pricing and shipping modules untouched | revert the PR |
 | Delegated decisions + G3 review (docs) and A03 capacity demand | #41 | `4d6ba4c` | 15/15 checks success on `6b06517` | none | A03 is an unwired pure helper plus tests over the unchanged reservation path; no schema | revert the PR |
 | B01 curated new-arrivals persistence | #42 | `beaabad` | 15/15 checks success on `a4d3165` (the first head `c7ee406` failed `verify`: two source comments tripped the U1 language inventory; fixed in `a4d3165`) | none needed (nothing reads the tables until B03) | additive migration: two new tables, no existing object altered; no caller | flag/route do not exist yet, so nothing to switch; revert the PR before any row exists, otherwise leave the tables |
-| B02 admin new-arrivals curator | #43 | _recorded after merge_ | _recorded after CI_ | none (admin-only page; public route untouched until B03) | admin surface only; no public read; no migration | revert the PR; data stays in the B01 tables |
+| B02 admin new-arrivals curator | #43 | `ecdcb1a` | 15/15 checks success on `20e7e4e` | none (admin-only page; public route untouched until B03) | admin surface only; no public read; no migration | revert the PR; data stays in the B01 tables |
+| B03 curated new-arrivals listing | #44 | _recorded after merge_ | _recorded after CI_ | `NEW_ARRIVALS_CURATION_ENABLED` (OFF) | flag OFF: same page and metadata, `?page=` ignored, no curated query; unmodified `editorial`/`evergreen-pages` specs pass against an OFF server | set the flag `false` and recreate `app`; leave the tables |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -102,6 +103,10 @@ Migration `20261018160000_add_new_arrivals_selection`: `NewArrivalsSelection` (u
 ## B02 — admin curator
 
 `/admin/new-arrivals` (nav link "Hàng mới"): an ordered table with a position number and a remove checkbox per row, a GET search form and per-result "Thêm" forms. Works without JavaScript. Both Server Actions re-authorize with `requireCurrentAdmin()`; every field is bounded and parsed by the pure planner (ids ≤ 64, positions 1–500 canonical, revision canonical decimal ≤ 18 digits, ≤ 500 rows, aligned arrays). A stale editor is refused with `STALE_REVISION` (announced via `role="alert"`, focused) and the newer order survives. Only a closed set of reason codes is ever rendered; a hostile `?error=` collapses to the generic message.
+
+## B03 — curated new-arrivals listing
+
+`NEW_ARRIVALS_CURATION_ENABLED` (default OFF). OFF: the loader returns an empty view model and metadata is the original (`searchParams` is never read, no curated query). ON: parse `?page=` (404 before any read when malformed, repeated or above 21), count stored slots, cut the page by stored rank, hydrate through `listProductsByIds` — the same visibility, stock and promotion projection as `/shop`, hidden products dropped in place with no refill. Empty selection, or a page whose slots are all hidden, keeps the editorial frame with a `role="status"` line and zero cards. Page 2+ titles read "Hàng mới — Trang N". **Deviation from the technical review §3, recorded:** no canonical tag is added, because `/new-arrivals` is not an indexable listing path today and the review forbids a new indexation default; sitemap and robots are untouched. `connection()` runs in both modes so the runtime flag is not baked in at build time (the page was already dynamic).
 
 ## B07 — bounded search suggestions
 
