@@ -5,6 +5,7 @@ const adminDesktopTests = [
   "admin-commerce-v3.spec.ts",
   "admin-editor.spec.ts",
   "admin-editor-compact.spec.ts",
+  "admin-benefits.spec.ts",
   "admin-new-arrivals.spec.ts",
   "homepage-featured.spec.ts",
   "related-override.spec.ts",
@@ -15,6 +16,7 @@ export default defineConfig({
   testDir: ".",
   testMatch: [
     "admin-bulk-operations.spec.ts",
+    "admin-benefits.spec.ts",
     "admin-bulk-status.spec.ts",
     "admin-collections.spec.ts",
     "admin-commerce-v3.spec.ts",

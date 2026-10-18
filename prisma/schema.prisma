@@ -95,6 +95,7 @@ model User {
   homepageFeaturedUpdated HomepageFeaturedProduct[] @relation("HomepageFeaturedUpdatedBy")
   relatedOverridesUpdated RelatedProductOverride[] @relation("RelatedOverrideUpdatedBy")
   sizeGuideMediaUpdated SizeGuideMedia[] @relation("SizeGuideMediaUpdatedBy")
+  benefitCampaignsCreated BenefitCampaign[] @relation("BenefitCampaignCreatedBy")
 
   @@map("user")
 }
@@ -190,6 +191,7 @@ model ProductMirror {
   homepageFeatured HomepageFeaturedProduct?
   relatedOverrides RelatedProductOverride[] @relation("RelatedOverrideOwner")
   relatedOverrideRefs RelatedProductOverride[] @relation("RelatedOverrideTarget")
+  benefitTargets BenefitCampaignTarget[]
   slugHistory       ProductSlugHistory[]
   promotionTargets  PromotionTarget[]
 
@@ -372,6 +374,8 @@ model VariantMirror {
   compositeComponents             CompositeComponentMirror[] @relation("CompositeParent")
   compositeParents                CompositeComponentMirror[] @relation("CompositeComponent")
   promotionTargets                PromotionTarget[]
+  benefitTargets                  BenefitCampaignTarget[]
+  benefitGifts                    BenefitCampaignGift[]
   capacityReservations            CapacityReservation[]
   capacityResources               CapacityReservationResource[]
 
@@ -688,4 +692,91 @@ model SizeGuideMedia {
   updatedBy       User?    @relation("SizeGuideMediaUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 
   @@index([updatedByUserId])
+}
+
+/// An opt-in "benefit" campaign (A/B/C plan A06): a gift or a quantity-tier discount, independent of the
+/// legacy `PromotionCampaign` tables so legacy readers can never misinterpret it. Website-owned.
+///
+/// Status is derived, never stored, like legacy: `isEnabled`, `enabledAt`, `disabledAt` and the window
+/// say whether it ever applied. A campaign is created as a draft and can only be edited while it is
+/// not enabled; enabling is the one place the publish-time overlap rules run, inside a transaction that
+/// holds an advisory lock so two administrators cannot publish conflicting campaigns together. The
+/// migration adds the CHECKs (kind, name length, window order) that Prisma cannot express.
+model BenefitCampaign {
+  id              String                  @id @default(cuid())
+  kind            String
+  name            String
+  startsAt        DateTime?
+  endsAt          DateTime?
+  isEnabled       Boolean                 @default(false)
+  enabledAt       DateTime?
+  disabledAt      DateTime?
+  /// Optimistic concurrency for admin edits; bumped by every state change.
+  version         Int                     @default(1)
+  createdByUserId String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  createdBy       User?                   @relation("BenefitCampaignCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  targets         BenefitCampaignTarget[]
+  tiers           BenefitCampaignTier[]
+  gifts           BenefitCampaignGift[]
+
+  @@index([isEnabled, startsAt, endsAt])
+  @@index([createdByUserId])
+}
+
+/// Scope of a campaign. No rows = store-wide. Exactly one of `productId` / `variantId` (a database CHECK).
+model BenefitCampaignTarget {
+  id         String          @id @default(cuid())
+  campaignId String
+  productId  String?
+  variantId  String?
+  campaign   BenefitCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product    ProductMirror?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variant    VariantMirror?  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, productId])
+  @@unique([campaignId, variantId])
+  @@index([productId])
+  @@index([variantId])
+}
+
+/// One step of a campaign's ladder. Exactly one threshold column is set; `percentageValue` is NULL for
+/// a gift step and 1-99 for a price step. `position` 0-7 with a unique `(campaignId, position)` makes the
+/// owner-approved ceiling of eight steps a database fact.
+model BenefitCampaignTier {
+  id                   String          @id @default(cuid())
+  campaignId           String
+  position             Int
+  thresholdQuantity    Int?
+  thresholdSubtotalVnd BigInt?
+  percentageValue      Int?
+  campaign             BenefitCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, position])
+}
+
+/// One gift a `GIFT_ITEM` campaign can grant. `position` 0-4 with a unique `(campaignId, position)` makes
+/// the owner-approved ceiling of five gifts a database fact; `quantity` is 1-5.
+model BenefitCampaignGift {
+  id         String          @id @default(cuid())
+  campaignId String
+  variantId  String
+  position   Int
+  quantity   Int
+  campaign   BenefitCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  variant    VariantMirror   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, variantId])
+  @@unique([campaignId, position])
+  @@index([variantId])
+}
+
+/// Single-row revision of the benefit campaign set: advanced in the same transaction as any publish or
+/// disable. Its own row, not `PromotionPricingRevision`, because benefit campaigns do not change the
+/// Merchant feed's prices.
+model BenefitRevision {
+  id        String   @id @default("current")
+  revision  BigInt   @default(0)
+  updatedAt DateTime @updatedAt
 }
