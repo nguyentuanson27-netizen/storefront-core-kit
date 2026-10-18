@@ -195,6 +195,8 @@ test.describe("flag ON", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(`${url}/`, { waitUntil: "networkidle" });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+    await expect(page).toHaveTitle(/\S/);
     const scan = await new AxeBuilder({ page }).withTags(BUYER_AXE_TAGS).analyze();
     expect(scan.violations).toEqual([]);
   });
@@ -219,6 +221,8 @@ test.describe("flag ON", () => {
     await page.goto(`${url}${path}`, { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { level: 1, name: "Nổi bật trang chủ" })).toBeVisible();
     await expect(page.getByText("Chưa có sản phẩm nào trong danh sách.")).toBeVisible();
+    // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+    await expect(page).toHaveTitle(/\S/);
     const emptyScan = await new AxeBuilder({ page }).withTags(BUYER_AXE_TAGS).analyze();
     expect(emptyScan.violations).toEqual([]);
 
@@ -237,6 +241,8 @@ test.describe("flag ON", () => {
     await expect(alert).toBeFocused();
     expect(await prisma.homepageFeaturedProduct.count()).toBe(12);
 
+    // The title is streamed in after a server-action redirect; scanning before it lands reports a false "document-title" violation.
+    await expect(page).toHaveTitle(/\S/);
     const filledScan = await new AxeBuilder({ page }).withTags(BUYER_AXE_TAGS).analyze();
     expect(filledScan.violations).toEqual([]);
   });
