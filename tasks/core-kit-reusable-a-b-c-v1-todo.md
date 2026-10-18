@@ -6,7 +6,7 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 
 ## Approval and evidence gates (all unchecked by default)
 
-- [ ] G0 F00 exact source gap inventory reviewed.
+- [ ] G0 Review this /plan's **completed** 13-capability source/test/reuse matrix (§2 of plan). F00 subsequently revalidates it at the implementation SHA; do not defer initial matrix until after plan approval.
 - [ ] G1 F01 child spec approved: stacking, role+lineId/laq2, paid quantities, order audit, capacity and rollback.
 - [ ] G2 Controlled Pancake acceptance/readback proves 0-VND gift, same-variation PAID+GIFT and differently-priced PAID rows **for each enabled use case**, or case remains OFF.
 - [ ] G3 Additive DB migration and old/new code coexistence approved.
@@ -16,9 +16,9 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 
 ## Dependency-ordered task checklist
 
-- [ ] **F00 — Audit exact-main gaps and ownership** [Foundation; deps: none; Required]
-  - [ ] Acceptance: Every gap has an exact source and test path, a real owner, and a justified reuse decision.
-  - [ ] Verification: Source review and baseline `pnpm test:domain`; documented reviewer sign-off.
+- [ ] **F00 — Revalidate audited matrix and ownership at implementation SHA** [Foundation; deps: none; Revalidation gate]
+  - [ ] Acceptance: At /build SHA, re-check the **already-delivered `2 matrix** source/test links, classifications and adoption decisions, recording only evidenced drift and reviewer approval.
+  - [ ] Verification: Compare pinned plan baseline against exact current source/test tree and record actual focused tests/CI when run.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
 - [ ] **F01 — Approve child contracts and POS evidence matrix** [Foundation; deps: F00; Human / external evidence gate]
@@ -41,9 +41,9 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
   - [ ] Verification: `pnpm test:db` capacity-reservation/mirror-handoff/concurrency and `pnpm test:domain` capacity resources.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **A04 — Integrate versioned render, proof and order snapshot** [A; deps: A01, A02, A03; Checkout correctness gate]
-  - [ ] Acceptance: Current legacy laq1 continues unchanged; laq2 required for any benefit line, with role and total parity.
-  - [ ] Verification: `pnpm test:domain` quote/proof and `pnpm test:db` checkout p9a/snapshot suites.
+- [ ] **A04 — Stage laq2 proof/render adapters with synthetic fixtures (OFF)** [A; deps: A01, A02, A03; OFF-only infrastructure]
+  - [ ] Acceptance: `laq1` remains legacy-only; synthetic `laq2` benefit lines prove signature/amount/role parity, while **real buyer benefit checkout stays OFF until A08**.
+  - [ ] Verification: `pnpm test:domain` fixture quote/proof, `pnpm test:db` snapshot/legacy readback and flag-OFF regression.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
 - [ ] **A05 — Implement pure paid-only tier eligibility and shipping basis** [A; deps: F01; Stacking must be approved]
@@ -131,9 +131,9 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
   - [ ] Verification: `pnpm test:domain` PDP models and `tests/a11y-runtime/pdp-promotion.spec.ts`.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **C02 — Expose headless PLP filters and optional search overlay** [C; deps: F00, B07; Depends on bounded search model]
-  - [ ] Acceptance: Applying/removing filter preserves others and resets pagination; GET/no-JS search remains correct.
-  - [ ] Verification: `pnpm test:domain` discovery + filter model, `tests/a11y-runtime/discovery.spec.ts`.
+- [ ] **C02 — Add headless PLP filter interaction** [C; deps: F00; Canonical discovery; no B07]
+  - [ ] Acceptance: Existing URL-backed filters and no-JS forms remain canonical; filter drawer/chips and focus states do not depend on B07 or C05.
+  - [ ] Verification: `pnpm test:domain` filter model and `tests/a11y-runtime/discovery.spec.ts` browser/keyboard.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
 - [ ] **C03 — Add optional accessible headless cart drawer** [C; deps: F00; Independent]
@@ -141,14 +141,19 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
   - [ ] Verification: `pnpm test:domain` cart models + `tests/a11y-runtime/checkout.spec.ts` and mobile keyboard.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **A10 — Implement safe upsell add-one transition and optional adapter** [A; deps: A09, C03; Optional/default OFF]
-  - [ ] Acceptance: Stale upsell cannot submit old proof or silently change money; at most one intended unit is added.
-  - [ ] Verification: `pnpm test:domain` upsell action + `pnpm test:db` cart mutation; checkout browser/a11y.
+- [ ] **A10 — Implement safe upsell add-one and checkout adapter** [A; deps: A09; Canonical cart mutation; no C03]
+  - [ ] Acceptance: Server-validated idempotent add-one and quote refresh use current `storefront-cart-actions`, with optional checkout adapter independent of drawer.
+  - [ ] Verification: `pnpm test:domain` upsell mutation, `pnpm test:db` cart concurrency, checkout a11y regression.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **C04 — Wire gift reminder and checkout role-lines only after A1** [C; deps: C03, A08; Gated by A1 vendor proof]
-  - [ ] Acceptance: OFF presents existing checkout; ON shows correct separate gift/paid lines and total before submit.
-  - [ ] Verification: `pnpm test:domain` checkout model + `tests/a11y-runtime/checkout.spec.ts`.
+- [ ] **C04 — Wire gift reminder and checkout role-lines only after A1** [C; deps: A08; Canonical quote; no C03]
+  - [ ] Acceptance: Existing checkout read model consumes A08-proven paid/gift totals and preserves input across stale-proof recovery; no drawer required.
+  - [ ] Verification: `pnpm test:domain` checkout view model, `tests/a11y-runtime/checkout.spec.ts` keyboard/browser.
+  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+
+- [ ] **C05 — Add optional search overlay after bounded suggestions** [C; deps: B07; Optional/default OFF]
+  - [ ] Acceptance: Overlay consumes B07's approved bounded suggestions and keyboard/empty/error states, never blocking C02/no-JS search.
+  - [ ] Verification: `pnpm test:domain` overlay model and `tests/a11y-runtime/discovery.spec.ts` runtime/focus.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
 - [ ] **R00 — Repeat quality/rollback verification for each enabled slice** [Release; deps: F00; Every implementation PR]
@@ -158,16 +163,16 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 
 ## Batch checkpoints
 
-- [ ] CP0: F00/F01 reviewed, no unapproved promotion/Pancake assumptions.
+- [ ] CP0: Plan §2 baseline matrix reviewed now; F00 revalidated at implementation SHA and F01 approved; no unreviewed campaign/Pancake assumptions.
 - [ ] CP-A0: A01/A02/A03 role proof/history and locked same-SKU resource correctness.
-- [ ] CP-A1: A04/A05 checkout quote parity, no stock-only proof churn, campaign-eligible vs whole-cart shipping tests.
+- [ ] CP-A1: A04 OFF-only synthetic laq2/legacy parity plus A05 frozen paid eligibility and mixed-cart shipping; real checkout integration reserved for A08 after A07.
 - [ ] CP-A2: A06/A07/A08 admin/gift/POS acceptance, feature OFF and compatibility.
 - [ ] CP-A3: A09/A10 read-only proof + bounded idempotent upsell (optional).
 - [ ] CP-B1: B01/B02/B03 curated manual ordering OFF/empty/ON route truth.
 - [ ] CP-B2: B04/B05/B06/B07 independent merchandising and search gates.
 - [ ] CP-B3: B08 decision and B09 optional-only implementation.
 - [ ] CP-B4: B10 evidence and B11 optional-only implementation.
-- [ ] CP-C: C01/C02/C03/C04 no duplicate money, keyboard/browser/a11y and brand discardability.
+- [ ] CP-C: C01–C05 independent headless/a11y gates; C02 PLP filter no B07; C05 optional search overlay depends B07; C03 drawer never blocks A10/C04.
 - [ ] CP-R: R00 per-slice verified release/rollback, not a big-bang flag flip.
 
 ## Verification template for implementation PRs
