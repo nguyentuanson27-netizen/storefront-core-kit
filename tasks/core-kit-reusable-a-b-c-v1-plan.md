@@ -49,25 +49,25 @@ Classification: **EXISTS** = requested baseline authority exists; **PARTIAL** = 
 ## 3. Dependency graph and execution order
 
 ```text
-F00 exact SHA inventory → F01 owner decisions + POS evidence matrix
-    F01 → A01 lineId/PAID-GIFT/laq2 → A02 additive history → A03 aggregated locked capacity → A04 v2 render/submit
-    F01 → A05 campaign eligibility/paid-only shipping → A06 campaign lifecycle → A07 selected gifts
-    [A03, A04, A06, A07, accepted POS evidence] → A08 POS/order parity
-    A08 → A09 bounded read-only upsell → A10 add-one mutation (+ C03 drawer)
+F00 revalidate the /plan gap matrix at implementation SHA → F01 owner contracts + POS evidence
+    F01 → A01 role lineId/laq2 → A02 additive history → A03 combined locked capacity → A04 OFF-only laq2 adapters (synthetic fixtures)
+    F01 → A05 frozen campaign eligibility + paid-only shipping → A06 admin lifecycle → A07 gift selection
+    [A03, A04, A05, A06, A07, POS evidence] → A08 real A1 checkout render/submit + POS parity
+    A08 → A09 read-only upsell → A10 canonical add-one checkout action (no cart drawer)
 
-F00 → B01 curator persistence → B02 admin → B03 new-arrivals ON/OFF read model
-F00 → B04 homepage featured; B05 related override; B06 guide images; B07 suggestions
+F00 → B01 selection storage → B02 admin → B03 flagged New Arrivals
+F00 → B04 homepage featured; B05 related override; B06 size media; B07 suggestions
 F00 → B08 category decision → B09 only if approved
-F00 → B10 image delivery measurement → B11 only if approved
+F00 → B10 image measurement → B11 only if approved
 
-F00 → C01 mobile PDP; F00 → C03 cart drawer
-[F00, B07] → C02 PLP + search overlay
-[A08, C03] → C04 checkout gift UI
+F00 → C01 PDP; C02 PLP filters; C03 optional cart drawer
+B07 → C05 optional search overlay (not a C02 prerequisite)
+A08 → C04 checkout gift UI (not a C03 prerequisite)
 
-R00 = repeatable quality/release gate for each slice (not one final mega-PR).
+R00 repeats release/verification for each independently enabled slice.
 ```
 
-B01–B07, C01/C03 can run independently of the A money path after F00. B08/B10 are research/owner decisions, **not approval** for B09/B11. A10 must follow C03; C04 must follow A08. Shared schema, proof, flag and pricing changes require contract coordination before parallel writes.
+B01–B07, C01/C02/C03 can proceed independently after F00. B08/B10 research does not authorize B09/B11. A04 creates **OFF-only** versioned quote plumbing with synthetic data and is not a live A1 checkout integration; A08 completes real buyer render/submit after A05 and A07. A10 consumes existing canonical `src/commerce/storefront-cart-actions.ts` and checkout quote authority, with **no C03 dependency**. C04 consumes A08's server quote/`src/routes/checkout-model.ts`, with **no C03 dependency**. A separate adapter may depend on C03 only if it actually embeds the drawer. B07 is required only by C05's optional search overlay, not C02 filtering. Parallel schema, checkout and shared-interface work must coordinate reviewed contracts.
 
 ## 4. Non-negotiable interfaces and behavior
 
@@ -80,11 +80,11 @@ B01–B07, C01/C03 can run independently of the A money path after F00. B08/B10 
 
 ## 5. Checkpoints (stop/go between small batches)
 
-**CP0 (F00–F01):** Reviewed gap matrix and narrow A child spec, owner stacking decision, POS acceptance matrix; unknown vendor case => OFF.
+**CP0 (F00–F01):** The complete source/test/reuse gap matrix is already supplied in §2 of this /plan. F00 revalidates it at the /build SHA; F01 reviews child contracts, stacking and POS acceptance evidence. Unknown vendor cases stay OFF.
 
 **CP-A0 (A01–A03):** v2 role identity/history + locked demand, same-SKU stock2 passes/stock1 refuses, concurrency and legacy readers.
 
-**CP-A1 (A04–A05):** correct laq1/laq2 authorization, no harmless stock-sync reconfirm loop, frozen campaign thresholds and mixed-cart/no-eligible free-shipping tests.
+**CP-A1 (A04–A05):** A04 tests laq1/laq2 adapters **OFF with synthetic role-line fixtures**; A05 proves frozen campaign thresholds and mixed/no-eligible shipping. **A08**, after A05/A07, owns actual benefit-enabled render/submit; no harmless stock-sync reconfirm loop.
 
 **CP-A2 (A06–A08):** admin write/auth, selected gift revalidation, exact paid/gift/money POS readback and feature-OFF rollback; without external proof A08 **blocked**.
 
@@ -96,7 +96,7 @@ B01–B07, C01/C03 can run independently of the A money path after F00. B08/B10 
 
 **CP-B3/B4 (B08–B11):** explicit human decisions; optional taxonomy/image proxy remain skipped if not justified and approved.
 
-**CP-C (C01–C04):** headless authority, no-JS route fallback, keyboard/axe/mobile 390×844, tablet 768px and desktop 1440px; C04 only after A08.
+**CP-C (C01–C05):** C02 filter UX independent of B07; C05 optional overlay requires B07; C03 drawer optional; C04 checkout quote UX requires A08 not C03. Verify no-JS, keyboard/axe/mobile 390×844, tablet 768px and desktop 1440px.
 
 **CP-R (R00 repeated):** exact-head tests, migrations, security, observability, feature-OFF compatibility, rollback and owner activation approval for every enabled slice.
 
@@ -136,18 +136,18 @@ pnpm release:check
 
 Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concurrency: `tests/database/*.test.ts` (especially capacity/quote/order). Pancake: existing `tests/integrations/*` plus controlled actual readback. UI: `tests/a11y-runtime/*` and browser keyboard/axe/regression. Next.js/Prisma/Better Auth integration must use current official/version-specific source docs when implementation begins. Each implementation PR must meet the task acceptance **and** the project's full Definition of Done, with exact-head CI and operational rollback.
 
-**Verification for this /plan PR:** inspect two Markdown files, spec references, unique task IDs, dependency graph and GitHub-only diff. Do **not** claim application tests were run locally for documentation edits.
+**Verification for this /plan PR:** source/test paths for all 13 capability rows in §2 checked against the pinned Git tree and relevant source/tests inspected; verify unique task IDs, dependencies and both Markdown files against the final GitHub-only diff. Do **not** claim local application tests/build/browser runs for docs-only edits.
 
 ## 8. Detailed tasks (dependency-ordered)
 
 | ID | Work item | Dependencies | Gate |
 | --- | --- | --- | --- |
-| F00 | Audit exact-main gaps and ownership | — | Required |
+| F00 | Revalidate audited matrix and ownership at implementation SHA | — | Revalidation gate |
 | F01 | Approve child contracts and POS evidence matrix | F00 | Human / external evidence gate |
 | A01 | Design/test v2 role lines and laq2 proof | F01 | Approved A contract |
 | A02 | Add immutable benefit order persistence | A01 | Migration review |
 | A03 | Aggregate gift and paid stock through existing locks | A01, A02 | Capacity safety gate |
-| A04 | Integrate versioned render, proof and order snapshot | A01, A02, A03 | Checkout correctness gate |
+| A04 | Stage laq2 proof/render adapters with synthetic fixtures (OFF) | A01, A02, A03 | OFF-only infrastructure |
 | A05 | Implement pure paid-only tier eligibility and shipping basis | F01 | Stacking must be approved |
 | A06 | Add benefit campaign admin lifecycle and persistence | A05, F01 | Admin/schema approval |
 | A07 | Persist selected gift state and enforce fresh entitlement | A01, A05, A06 | Approved gift choice contract |
@@ -165,29 +165,30 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 | B10 | Measure whether trusted image proxy is justified | F00 | Security/performance evidence gate |
 | B11 | Implement bounded image endpoint only if approved | B10 | Conditional: only when B10 approves |
 | C01 | Extract portable PDP/mobile selection interaction models | F00 | Independent |
-| C02 | Expose headless PLP filters and optional search overlay | F00, B07 | Depends on bounded search model |
+| C02 | Add headless PLP filter interaction | F00 | Canonical discovery; no B07 |
 | C03 | Add optional accessible headless cart drawer | F00 | Independent |
-| A10 | Implement safe upsell add-one transition and optional adapter | A09, C03 | Optional/default OFF |
-| C04 | Wire gift reminder and checkout role-lines only after A1 | C03, A08 | Gated by A1 vendor proof |
+| A10 | Implement safe upsell add-one and checkout adapter | A09 | Canonical cart mutation; no C03 |
+| C04 | Wire gift reminder and checkout role-lines only after A1 | A08 | Canonical quote; no C03 |
+| C05 | Add optional search overlay after bounded suggestions | B07 | Optional/default OFF |
 | R00 | Repeat quality/rollback verification for each enabled slice | F00 | Every implementation PR |
 
-### F00: Audit exact-main gaps and ownership
+### F00: Revalidate audited matrix and ownership at implementation SHA
 
-**Intent:** Pin source SHA and classify every A/B/C capability as EXISTS/PARTIAL/MISSING/BRAND-ONLY plus KEEP/ADAPT/REBUILD/SKIP; cite code and tests rather than names alone.
+**Intent:** The initial 13-capability gap matrix, verified code/test paths and KEEP/ADAPT/REBUILD/SKIP decisions are **already delivered in `2** for this /plan PR. At each /build SHA, compare that review baseline against current code/test owners, record drift and resolve any contract-breaking differences before applying implementation tasks. This is not another postponed initial audit.
 
-**Dependencies:** None. **Gate:** Required.
+**Dependencies:** None. **Gate:** Revalidation gate; approve the matrix **now** while reviewing this plan.
 
 **Acceptance:**
-- [ ] Every gap has an exact source and test path, a real owner, and a justified reuse decision.
-- [ ] No second checkout, pricing, stock, discovery or collection authority is planned.
+- [ ] Compare every existing matrix row against the chosen implementation SHA; update only changed source paths, tests and reuse decisions with evidence.
+- [ ] Pin the new SHA and reviewer acknowledgement, with no parallel pricing, stock, checkout, collection or URL authority introduced.
 
 **Verification (future implementation, not this PR):**
-- [ ] Source review and baseline `pnpm test:domain`; documented reviewer sign-off.
+- [ ] Review current tree and owner modules versus `2; run relevant focused characterization tests only when required, recording their real exact-head CI evidence.
 
 **Likely touched/reviewed files** (not exact diff promises):
-- `docs/audits/core-kit-a-b-c-gap-matrix.md` (new)
-- `docs/specs/core-kit-reusable-capabilities-a-b-c-v1.md` (read)
-- `tests/domain/route-boundary.test.ts` (read)
+- `tasks/core-kit-reusable-a-b-c-v1-plan.md` (`2 baseline matrix)
+- `docs/specs/core-kit-reusable-capabilities-a-b-c-v1.md` (approved source)
+- `tests/domain/route-boundary.test.ts` (boundary verification)
 
 ### F01: Approve child contracts and POS evidence matrix
 
@@ -263,24 +264,24 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 - `tests/database/capacity-reservation.test.ts`
 - `tests/domain/capacity-resources.test.ts`
 
-### A04: Integrate versioned render, proof and order snapshot
+### A04: Stage laq2 proof/render adapters with synthetic fixtures (OFF)
 
-**Intent:** Use server quote authority in render, draft snapshot and submit; reconfirm only when quote, grantability or paid/gift line facts materially change, not a harmless stock sync.
+**Intent:** Prepare typed `laq2` quote/render/draft adapters using **synthetic server-owned PAID/GIFT role-line fixtures** and approved versioned proof. Keep the A1 gate OFF. This task does **not** enable or integrate real benefit eligibility, selected gifts or the buyer submit path. **A08** will connect A05 eligibility and A07 gift selection into the real render/submit flow and POS order mapping.
 
-**Dependencies:** A01, A02, A03. **Gate:** Checkout correctness gate.
+**Dependencies:** A01, A02, A03. **Gate:** OFF-only infrastructure; legacy checkout remains the only live path.
 
 **Acceptance:**
-- [ ] Current legacy laq1 continues unchanged; laq2 required for any benefit line, with role and total parity.
-- [ ] Stock-only synchronization never creates an unnecessary reconfirmation loop; reservation still rejects insufficient stock under lock.
+- [ ] Legacy `laq1` remains unchanged and never signs benefits; bounded synthetic `laq2` fixtures preserve signed role/lineId, amount and shipping parity through adapters.
+- [ ] Material synthetic quote/entitlement changes require new proof; harmless stock-sync metadata does not. No benefit-enabled buyer submit is reachable until A08.
 
 **Verification (future implementation, not this PR):**
-- [ ] `pnpm test:domain` quote/proof and `pnpm test:db` checkout p9a/snapshot suites.
+- [ ] `pnpm test:domain` fixture-based quote/proof; `pnpm test:db` legacy snapshot/version readback and A1 flag-OFF checkout regression.
 
 **Likely touched/reviewed files** (not exact diff promises):
 - `src/commerce/guest-checkout-snapshot.ts`
-- `src/commerce/guest-checkout-submit.ts`
+- `src/commerce/checkout-quote.ts`
+- `src/commerce/checkout-quote-proof.ts`
 - `tests/database/guest-checkout-p9a-quote-proof.test.ts`
-- `tests/domain/checkout-quote.test.ts`
 
 ### A05: Implement pure paid-only tier eligibility and shipping basis
 
@@ -341,7 +342,7 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 
 ### A08: Prove POS create/readback parity and complete gated A1
 
-**Intent:** Only for cases approved by vendor evidence, send role-correct lines through the existing Pancake gateway, preserving exact quantities/totals and order-state idempotency.
+**Intent:** After A05 canonical eligibility and A07 gift selection exist, connect the **real buyer** benefit-aware render/quote, checkout DRAFT/submit and accepted order to A04's OFF-only adapters and the existing Pancake gateway. Only vendor-evidenced role combinations may be enabled; preserve exact quantities, totals and idempotency.
 
 **Dependencies:** A03, A04, A06, A07. **Gate:** External POS acceptance; default OFF.
 
@@ -601,23 +602,23 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 - `src/components/brand/product-detail.tsx`
 - `tests/domain/pdp-mobile-interaction.test.ts` (new)
 
-### C02: Expose headless PLP filters and optional search overlay
+### C02: Add headless PLP filter interaction
 
-**Intent:** Consume storefront-discovery/shop-model canonical filter/sort hrefs; add only reusable focus/disclosure/active-count and suggestion interaction state.
+**Intent:** Implement only the missing reusable filter drawer/disclosure/chip/focus behavior atop **existing** `src/commerce/storefront-discovery.ts` and `src/routes/shop-model.ts`. Current URL parsing, filter/sort truth and GET/no-JS submission already work; **B07 bounded search suggestions are not required** for this task.
 
-**Dependencies:** F00, B07. **Gate:** Depends on bounded search model.
+**Dependencies:** F00. **Gate:** Canonical discovery authority, independent of B07/C05.
 
 **Acceptance:**
-- [ ] Applying/removing filter preserves others and resets pagination; GET/no-JS search remains correct.
-- [ ] Mobile drawer focus return, aria-live empty/loading/error and keyboard access proven.
+- [ ] Applying/removing any filter retains the other valid criteria and resets page; existing GET/no-JS filtering still works.
+- [ ] Mobile disclosure/focus restoration, active-count labels and keyboard behavior are accessible without a second sort, URL or price engine.
 
 **Verification (future implementation, not this PR):**
-- [ ] `pnpm test:domain` discovery + filter model, `tests/a11y-runtime/discovery.spec.ts`.
+- [ ] `pnpm test:domain` discovery + filter model; `tests/a11y-runtime/discovery.spec.ts` at mobile and desktop.
 
 **Likely touched/reviewed files** (not exact diff promises):
 - `src/components/headless/plp-filter-model.ts` (new)
-- `src/components/headless/search-overlay-model.ts` (new)
 - `src/routes/shop-model.ts` (reuse)
+- `src/components/brand/listing-refine-form.tsx` (optional adapter)
 - `tests/domain/plp-filter-model.test.ts` (new)
 
 ### C03: Add optional accessible headless cart drawer
@@ -639,18 +640,18 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 - `src/routes/cart-model.ts` (reuse)
 - `tests/domain/cart-drawer-model.test.ts` (new)
 
-### A10: Implement safe upsell add-one transition and optional adapter
+### A10: Implement safe upsell add-one and checkout adapter
 
-**Intent:** Revalidate proposed benefit at cart mutation, make duplicate click idempotent, refresh quote and consume server offer facts for UI.
+**Intent:** Revalidate a server-proven A09 opportunity through the **existing canonical cart mutation** in `src/commerce/storefront-cart-actions.ts`, ensuring an idempotent add-one transition and refreshed checkout quote. A checkout upsell adapter may render this offer **without** the optional C03 cart drawer; only a future drawer-specific adapter needs C03.
 
-**Dependencies:** A09, C03. **Gate:** Optional/default OFF.
+**Dependencies:** A09. **Gate:** Optional/default OFF; canonical cart and quote owners already exist.
 
 **Acceptance:**
-- [ ] Stale upsell cannot submit old proof or silently change money; at most one intended unit is added.
-- [ ] Flag OFF retains current cart and checkout; enabled case goes through the same server canonical pricing.
+- [ ] Stale upsell cannot submit old proof or silently change buyer money; double click/retry adds only the intended unit.
+- [ ] Upsell feature OFF preserves legacy cart/checkout; enabled mutations use server-owned prices and refreshed proof, with no C03 requirement.
 
 **Verification (future implementation, not this PR):**
-- [ ] `pnpm test:domain` upsell action + `pnpm test:db` cart mutation; checkout browser/a11y.
+- [ ] `pnpm test:domain` upsell action and `pnpm test:db` cart concurrency plus checkout browser/a11y.
 
 **Likely touched/reviewed files** (not exact diff promises):
 - `src/commerce/storefront-cart-actions.ts`
@@ -660,22 +661,41 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 
 ### C04: Wire gift reminder and checkout role-lines only after A1
 
-**Intent:** Render only canonical paid/gift/discount/stock/total facts from server; preserve recipient/address across quote reconfirmation and avoid client recalculation.
+**Intent:** Use A08's canonical benefit quote and existing `src/routes/checkout-model.ts` to render paid/gift/discount/stock/total facts at checkout. Preserve recipient/address across quote reconfirmation. **Do not depend on C03**: an optional drawer adapter may separately reuse the model only if its UI actually includes a drawer.
 
-**Dependencies:** C03, A08. **Gate:** Gated by A1 vendor proof.
+**Dependencies:** A08. **Gate:** Approved A1 POS acceptance and canonical checkout read model, not cart drawer.
 
 **Acceptance:**
-- [ ] OFF presents existing checkout; ON shows correct separate gift/paid lines and total before submit.
-- [ ] Stale selection/amount triggers safe recovery with focus and data intact; unsupported POS benefit case remains OFF.
+- [ ] A1 OFF shows current checkout. A1 ON shows server-proven distinct paid/gift rows and total before final submit.
+- [ ] Stale gift/amount returns safe focused recovery, keeping customer form input; unsupported POS combinations remain OFF.
 
 **Verification (future implementation, not this PR):**
-- [ ] `pnpm test:domain` checkout model + `tests/a11y-runtime/checkout.spec.ts`.
+- [ ] `pnpm test:domain` checkout model and `tests/a11y-runtime/checkout.spec.ts` plus role/keyboard tests.
 
 **Likely touched/reviewed files** (not exact diff promises):
 - `src/components/headless/checkout-gift-reminder-model.ts` (new)
 - `src/components/brand/guest-checkout-form.tsx`
 - `src/routes/checkout-model.ts`
 - `tests/domain/checkout-gift-reminder.test.ts` (new)
+
+### C05: Add optional search overlay after bounded suggestions
+
+**Intent:** Supply an independent search overlay open/close/focus/result state over B07's **bounded** and server-priced suggestions. The existing search entry form sending GET to `/shop` remains usable without JavaScript. C02 PLP filters neither depend on this overlay nor require B07.
+
+**Dependencies:** B07. **Gate:** Optional/default OFF until suggestions are bounded and approved.
+
+**Acceptance:**
+- [ ] Approved suggestion results alone are displayed; stale responses, loading/empty/error states and canonical PDP/`/shop` links behave correctly.
+- [ ] Escape/focus return, keyboard/aria behavior and no-JS fallback pass; disabling overlay does not alter C02 filtering or canonical money.
+
+**Verification (future implementation, not this PR):**
+- [ ] `pnpm test:domain` search overlay model; `tests/a11y-runtime/discovery.spec.ts` keyboard/mobile/no-JS assertions.
+
+**Likely touched/reviewed files** (not exact diff promises):
+- `src/components/headless/search-overlay-model.ts` (new)
+- `src/components/brand/search-overlay.tsx` (optional adapter)
+- `src/routes/search.ts` (reuse)
+- `tests/domain/search-overlay-model.test.ts` (new)
 
 ### R00: Repeat quality/rollback verification for each enabled slice
 
@@ -698,7 +718,7 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 ## 9. Handoff and merge discipline
 
 1. Review/approve this plan separately from the already merged umbrella spec.
-2. Begin with F00 source audit and F01 owner-approved A child contracts; do not perform a migration or POS write from this /plan PR.
+2. This /plan already contains the source/test/reuse matrix in §2. Before /build, F00 **revalidates** it at the implementation SHA, then F01 gates owner-approved A child contracts; no migration or POS write is authorized by this plan.
 3. Split by one reviewed semantic capability. ADR 0005 governs changed-line scope; tests, migrations and rollback must accompany the behavior they prove.
 4. Link task ID, parent spec section, exact base/head SHA and verification in each implementation PR. Do not infer implementation completion from merged documentation.
 5. Ship and enable only the slices whose dependencies and external/production evidence are fulfilled. Deferred B3/B6 work stays deferred until separately approved.
