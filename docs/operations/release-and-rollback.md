@@ -223,6 +223,13 @@ catalog, and `/search` and `/shop` are unchanged either way.
 Bounds are code constants in `src/commerce/storefront-search-suggestions.ts`: query 2–80 characters (the same maximum
 `/shop` accepts for `q`), at most 6 suggestions, a 1,500 ms ceiling after which the caller gets `UNAVAILABLE`.
 
+The ceiling is enforced in the database, not only in the caller. Suggestions read through their own Prisma client
+(`src/db/search-suggestions-prisma.ts`, built by `src/db/budgeted-prisma.ts`): Postgres cancels any statement that runs longer
+than 1,500 ms (`statement_timeout`), and the client's pool is capped at 4 connections with a 1 s wait for a free one, so a burst
+of slow suggestions cannot hold more than 4 connections of the shared pool's budget or leave statements running after the caller
+has given up. The pool is created on first use, so a deployment that never enables suggestions never opens it. This bounds time
+and connections; it is not a request-rate limit (see the residual in the slice record).
+
 Enable by setting `SEARCH_SUGGESTIONS_ENABLED=true` in `deploy/vps/.env.production` and recreating the `app`
 container (`--no-build --no-deps --force-recreate`, as for selling modes; a plain restart keeps the old environment).
 Verify with `compose exec app node -e 'if (process.env.SEARCH_SUGGESTIONS_ENABLED !== "true") process.exit(1)'`.
@@ -257,8 +264,10 @@ and a sticky purchase bar below 1024px that appears once the real purchase panel
 the panel's own `addToBag`; when a choice is still needed it moves focus to that choice in the panel. Off by default in
 `.env.example` and `deploy/vps/env.example`; only the exact value `true` enables it. Off, the product page is unchanged.
 
-The server never sends the bar: it appears only after the client has measured the viewport. Known tradeoff: while the bar
-is showing it covers the bottom ~70px of the viewport, including over the footer once the shopper scrolls past the panel.
+The server never sends the bar: it appears only after the client has measured the viewport. The bar is shown only while the
+shopper is within the product detail region and the purchase panel is out of view; once they scroll past that region (the related
+grid, the footer) it hides, so it never covers the footer. Within the region it covers the bottom ~70px of the viewport, which the
+detail region reserves with bottom padding. When the option is a preorder the bar shows the same brand preorder marker the panel does.
 
 Enable: set `PDP_MOBILE_INTERACTIONS_ENABLED=true` in `deploy/vps/.env.production`, recreate `app`
 (`--no-build --no-deps --force-recreate`), verify with
@@ -268,9 +277,11 @@ same switch in reverse; there is nothing to migrate.
 ## Cart drawer (`CART_DRAWER_ENABLED`)
 
 A/B/C plan task C03. No migration. A read-only summary of the shopper's own cart opened from the header cart link.
-Every figure (line prices, availability words, subtotal, whether checkout is offered) is `buildCartViewModel`'s, the same
-model `/cart` renders, passed through the `readStorefrontCartDrawer` server action; the drawer recalculates nothing and edits
-nothing. Quantity changes stay on `/cart`. Off by default in `.env.example` and `deploy/vps/env.example`; only the exact value
+**Scope: read-only.** Every figure (line prices, availability words, subtotal, whether checkout is offered) is
+`buildCartViewModel`'s, the same model `/cart` renders, passed through the `readStorefrontCartDrawer` server action; the drawer
+recalculates nothing and edits nothing. **Changing a quantity or removing a line still happens on `/cart`**, where the canonical
+cart mutation and its feedback live; an editing drawer would be a separate slice (checklist C03b) that reuses `useCartLine`.
+Opening is single-flight: activating the link twice in the same tick makes one server read. Off by default in `.env.example` and `deploy/vps/env.example`; only the exact value
 `true` enables it. Off, the header link is a plain link and the action answers `null` without reading the database.
 
 The dialog traps Tab, closes on Escape, the close button, the backdrop or following any link inside it, restores focus to the

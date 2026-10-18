@@ -38,14 +38,32 @@ export function useCartDrawer({
   const titleId = useId();
   const [state, dispatch] = useReducer(reduceCartDrawer, INITIAL_CART_DRAWER);
   const sequence = useRef(0);
+  // Whether a read is in flight for the current open. The reducer also ignores a second OPEN while
+  // loading, but it runs after this function has already called the server, so two activations in
+  // the same tick (Enter held, a double tap, a scripted click) would otherwise cost two reads. This
+  // guard is synchronous, so the second one never reaches the network.
+  const inFlight = useRef(false);
 
   const load = useCallback(() => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     sequence.current += 1;
     const requestId = sequence.current;
+    // Only the read that is still current may release the guard: a late answer from a read that was
+    // closed over must not unlock a newer one.
+    const settle = () => {
+      if (sequence.current === requestId) inFlight.current = false;
+    };
     dispatch({ type: "OPEN", requestId });
     readStorefrontCartDrawer().then(
-      (view) => dispatch({ type: "LOADED", requestId, view }),
-      () => dispatch({ type: "FAILED", requestId }),
+      (view) => {
+        settle();
+        dispatch({ type: "LOADED", requestId, view });
+      },
+      () => {
+        settle();
+        dispatch({ type: "FAILED", requestId });
+      },
     );
   }, []);
 
@@ -58,7 +76,12 @@ export function useCartDrawer({
     [load],
   );
 
-  const close = useCallback(() => dispatch({ type: "CLOSE" }), []);
+  const close = useCallback(() => {
+    // Closing abandons the read in flight (its answer is dropped by the reducer), so opening again
+    // is allowed to start a fresh one.
+    inFlight.current = false;
+    dispatch({ type: "CLOSE" });
+  }, []);
 
   useEffect(() => {
     if (state.focus === null) return;

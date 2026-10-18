@@ -198,16 +198,21 @@ export function resolvePurchaseCtaState(input: {
  * Whether the sticky bar is on screen.
  *
  * It exists to keep the primary action reachable while the real one is out of view, so it shows
- * only on a narrow viewport and only once the panel itself is not intersecting. Until the client
- * has measured both, it is absent: a server-rendered page never carries a bar over its content.
+ * only on a narrow viewport, only once the panel itself is not intersecting, and only while the
+ * shopper is still within the product detail region. Past that region (the related grid, the
+ * footer) there is nothing left to buy from this page, and a fixed bar would only cover content.
+ * Until the client has measured all of it, the bar is absent: a server-rendered page never carries
+ * a bar over its content.
  */
 export function resolveStickyBarVisible(input: {
   ready: boolean;
   wide: boolean;
   panelIntersecting: boolean;
+  /** Whether the product detail region still overlaps the viewport, less the bar's own height. */
+  regionIntersecting: boolean;
   ctaKind: PurchaseCtaKind;
 }): boolean {
-  if (!input.ready || input.wide || input.panelIntersecting) return false;
+  if (!input.ready || input.wide || input.panelIntersecting || !input.regionIntersecting) return false;
   // With nothing to buy there is no action to keep reachable.
   return input.ctaKind !== "none";
 }

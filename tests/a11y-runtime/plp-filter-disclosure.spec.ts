@@ -260,6 +260,34 @@ test("removing the last chip lands focus on the trigger, not the body", async ({
   await expect(trigger(page)).toBeFocused();
 });
 
+test("removing a chip while the panel is open closes it and leaves focus on the next chip, not the trigger", async ({ page }) => {
+  await page.goto(`${BASE_URL}/shop?color=Ink&size=M&availability=in-stock`, { waitUntil: "networkidle" });
+  await trigger(page).click();
+  await expect(trigger(page)).toHaveAttribute("aria-expanded", "true");
+
+  const applied = page.getByRole("list", { name: "Bộ lọc đang áp dụng" });
+  await applied.getByRole("link", { name: "Bỏ lọc Màu: Ink" }).focus();
+  await page.keyboard.press("Enter");
+  await page.waitForURL((url) => !url.searchParams.has("color"));
+
+  await expect(trigger(page)).toHaveAttribute("aria-expanded", "false");
+  await expect(applied.getByRole("link", { name: /^Bỏ lọc Kích cỡ/ })).toBeFocused();
+  // Give a late focus request time to land; the chip must still have it.
+  await page.waitForTimeout(500);
+  await expect(applied.getByRole("link", { name: /^Bỏ lọc Kích cỡ/ })).toBeFocused();
+  await expect(trigger(page)).not.toBeFocused();
+});
+
+test("removing the last chip while the panel is open lands focus on the trigger", async ({ page }) => {
+  await page.goto(`${BASE_URL}/shop?color=Ink`, { waitUntil: "networkidle" });
+  await trigger(page).click();
+  const applied = page.getByRole("list", { name: "Bộ lọc đang áp dụng" });
+  await applied.getByRole("link", { name: "Bỏ lọc Màu: Ink" }).click();
+  await page.waitForURL((url) => !url.searchParams.has("color"));
+  await expect(trigger(page)).toHaveAttribute("aria-expanded", "false");
+  await expect(trigger(page)).toBeFocused();
+});
+
 test("768px is still collapsed; 1440px shows the whole form with no trigger", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1024 });
   await page.goto(`${BASE_URL}/shop`, { waitUntil: "networkidle" });

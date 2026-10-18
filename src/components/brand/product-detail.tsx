@@ -54,6 +54,7 @@ export function BrandProductDetail({
 }: BrandProductDetailProps) {
   const controller = useVariantSelection(selection);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const regionRef = useRef<HTMLDivElement | null>(null);
   const cta = resolvePurchaseCtaState({
     view: controller.view,
     selection: controller.selection,
@@ -62,12 +63,16 @@ export function BrandProductDetail({
   const stickyBar = usePdpStickyBar({
     enabled: mobileInteractions,
     panelRef,
+    regionRef,
     wideQuery: "(min-width: 1024px)",
     ctaKind: cta.kind,
   });
 
   return (
-    <div className={`${mobileInteractions ? "max-lg:pb-24 " : ""}mt-7 grid min-w-0 gap-10 border-t border-black/20 pt-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16`}>
+    <div
+      ref={regionRef}
+      className={`${mobileInteractions ? "max-lg:pb-24 " : ""}mt-7 grid min-w-0 gap-10 border-t border-black/20 pt-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] lg:gap-16`}
+    >
       <BrandProductGallery
         media={media}
         productName={productName}
@@ -88,6 +93,7 @@ export function BrandProductDetail({
         <PdpStickyPurchaseBar
           cta={cta}
           price={controller.view.priceDisplay}
+          preorderLabel={controller.view.preorderMessage}
           message={controller.message}
           onAdd={controller.addToBag}
           onChoose={(key) => focusMissingOption(panelRef.current, key)}
