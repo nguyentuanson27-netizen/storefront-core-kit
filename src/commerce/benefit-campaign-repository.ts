@@ -42,6 +42,7 @@ export type BenefitWriteRefusal =
   | "ALREADY_STARTED"
   | "ALREADY_ENABLED"
   | "WINDOW_ENDED"
+  | "CONFLICT_SCAN_LIMIT"
   | "CONFLICT";
 
 export type BenefitWriteResult =
@@ -206,22 +207,23 @@ export async function replaceBenefitCampaignDraft(
 async function scopeOf(
   tx: Prisma.TransactionClient,
   targets: readonly { productId: string | null; variantId: string | null }[],
-): Promise<ReadonlySet<string> | null> {
-  if (targets.length === 0) return null;
+): Promise<Pick<BenefitScopeFacts, "productIds" | "variantProductIds">> {
+  if (targets.length === 0) return { productIds: null, variantProductIds: new Map() };
   const products = new Set<string>();
   const variantIds: string[] = [];
   for (const target of targets) {
     if (target.productId) products.add(target.productId);
     if (target.variantId) variantIds.push(target.variantId);
   }
+  const variantProductIds = new Map<string, string>();
   if (variantIds.length > 0) {
     const variants = await tx.variantMirror.findMany({
       where: { id: { in: variantIds } },
-      select: { productId: true },
+      select: { id: true, productId: true },
     });
-    for (const variant of variants) products.add(variant.productId);
+    for (const variant of variants) variantProductIds.set(variant.id, variant.productId);
   }
-  return products;
+  return { productIds: products, variantProductIds };
 }
 
 /** Enables a draft if no accepted overlap rule forbids it. All checks and the write share one lock. */
@@ -239,6 +241,7 @@ export async function publishBenefitCampaign(
     if (!campaign) return { ok: false, reason: "NOT_FOUND" };
     if (campaign.version !== expectedVersion) return { ok: false, reason: "STALE_VERSION" };
     if (campaign.isEnabled) return { ok: false, reason: "ALREADY_ENABLED" };
+    if (campaign.enabledAt !== null) return { ok: false, reason: "ALREADY_STARTED" };
     if (campaign.endsAt !== null && campaign.endsAt.getTime() <= now.getTime()) {
       return { ok: false, reason: "WINDOW_ENDED" };
     }
@@ -249,7 +252,7 @@ export async function publishBenefitCampaign(
       name: campaign.name,
       startsAt: campaign.startsAt,
       endsAt: campaign.endsAt,
-      productIds: await scopeOf(tx, campaign.targets),
+      ...(await scopeOf(tx, campaign.targets)),
     };
 
     const stillRunning = { OR: [{ endsAt: null }, { endsAt: { gt: now } }] };
@@ -257,14 +260,16 @@ export async function publishBenefitCampaign(
       tx.benefitCampaign.findMany({
         where: { isEnabled: true, id: { not: id }, ...stillRunning },
         include: { targets: { select: { productId: true, variantId: true } } },
-        take: 500,
+        take: 501,
       }),
       tx.promotionCampaign.findMany({
         where: { isEnabled: true, ...stillRunning },
         include: { targets: { select: { productId: true, variantId: true } } },
-        take: 500,
+        take: 501,
       }),
     ]);
+    if (otherBenefit.length > 500 || legacy.length > 500) return { ok: false, reason: "CONFLICT_SCAN_LIMIT" };
+
     const toFacts = async (
       rows: readonly { id: string; name: string; startsAt: Date | null; endsAt: Date | null; targets: { productId: string | null; variantId: string | null }[] }[],
     ): Promise<BenefitScopeFacts[]> =>
@@ -274,7 +279,7 @@ export async function publishBenefitCampaign(
           name: row.name,
           startsAt: row.startsAt,
           endsAt: row.endsAt,
-          productIds: await scopeOf(tx, row.targets),
+          ...(await scopeOf(tx, row.targets)),
         })),
       );
 
