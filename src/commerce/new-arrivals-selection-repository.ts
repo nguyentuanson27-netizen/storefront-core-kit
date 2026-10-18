@@ -133,3 +133,42 @@ export async function replaceNewArrivalsSelection(
     return { ok: true, revision: next };
   });
 }
+
+type ProductReadClient = Pick<Prisma.TransactionClient, "productMirror">;
+
+export type NewArrivalsProductLabel = Readonly<{ id: string; name: string; slug: string }>;
+
+/** Names for the admin list. Ids the catalog no longer has are simply absent from the map. */
+export async function readNewArrivalsProductLabels(
+  client: ProductReadClient,
+  productIds: readonly string[],
+): Promise<Map<string, NewArrivalsProductLabel>> {
+  if (productIds.length === 0) return new Map();
+  const rows = await client.productMirror.findMany({
+    where: { id: { in: [...productIds] } },
+    select: { id: true, name: true, slug: true },
+  });
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+/** Admin product picker: bounded query, bounded result, present products only. */
+export async function searchProductsForNewArrivals(
+  client: ProductReadClient,
+  rawQuery: string,
+  { take = 10 }: Readonly<{ take?: number }> = {},
+): Promise<NewArrivalsProductLabel[]> {
+  const query = rawQuery.trim().slice(0, 80);
+  if (query.length < 2) return [];
+  return client.productMirror.findMany({
+    where: {
+      isPresent: true,
+      OR: [
+        { name: { contains: query, mode: "insensitive" } },
+        { slug: { contains: query, mode: "insensitive" } },
+      ],
+    },
+    orderBy: [{ name: "asc" }, { id: "asc" }],
+    take: Math.min(Math.max(take, 1), 20),
+    select: { id: true, name: true, slug: true },
+  });
+}

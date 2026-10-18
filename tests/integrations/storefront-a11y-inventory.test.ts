@@ -10,6 +10,7 @@ const A11Y_DIRECTORY = fileURLToPath(new URL("../a11y-runtime/", import.meta.url
 const ADMIN_ONLY_AXE_SPECS = new Set([
   "admin-collections.spec.ts",
   "admin-editor.spec.ts",
+  "admin-new-arrivals.spec.ts",
 ]);
 
 async function listAxeSpecs(): Promise<Array<{ name: string; source: string }>> {

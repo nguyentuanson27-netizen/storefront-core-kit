@@ -88,10 +88,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: Check signed-off child spec/migration links first, then `pnpm prisma:validate` and `pnpm test:db` curation/reorder/concurrency/migration.
   - Evidence: PR #42; migration `20261018160000_add_new_arrivals_selection` (two new tables, additive, applied only to CI/local databases); `src/commerce/new-arrivals-selection-repository.ts`, `src/commerce/new-arrivals-paging.ts` (no caller, no route change, no flag needed: nothing reads it until B03). Tests: `tests/domain/new-arrivals-paging.test.ts` (6), `tests/database/new-arrivals-selection.test.ts` (11): round trip + dense positions, atomic full reversal, 500 accepted / 501 refused, DB-level CHECK/UNIQUE/FK, stale revision, two concurrent writers => one wins, cascade on product delete, admin removal keeps slot. `prisma migrate diff` after the migration is empty (no drift). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [ ] **B02 — Expose admin-only arrivals curator** [B; deps: B01; Admin auth review]
-  - [ ] Acceptance: Only admins change selection, with reliable validation feedback and persisted ordering.
-  - [ ] Verification: `pnpm test:domain` admin/auth and `pnpm test:db` writes; authenticated HTTP smoke.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **B02 — Expose admin-only arrivals curator** [B; deps: B01; Admin auth review]
+  - [x] Acceptance: Only admins change selection, with reliable validation feedback and persisted ordering.
+  - [x] Verification: `pnpm test:domain` admin/auth and `pnpm test:db` writes; authenticated HTTP smoke.
+  - Evidence: PR #43; `/admin/new-arrivals` (`src/app/admin/new-arrivals/{page,actions}.tsx`), pure planner `src/commerce/new-arrivals-admin.ts`, picker/label reads in the B01 repository. Server actions re-authorize with `requireCurrentAdmin()`; the page uses `requireCurrentAdminPage()`; outcomes are a redirect carrying a typed reason from a closed set. Tests: `tests/domain/new-arrivals-admin.test.ts` (9), `tests/a11y-runtime/admin-new-arrivals.spec.ts` (3, desktop admin project): search + add, reorder, remove, persisted order, axe on empty/filled/error, stale editor announced and focused with the newer order intact, hostile `?error=` never rendered, unauthenticated visitor redirected. Public `/new-arrivals` is unchanged (B03). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **B03 — Add ON/OFF curated arrivals read model** [B; deps: B01, B02; GB1 pagination/empty-state approval + route/SEO parity]
   - [ ] Acceptance: **Recheck approved GB1 spec**: OFF original editorial/no data query; ON+empty editorial frame and accessible empty-list status (zero cards, no fallback/redirect); ON+selection preserves manual order and canonical pricing across bounded pages.

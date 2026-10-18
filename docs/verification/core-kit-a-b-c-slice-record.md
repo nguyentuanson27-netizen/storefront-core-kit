@@ -70,7 +70,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | A01 laq2 role lines and proof | #39 | `384cab8` | 15/15 checks success on `d905ec7` | none (unwired pure module) | no caller; `laq1` module untouched; no schema | revert the PR |
 | A05 benefit eligibility and shipping basis | #40 | `dfa98a5` | 15/15 checks success on `3fa4804` | none (unwired pure module) | no caller; legacy pricing and shipping modules untouched | revert the PR |
 | Delegated decisions + G3 review (docs) and A03 capacity demand | #41 | `4d6ba4c` | 15/15 checks success on `6b06517` | none | A03 is an unwired pure helper plus tests over the unchanged reservation path; no schema | revert the PR |
-| B01 curated new-arrivals persistence | #42 | _recorded after merge_ | _recorded after CI_ | none needed (nothing reads the tables until B03) | additive migration: two new tables, no existing object altered; no caller | flag/route do not exist yet, so nothing to switch; revert the PR before any row exists, otherwise leave the tables |
+| B01 curated new-arrivals persistence | #42 | `beaabad` | 15/15 checks success on `a4d3165` (the first head `c7ee406` failed `verify`: two source comments tripped the U1 language inventory; fixed in `a4d3165`) | none needed (nothing reads the tables until B03) | additive migration: two new tables, no existing object altered; no caller | flag/route do not exist yet, so nothing to switch; revert the PR before any row exists, otherwise leave the tables |
+| B02 admin new-arrivals curator | #43 | _recorded after merge_ | _recorded after CI_ | none (admin-only page; public route untouched until B03) | admin surface only; no public read; no migration | revert the PR; data stays in the B01 tables |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -97,6 +98,10 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 Migration `20261018160000_add_new_arrivals_selection`: `NewArrivalsSelection` (unique product, unique **deferrable** position, `CHECK 0 <= position < 500`, FK cascade to the product, `SetNull` to the admin) and the single-row `NewArrivalsSelectionState` revision. The 500-slot ceiling is therefore a database fact, not only an application check. `prisma migrate diff` against the migrated database is empty, which closes the "no Prisma drift for a deferrable unique" check.
 
 `replaceNewArrivalsSelection` replaces the ordered selection in one transaction: it row-locks the state row (concurrent admins serialize), compares the editor's revision (a stale editor is refused), validates products, rewrites dense positions and advances the revision. Pages are read by stored rank. Nothing in the app reads these tables yet; B02 (admin) and B03 (route) are next, so no flag exists for B01 and no behavior changed.
+
+## B02 — admin curator
+
+`/admin/new-arrivals` (nav link "Hàng mới"): an ordered table with a position number and a remove checkbox per row, a GET search form and per-result "Thêm" forms. Works without JavaScript. Both Server Actions re-authorize with `requireCurrentAdmin()`; every field is bounded and parsed by the pure planner (ids ≤ 64, positions 1–500 canonical, revision canonical decimal ≤ 18 digits, ≤ 500 rows, aligned arrays). A stale editor is refused with `STALE_REVISION` (announced via `role="alert"`, focused) and the newer order survives. Only a closed set of reason codes is ever rendered; a hostile `?error=` collapses to the generic message.
 
 ## B07 — bounded search suggestions
 
