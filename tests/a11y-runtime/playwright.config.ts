@@ -6,6 +6,7 @@ const adminDesktopTests = [
   "admin-editor.spec.ts",
   "admin-editor-compact.spec.ts",
   "admin-new-arrivals.spec.ts",
+  "homepage-featured.spec.ts",
 ];
 
 export default defineConfig({
@@ -31,6 +32,7 @@ export default defineConfig({
     "facebook-pixel-disabled.spec.ts",
     "flash-sale-freshness.spec.ts",
     "footer-support.spec.ts",
+    "homepage-featured.spec.ts",
     "homepage-taxonomy.spec.ts",
     "merchant-return-policy.spec.ts",
     "new-arrivals-curation.spec.ts",

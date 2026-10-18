@@ -22,6 +22,13 @@ import { selectEditorialPanels, type EditorialPanel } from "./editorial-panels.t
  * money rules live.
  */
 
+/** Strictly `"true"` turns the curated homepage selection on; anything else, including unset, is OFF. */
+export function readHomepageFeaturedEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return env.HOMEPAGE_FEATURED_ENABLED === "true";
+}
+
 /** The fields of a catalog product this route actually reads. */
 export type HomeProduct = Readonly<{
   id: string;
