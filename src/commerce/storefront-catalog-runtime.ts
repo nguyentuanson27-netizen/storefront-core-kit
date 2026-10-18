@@ -7,6 +7,11 @@ import {
   type StorefrontDiscoveryQuery,
 } from "./storefront-discovery.ts";
 import { createStorefrontProductDetailRepository } from "./storefront-product-detail.ts";
+import { readRelatedOverrideIds } from "./related-product-override-repository.ts";
+import {
+  readRelatedOverrideEnabled,
+  selectRelatedOverride,
+} from "./related-product-override.ts";
 import { listRelatedStorefrontProducts } from "./storefront-related-products.ts";
 import { createStorefrontProductSlugResolver } from "./storefront-product-slug-resolution.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
@@ -145,6 +150,18 @@ export async function listConfiguredRelatedStorefrontProducts(
 ) {
   const shopId = readPancakeShopId();
   const catalog = createStorefrontCatalogRepository(prisma);
+
+  // Off (the default) the override table is never read. On, the administrator's manual candidates
+  // come first, filtered to what is currently visible; with none to show, the collection-projected
+  // related products below are used exactly as before.
+  if (readRelatedOverrideEnabled()) {
+    const manualIds = await readRelatedOverrideIds(prisma, currentProduct.id);
+    if (manualIds.length > 0) {
+      const { products } = await catalog.listProductsByIds({ shopId, productIds: manualIds, now });
+      const manual = selectRelatedOverride(currentProduct.id, products);
+      if (manual.length > 0) return manual;
+    }
+  }
 
   return listRelatedStorefrontProducts({
     currentProduct,

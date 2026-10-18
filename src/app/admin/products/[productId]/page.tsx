@@ -501,6 +501,15 @@ export default async function ProductEditorPage({ params, searchParams }: Produc
 
       <ProductPromotionsSummary campaigns={relatedCampaigns} />
 
+      <p className="text-sm">
+        <Link
+          className="font-semibold underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-4"
+          href={`/admin/products/${persistedProductId}/related`}
+        >
+          Sản phẩm liên quan thủ công →
+        </Link>
+      </p>
+
       <ProductEditorialForm
         action={saveProductContent}
         collectionChoices={collectionChoices}

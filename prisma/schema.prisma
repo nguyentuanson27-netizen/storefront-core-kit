@@ -93,6 +93,7 @@ model User {
   sellingPoliciesUpdated ProductSellingPolicy[] @relation("SellingPolicyUpdatedBy")
   newArrivalsUpdated NewArrivalsSelection[] @relation("NewArrivalsUpdatedBy")
   homepageFeaturedUpdated HomepageFeaturedProduct[] @relation("HomepageFeaturedUpdatedBy")
+  relatedOverridesUpdated RelatedProductOverride[] @relation("RelatedOverrideUpdatedBy")
 
   @@map("user")
 }
@@ -186,6 +187,8 @@ model ProductMirror {
   sellingPolicy     ProductSellingPolicy?
   newArrivalsSelection NewArrivalsSelection?
   homepageFeatured HomepageFeaturedProduct?
+  relatedOverrides RelatedProductOverride[] @relation("RelatedOverrideOwner")
+  relatedOverrideRefs RelatedProductOverride[] @relation("RelatedOverrideTarget")
   slugHistory       ProductSlugHistory[]
   promotionTargets  PromotionTarget[]
 
@@ -621,4 +624,28 @@ model HomepageFeaturedState {
   id        String   @id @default("current")
   revision  BigInt   @default(0)
   updatedAt DateTime @updatedAt
+}
+
+/// One manually chosen "related product" for a product (A/B/C plan B05). Website-owned; catalog sync
+/// never writes it. Absence of rows means "use the documented fallback" (collection-projected
+/// related products), never "no related products".
+///
+/// The migration adds `CHECK (productId <> relatedProductId)` and `CHECK (position >= 0 AND position < 8)`,
+/// and makes `(productId, position)` a DEFERRABLE INITIALLY DEFERRED unique so a reorder can pass
+/// through duplicate positions. Both foreign keys cascade: deleting either product removes the pair.
+model RelatedProductOverride {
+  id               String        @id @default(cuid())
+  productId        String
+  relatedProductId String
+  position         Int
+  addedAt          DateTime      @default(now())
+  updatedByUserId  String?
+  product          ProductMirror @relation("RelatedOverrideOwner", fields: [productId], references: [id], onDelete: Cascade)
+  relatedProduct   ProductMirror @relation("RelatedOverrideTarget", fields: [relatedProductId], references: [id], onDelete: Cascade)
+  updatedBy        User?         @relation("RelatedOverrideUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([productId, relatedProductId])
+  @@unique([productId, position])
+  @@index([relatedProductId])
+  @@index([updatedByUserId])
 }
