@@ -11,5 +11,6 @@
 | [0007](./0007-configurable-merchant-apparel-facts.md) | **Accepted** | O3 uses approved `male/adult/new` shop defaults with local product overrides and fail-closed Merchant resolution |
 | [0008](./0008-merchant-manufacturer-mpn-source.md) | **Accepted** | Merchant manufacturer MPN comes from Pancake variation `display_id` mirrored as `pancakeDisplayId`; local `VariantMirror.sku` ownership is unchanged |
 | [0009](./0009-permanent-production-domain.md) | **Accepted** | Official permanent storefront is `www.lafashion.asia`; legacy temporary host remains noindex and indexing stays separately gated |
+| [0010](./0010-category-taxonomy-vs-collections.md) | **Proposed — owner decision required** | Category taxonomy versus current collections (A/B/C task B08); recommendation is KEEP collections |
 
 ADR files are retained as historical records when superseded or amended. The newest accepted ADR governs where decisions overlap, including repository workflow policy documented by ADR 0005, Merchant domain authority documented by ADR 0009, Merchant apparel-fact policy documented by ADR 0007, and Merchant manufacturer-MPN source/ownership semantics documented by ADR 0008.
