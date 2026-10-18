@@ -148,10 +148,16 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: `pnpm test:domain` filter model and `tests/a11y-runtime/discovery.spec.ts` browser/keyboard.
   - Evidence: PR #30; `src/components/headless/plp-filter-model.ts` (pure), `use-plp-filter-disclosure.ts` (hook), brand adapter `src/components/brand/listing-filter-region.tsx`; flag `SHOP_FILTER_DISCLOSURE_ENABLED` default OFF. Local on base `main@75e69b4`: lint 0 errors, typecheck, new domain tests, `plp-filter-disclosure.spec.ts` 7/7 plus the unchanged `discovery.spec.ts` 2/2 in Chromium (390×844, 768×1024, 1440×900, axe, keyboard). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [x] **C03 — Add optional accessible headless cart drawer** [C; deps: F00; Independent]
-  - [x] Acceptance: Keyboard focus trap/restore and Escape work; stale/double mutations do not lose buyer data. (The v1 drawer is read-only, so it performs no mutation; stale and double opens are handled by request-id sequencing.) OFF retains existing cart page; drawer never recalculates item money or stock.
-  - [x] Verification: `pnpm test:domain` cart models + `tests/a11y-runtime/checkout.spec.ts` and mobile keyboard. (Browser evidence is the new `cart-drawer.spec.ts`; the existing cart/checkout specs are the OFF regression.)
-  - Evidence: PR #32; `src/components/headless/cart-drawer-model.ts` (pure), `use-cart-drawer.ts`, brand `src/components/brand/cart-drawer.tsx`, read model `src/routes/cart-drawer-model.ts` + server action `src/routes/cart-drawer.ts`; flag `CART_DRAWER_ENABLED` default OFF. Local on base `main@ca8dceb`: lint 0 errors, typecheck, `pnpm test`, `cart-drawer.spec.ts` 6/6 in Chromium (390×844, 1440×900, axe, keyboard, Tab trap). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
+- [x] **C03 — Add optional accessible headless cart drawer** [C; deps: F00; Independent] — **v1 is read-only (see C03b)**
+  - [x] Acceptance (read-only scope): Keyboard focus trap/restore and Escape work; opening is single-flight and stale answers are dropped; OFF retains the existing cart page; the drawer never recalculates item money or stock.
+  - [ ] Not covered by v1: "stale/double **mutations** do not lose buyer data" has no subject because the drawer performs no mutation. Quantity change and removal remain on `/cart`. This line stays unticked until C03b exists.
+  - [x] Verification: `pnpm test:domain` cart models and the browser spec `tests/a11y-runtime/cart-drawer.spec.ts` (the existing cart/checkout specs are the OFF regression).
+  - Evidence: PR #32 (merged), review follow-up in the fix PR; `src/components/headless/cart-drawer-model.ts` (pure), `use-cart-drawer.ts`, brand `src/components/brand/cart-drawer.tsx`, read model `src/routes/cart-drawer-model.ts` + server action `src/routes/cart-drawer.ts`; flag `CART_DRAWER_ENABLED` default OFF. Exact-head CI and merge SHAs in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
+
+- [ ] **C03b — Edit quantity / remove a line inside the cart drawer** [C; deps: C03; Optional, not started]
+  - [ ] Acceptance: reuse `useCartLine` and the canonical cart mutation; no money or stock recalculation in the drawer; stale or double mutations do not lose buyer data; focus returns sensibly after a removal.
+  - [ ] Verification: `pnpm test:domain` drawer mutation rules and a browser spec for double click, stale line and removal focus.
+  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
 - [ ] **A10 — Implement safe upsell add-one and checkout adapter** [A; deps: A09; Canonical cart mutation; no C03]
   - [ ] Acceptance: Server-validated idempotent add-one and quote refresh use current `storefront-cart-actions`, with optional checkout adapter independent of drawer.

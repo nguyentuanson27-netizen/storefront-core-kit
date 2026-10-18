@@ -1,5 +1,6 @@
 import { buildPromotionalStorefrontPricing } from "./storefront-promotion-projection.ts";
 import { readApplicablePromotionCampaignsBatched } from "./promotion-candidate-batching.ts";
+import type { PromotionCandidateReadClient } from "./promotion-candidate-repository.ts";
 import { resolveStorefrontPromotionRefresh } from "./storefront-promotion-freshness.ts";
 import { Prisma, type PrismaClient } from "../generated/prisma/client.ts";
 import { withAdvisorySellableStock } from "./capacity-reservation-repository.ts";
@@ -759,8 +760,11 @@ export function createStorefrontCatalogRepository(
     const pageVariantIds = orderedProducts.flatMap((product) =>
       product.variants.map((variant) => variant.id),
     );
+    // Through this repository's own client, so a repository built on a budgeted client stays inside
+    // its budget for the promotion read too; the shared client is what it receives in the app.
     const { campaignsByVariantId } = await readApplicablePromotionCampaignsBatched({
       variantIds: pageVariantIds,
+      client: client as unknown as PromotionCandidateReadClient,
     });
     const { refreshAfterMs } = resolveStorefrontPromotionRefresh({
       now,

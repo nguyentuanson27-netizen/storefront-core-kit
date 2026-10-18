@@ -73,6 +73,15 @@ test("the listing re-rendering for a new filter state closes the open panel onto
   assert.deepEqual([closed.open, closed.focus], [false, "trigger"]);
 });
 
+test("navigating with restoreFocus:false closes the panel and asks for no focus, so a chip's neighbour keeps it", () => {
+  const opened = run([{ type: "TOGGLE" }, { type: "FOCUS_HANDLED" }], narrow);
+  const closed = run([{ type: "NAVIGATED", restoreFocus: false }], opened);
+  assert.deepEqual([closed.open, closed.focus], [false, null]);
+  // The default is unchanged: no flag still returns focus to the trigger.
+  assert.equal(run([{ type: "NAVIGATED" }], opened).focus, "trigger");
+  assert.equal(run([{ type: "NAVIGATED", restoreFocus: true }], opened).focus, "trigger");
+});
+
 test("navigating while already collapsed does not steal focus", () => {
   assert.equal(run([{ type: "NAVIGATED" }], narrow), narrow);
 });

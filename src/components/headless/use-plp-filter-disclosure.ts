@@ -63,11 +63,14 @@ export function usePlpFilterDisclosure({
   useEffect(() => {
     if (previousStateKey.current === stateKey) return;
     previousStateKey.current = stateKey;
-    dispatch({ type: "NAVIGATED" });
 
     const pending = pendingChipFocus.current;
-    if (pending === null) return;
     pendingChipFocus.current = null;
+    // When a chip was just removed, focus belongs to its neighbour. Closing an open panel must not
+    // also ask for the trigger, or that request lands after this one and steals focus from the chip.
+    dispatch({ type: "NAVIGATED", restoreFocus: pending === null });
+    if (pending === null) return;
+
     const target =
       pending.key === null
         ? null

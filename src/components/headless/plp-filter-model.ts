@@ -29,8 +29,12 @@ export type PlpFilterDisclosureEvent =
   | Readonly<{ type: "VIEWPORT"; wide: boolean }>
   | Readonly<{ type: "TOGGLE" }>
   | Readonly<{ type: "ESCAPE" }>
-  /** The listing re-rendered for a different filter state. */
-  | Readonly<{ type: "NAVIGATED" }>
+  /**
+   * The listing re-rendered for a different filter state. `restoreFocus: false` closes an open
+   * panel without asking for focus on the trigger, for when the caller has already decided where
+   * focus belongs (a removed chip's neighbour); it defaults to restoring focus to the trigger.
+   */
+  | Readonly<{ type: "NAVIGATED"; restoreFocus?: boolean }>
   | Readonly<{ type: "FOCUS_HANDLED" }>;
 
 export const INITIAL_PLP_FILTER_DISCLOSURE: PlpFilterDisclosureState = Object.freeze({
@@ -72,7 +76,7 @@ export function reducePlpFilterDisclosure(
       // Applying a filter ends the task the panel was open for; the shopper lands on the trigger,
       // which now also states how many filters are active.
       if (!state.ready || state.wide || !state.open) return state;
-      return next(state, { open: false, focus: "trigger" });
+      return next(state, { open: false, focus: event.restoreFocus === false ? null : "trigger" });
 
     case "FOCUS_HANDLED":
       return state.focus === null ? state : next(state, { focus: null });

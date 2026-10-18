@@ -64,6 +64,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | C01 | #31 | `ca8dceb` | 15/15 checks success on `9c82d26` | `PDP_MOBILE_INTERACTIONS_ENABLED` (OFF) | flag OFF renders the unchanged gallery and detail; unmodified `pdp-promotion`, `storefront-media`, `variant-deep-link` specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
 | C03 | #32 | `ebe7197` | 15/15 checks success on `05215fd` | `CART_DRAWER_ENABLED` (OFF) | flag OFF renders the plain header link; the server action answers `null` without a database read; unmodified cart/footer/not-found specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
 | C05 | #33 | `ec57980` | 15/15 checks success on `31c67f3` | `SEARCH_OVERLAY_ENABLED` (OFF; needs `SEARCH_SUGGESTIONS_ENABLED`) | flag OFF renders plain `/search` links; unmodified `editorial` and `evergreen-pages` specs pass against an OFF server | set either flag `false` and recreate `app`; no migration |
+| Review fixes (#29–#32) | #36 | _recorded after merge_ | _recorded after CI_ | none new | all five flags still default OFF; no migration; flag-OFF specs unchanged | revert the PR; the fixes are independent of each other |
 
 ## B07 — bounded search suggestions
 
@@ -170,10 +171,10 @@ added, so there is nothing to apply or roll back at the database.
 
 | Flag (all default OFF, exact `"true"` only) | Slice | Needs | Residual before production enablement |
 | --- | --- | --- | --- |
-| `SEARCH_SUGGESTIONS_ENABLED` | B07 | — | no dedicated rate limit (same exposure as `GET /shop?q=`); invisible until C05 |
+| `SEARCH_SUGGESTIONS_ENABLED` | B07 | — | no request-rate limit (same exposure as `GET /shop?q=`); time and connections are now bounded in the database (see review fixes); invisible until C05 |
 | `SHOP_FILTER_DISCLOSURE_ENABLED` | C02 | — | real-device and screen-reader pass; `/shop` content depends on a script to reveal (pre-existing) |
-| `PDP_MOBILE_INTERACTIONS_ENABLED` | C01 | — | real touch device; the bar covers ~70px at the bottom while showing |
-| `CART_DRAWER_ENABLED` | C03 | — | screen-reader pass; read-only by design |
+| `PDP_MOBILE_INTERACTIONS_ENABLED` | C01 | — | real touch device; the bar covers ~70px at the viewport bottom while the shopper is within the product detail (it hides past it) |
+| `CART_DRAWER_ENABLED` | C03 | — | screen-reader pass; read-only by design (editing is C03b, not started) |
 | `SEARCH_OVERLAY_ENABLED` | C05 | `SEARCH_SUGGESTIONS_ENABLED` | the B07 rate-limit decision; screen-reader pass |
 
 Each flag follows the runbook in [`docs/operations/release-and-rollback.md`](../operations/release-and-rollback.md): set it in
@@ -192,3 +193,27 @@ of them is a production change and still needs the owner's explicit approval (ga
 
 No gate was waived, no checkbox was ticked for a blocked task, and no production system, Pancake order or database outside the
 local test instance was touched.
+
+## Review follow-up on #29–#32 (fix PR)
+
+Four required findings and two suggestions from review, fixed in one PR. Each fix has a test that was verified to **fail with the fix
+removed** (the fix was temporarily reverted, the test run, then restored), so the tests catch the original defect.
+
+| # | Finding | Fix | Evidence |
+| --- | --- | --- | --- |
+| #30 (P2) | Removing a filter chip while the collapsed panel was open could move focus to the trigger instead of the next chip: closing the panel asked for trigger focus, and that request landed after the chip focus | `NAVIGATED` takes `restoreFocus`; the hook passes `false` when a chip removal is pending, so the panel closes without a competing focus request. No chip left still falls back to the trigger | domain: `restoreFocus:false` closes with no focus intent, default unchanged; browser: open panel → remove a chip by keyboard → focus stays on the next chip (checked again 500 ms later) and the panel is closed; last chip → trigger |
+| #31 (P2) | The sticky bar did not show the Preorder state | The bar shows the panel's own `view.preorderMessage` (the brand preorder label) when the CTA state is `preorder` | browser, with selling modes and preorder on in the test server: a PREORDER option shows `[data-preorder-marker]` equal to the brand label; a ready option shows none |
+| #31 (P2) | The bar covered the footer once the shopper scrolled to the bottom | `resolveStickyBarVisible` also requires the product detail region to overlap the viewport minus the bar's height (a second `IntersectionObserver` with a `-80px` bottom margin) | domain: region off-screen → hidden; browser: scroll to the bottom → bar hidden, the last footer link scrolls into view, is focusable and is the element at its own centre point; scrolling back up restores the bar |
+| #32 (P2) | Activating the cart link twice in one tick called the server twice although the reducer ignored the second open | A synchronous single-flight guard in the hook (released by the current read's answer or by close; a late answer from a closed read cannot release a newer one) | browser: two `click()` calls before React re-renders → exactly one server action request, the drawer fills; after close, opening again is a second, unblocked read |
+| #29 (suggestion) | The 1,500 ms timeout did not cancel the database query | Suggestions read through a dedicated client (`src/db/budgeted-prisma.ts`, `src/db/search-suggestions-prisma.ts`) with Postgres `statement_timeout` 1,500 ms and a pool capped at 4 connections, created on first use. The promotion read inside the discovery page now uses the repository's own client, so the whole read stays inside the budget | DB: a `pg_sleep(3)` is cancelled by Postgres within 2 s with a statement-timeout error, is no longer `active` in `pg_stat_activity` afterwards, the client stays usable, and a 1-connection pool serializes two 0.4 s reads |
+| #32 (suggestion) | C03 was ticked although the drawer is read-only | Checklist and runbook now state the read-only scope; the "stale/double mutations" acceptance line is **unticked** (it has no subject until the drawer can mutate); quantity editing is tracked as **C03b**, not started | `tasks/core-kit-reusable-a-b-c-v1-todo.md`, `docs/operations/release-and-rollback.md` |
+
+What the #29 change does **not** do: it bounds how long and how many connections a suggestion read can use. It is not a request-rate
+limit, and the residual in the release table stands until one is decided.
+
+Verified locally (PostgreSQL 16 reset to a clean database, Chromium): `pnpm lint` 0 errors, `pnpm typecheck`, `pnpm test` 1929/1929,
+`pnpm test:db` 490/490, `pnpm build`; the three specs that gained tests (`plp-filter-disclosure`, `pdp-mobile-interactions`,
+`cart-drawer`) 25/25; and a regression run of the specs that exercise the changed code with every flag in its default or test-server
+state (`discovery`, `pdp-promotion`, `storefront-media`, `variant-deep-link`, `storefront-commerce`, `selling-modes`,
+`search-overlay`) 31/31. A first `test:db` run showed three unrelated failures (homepage-position, sitemap, capacity-count); they came from rows
+left in the local database by earlier browser runs, and passed after the database was recreated.
