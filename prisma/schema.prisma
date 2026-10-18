@@ -91,6 +91,7 @@ model User {
   carts         Cart[]
   orders        OrderMirror[]
   sellingPoliciesUpdated ProductSellingPolicy[] @relation("SellingPolicyUpdatedBy")
+  newArrivalsUpdated NewArrivalsSelection[] @relation("NewArrivalsUpdatedBy")
 
   @@map("user")
 }
@@ -182,6 +183,7 @@ model ProductMirror {
   content           ProductContent?
   merchantFacts     ProductMerchantFacts?
   sellingPolicy     ProductSellingPolicy?
+  newArrivalsSelection NewArrivalsSelection?
   slugHistory       ProductSlugHistory[]
   promotionTargets  PromotionTarget[]
 
@@ -565,4 +567,33 @@ model SyncEvent {
 
   @@index([kind, status])
   @@index([externalId])
+}
+
+/// One slot of the curated New Arrivals selection (spec: docs/specs/core-kit-new-arrivals-curation-v1.md).
+///
+/// Website-owned: catalog sync never writes it. `position` is the administrator's stable manual order
+/// and is the only ordering authority; the migration adds `CHECK (position >= 0 AND position < 500)`
+/// and makes `position` a DEFERRABLE INITIALLY DEFERRED unique constraint, so the 500-slot ceiling is
+/// a database fact and an atomic reorder can pass through a state where two rows briefly share a
+/// position. Prisma models the unique constraint but cannot express either attribute. A deleted
+/// product takes its slot with it (cascade); a hidden product keeps its slot and is suppressed at
+/// render time only.
+model NewArrivalsSelection {
+  id              String        @id @default(cuid())
+  productId       String        @unique
+  position        Int           @unique
+  addedAt         DateTime      @default(now())
+  updatedByUserId String?
+  product         ProductMirror @relation(fields: [productId], references: [id], onDelete: Cascade)
+  updatedBy       User?         @relation("NewArrivalsUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+}
+
+/// Single-row optimistic-concurrency token for the New Arrivals selection, like
+/// `PromotionPricingRevision`: bounded by construction, advanced in the same transaction as any write.
+model NewArrivalsSelectionState {
+  id        String   @id @default("current")
+  revision  BigInt   @default(0)
+  updatedAt DateTime @updatedAt
 }

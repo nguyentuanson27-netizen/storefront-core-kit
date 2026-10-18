@@ -69,7 +69,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | G1/GB1 approval record (docs only) | #38 | `25d7e49` | 13/13 checks success on `73a29d5` | none | docs only | revert the PR |
 | A01 laq2 role lines and proof | #39 | `384cab8` | 15/15 checks success on `d905ec7` | none (unwired pure module) | no caller; `laq1` module untouched; no schema | revert the PR |
 | A05 benefit eligibility and shipping basis | #40 | `dfa98a5` | 15/15 checks success on `3fa4804` | none (unwired pure module) | no caller; legacy pricing and shipping modules untouched | revert the PR |
-| Delegated decisions + G3 review (docs) and A03 capacity demand | #41 | _recorded after merge_ | _recorded after CI_ | none | A03 is an unwired pure helper plus tests over the unchanged reservation path; no schema | revert the PR |
+| Delegated decisions + G3 review (docs) and A03 capacity demand | #41 | `4d6ba4c` | 15/15 checks success on `6b06517` | none | A03 is an unwired pure helper plus tests over the unchanged reservation path; no schema | revert the PR |
+| B01 curated new-arrivals persistence | #42 | _recorded after merge_ | _recorded after CI_ | none needed (nothing reads the tables until B03) | additive migration: two new tables, no existing object altered; no caller | flag/route do not exist yet, so nothing to switch; revert the PR before any row exists, otherwise leave the tables |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -90,6 +91,12 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 ## A03 — capacity demand for PAID + GIFT lines
 
 `reserveOrderCapacity` and `planCapacityResources` already merge duplicate purchased variants, and `CapacityReservation` is unique on `(orderId, variantId)`. A03 therefore changes **no** locking or reservation code: `src/commerce/benefit-capacity-demand.ts` (unwired) derives the reservation input from the signed role lines so the held quantity always includes the gift. Database tests drive the real reservation path: PAID X×1 + GIFT X×1 holds one row of 2; stock 1 refuses atomically, including unrelated lines; two concurrent checkouts on stock 2 allow exactly one; a retry does not double-hold.
+
+## B01 — curated new-arrivals persistence
+
+Migration `20261018160000_add_new_arrivals_selection`: `NewArrivalsSelection` (unique product, unique **deferrable** position, `CHECK 0 <= position < 500`, FK cascade to the product, `SetNull` to the admin) and the single-row `NewArrivalsSelectionState` revision. The 500-slot ceiling is therefore a database fact, not only an application check. `prisma migrate diff` against the migrated database is empty, which closes the "no Prisma drift for a deferrable unique" check.
+
+`replaceNewArrivalsSelection` replaces the ordered selection in one transaction: it row-locks the state row (concurrent admins serialize), compares the editor's revision (a stale editor is refused), validates products, rewrites dense positions and advances the revision. Pages are read by stored rank. Nothing in the app reads these tables yet; B02 (admin) and B03 (route) are next, so no flag exists for B01 and no behavior changed.
 
 ## B07 — bounded search suggestions
 
