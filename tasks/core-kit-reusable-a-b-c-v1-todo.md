@@ -138,10 +138,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: `pnpm test:domain` limits; HTTP security smoke; `pnpm build` and browser network check.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **C01 — Extract portable PDP/mobile selection interaction models** [C; deps: F00; Independent]
-  - [ ] Acceptance: Selection/not chosen/out of stock/loading/preorder use existing business truth without parallel pricing.
-  - [ ] Verification: `pnpm test:domain` PDP models and `tests/a11y-runtime/pdp-promotion.spec.ts`.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **C01 — Extract portable PDP/mobile selection interaction models** [C; deps: F00; Independent]
+  - [x] Acceptance: Selection/not chosen/out of stock/loading/preorder use existing business truth without parallel pricing.
+  - [x] Verification: `pnpm test:domain` PDP models and `tests/a11y-runtime/pdp-promotion.spec.ts`.
+  - Evidence: PR #31; `src/components/headless/pdp-mobile-interaction-model.ts` (pure), `use-pdp-mobile-interactions.ts` (hooks), brand `pdp-sticky-purchase-bar.tsx` + gallery/detail wiring; flag `PDP_MOBILE_INTERACTIONS_ENABLED` default OFF. Local on base `main@26bce5a`: lint 0 errors, typecheck, `pnpm test` incl. 18 new domain tests, `pdp-mobile-interactions.spec.ts` 6/6 plus unchanged `pdp-promotion`, `storefront-media`, `variant-deep-link` specs 12/12 in Chromium (390×844, 768×1024, 1440×900, axe, keyboard, touch swipe). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [x] **C02 — Add headless PLP filter interaction** [C; deps: F00; Canonical discovery; no B07]
   - [x] Acceptance: Existing URL-backed filters and no-JS forms remain canonical; filter drawer/chips and focus states do not depend on B07 or C05.

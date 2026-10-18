@@ -57,7 +57,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | --- | --- | --- | --- | --- | --- | --- |
 | F00 | #28 | `81438ef` | 13/13 checks success on `51bdd46` | — | no code change | revert the PR |
 | B07 | #29 | `75e69b4` | 15/15 checks success on `fab04ba` | `SEARCH_SUGGESTIONS_ENABLED` (OFF) | flag OFF returns `DISABLED` before validation or any catalog statement (asserted at 0 statements); `/search`, `/shop` untouched | set the flag `false` and recreate `app`; no migration |
-| C02 | #30 | _recorded after merge_ | _recorded after CI_ | `SHOP_FILTER_DISCLOSURE_ENABLED` (OFF) | flag OFF renders the unchanged always-open form; the unmodified `discovery.spec.ts` passes against an OFF server | set the flag `false` and recreate `app`; no migration |
+| C02 | #30 | `26bce5a` | 15/15 checks success on `aa6d6c5` | `SHOP_FILTER_DISCLOSURE_ENABLED` (OFF) | flag OFF renders the unchanged always-open form; the unmodified `discovery.spec.ts` passes against an OFF server | set the flag `false` and recreate `app`; no migration |
+| C01 | #31 | _recorded after merge_ | _recorded after CI_ | `PDP_MOBILE_INTERACTIONS_ENABLED` (OFF) | flag OFF renders the unchanged gallery and detail; unmodified `pdp-promotion`, `storefront-media`, `variant-deep-link` specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
 
 ## B07 — bounded search suggestions
 
@@ -99,3 +100,21 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
   content stays in a hidden streaming container until a script reveals it. That is true with this flag off or on. The
   no-script check therefore asserts the HTML the server sends, not a script-disabled render. It is worth its own task.
 - **Not claimed:** no real-device or screen-reader run; the live region and focus order are exercised with Playwright and axe only.
+
+## C01 — mobile PDP interactions
+
+- **What shipped:** `pdp-mobile-interaction-model.ts` (pure): non-wrapping gallery step, key map (arrows/Home/End), swipe
+  classifier (48px, 1.5× horizontal dominance, 800ms), purchase CTA state (`none|pending|choose|unavailable|preorder|ready`
+  with `missing` options in the panel's own order) and sticky-bar visibility. Hooks wire pointer/key/media-query/IntersectionObserver.
+  Brand: previous/next buttons and a polite "Ảnh n trên N" status on the carousel, and `PdpStickyPurchaseBar` below 1024px.
+- **No parallel business truth:** price text is the panel's `priceDisplay`; the bar's action is the panel's own `addToBag`; the CTA
+  state reads `resolveVariantSelectionView` output (`canAdd`, `selectedUnavailableReason`, `preorderMessage`). Nothing computes money.
+- **Server never sends the bar** (asserted on the HTML); it appears after the client measures the viewport and the panel has left it.
+  The bar's add feedback is `aria-hidden`; the panel's live region is the single announcement (asserted: exactly one status carries it).
+- **Finding:** the default panel disables combinations that cannot be bought (Black+L at stock 0), so the `unavailable` CTA state is
+  unreachable through the default UI; it is covered at the model level and stays for brands whose panels allow selecting them.
+- **Known tradeoff:** the fixed bar covers ~70px at the bottom while it is showing, including over the footer after the panel is scrolled past.
+- **Verified in Chromium** (local, PostgreSQL 16): axe clean with the bar showing at 390×844 and 768×1024 and without it at 1440×900;
+  no horizontal overflow; "Chọn màu" moves focus to the first colour and hides the bar over the real panel; adding from the bar adds via
+  the panel's action; Home/End/arrow keys and a touch swipe move the gallery without wrapping and a vertical drag does not.
+- **Not claimed:** no real touch device or screen reader; swipe is synthesized pointer events.

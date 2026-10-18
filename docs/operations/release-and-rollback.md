@@ -248,6 +248,23 @@ Enable: set `SHOP_FILTER_DISCLOSURE_ENABLED=true` in `deploy/vps/.env.production
 `compose exec app node -e 'if (process.env.SHOP_FILTER_DISCLOSURE_ENABLED !== "true") process.exit(1)'`.
 Rollback is the same switch in reverse; there is nothing to migrate or clean up.
 
+## Mobile product page interactions (`PDP_MOBILE_INTERACTIONS_ENABLED`)
+
+A/B/C plan task C01. No migration. Price, purchasability, the unavailable reason and the preorder marker are still
+decided by `variant-selection-model.ts`; which photo a colour maps to is still `resolve-gallery-model.ts`. The flag only
+adds interaction: previous/next buttons, arrow/Home/End keys and touch swipe on a multi-photo gallery (no wrap-around),
+and a sticky purchase bar below 1024px that appears once the real purchase panel leaves the viewport. The bar's action is
+the panel's own `addToBag`; when a choice is still needed it moves focus to that choice in the panel. Off by default in
+`.env.example` and `deploy/vps/env.example`; only the exact value `true` enables it. Off, the product page is unchanged.
+
+The server never sends the bar: it appears only after the client has measured the viewport. Known tradeoff: while the bar
+is showing it covers the bottom ~70px of the viewport, including over the footer once the shopper scrolls past the panel.
+
+Enable: set `PDP_MOBILE_INTERACTIONS_ENABLED=true` in `deploy/vps/.env.production`, recreate `app`
+(`--no-build --no-deps --force-recreate`), verify with
+`compose exec app node -e 'if (process.env.PDP_MOBILE_INTERACTIONS_ENABLED !== "true") process.exit(1)'`. Rollback is the
+same switch in reverse; there is nothing to migrate.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

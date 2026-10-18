@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 
+import { usePdpGalleryControls } from "@/components/headless/use-pdp-mobile-interactions";
 import {
   resolveGalleryModel,
   type GalleryManualSelection,
@@ -18,12 +19,22 @@ import {
  * retire it when the selection moves.
  */
 
-type BrandProductGalleryProps = Omit<GalleryModelInput, "manualSelection">;
+type BrandProductGalleryProps = Omit<GalleryModelInput, "manualSelection"> &
+  Readonly<{
+    /** Swipe, arrow keys and previous/next buttons on the carousel (`PDP_MOBILE_INTERACTIONS_ENABLED`). */
+    mobileInteractions?: boolean;
+  }>;
 
-export function BrandProductGallery(props: BrandProductGalleryProps) {
+export function BrandProductGallery({ mobileInteractions = false, ...props }: BrandProductGalleryProps) {
   const [manualSelection, setManualSelection] = useState<GalleryManualSelection | null>(null);
   const model = resolveGalleryModel({ ...props, manualSelection });
   const selectedVariantId = props.selectedVariantId ?? null;
+  const controls = usePdpGalleryControls({
+    enabled: mobileInteractions,
+    activeIndex: model.activeIndex,
+    imageCount: model.images.length,
+    onChange: (index) => setManualSelection({ variantId: selectedVariantId, index }),
+  });
 
   // Fallback state when no trusted photography is present
   if (model.mode === "empty") {
@@ -70,6 +81,7 @@ export function BrandProductGallery(props: BrandProductGalleryProps) {
         role="region"
         aria-roledescription="carousel"
         aria-label={model.regionLabel}
+        {...controls.frameProps}
       >
         <Image
           key={activeImage.url}
@@ -80,6 +92,31 @@ export function BrandProductGallery(props: BrandProductGalleryProps) {
           sizes="(min-width: 1024px) 50vw, 100vw"
           className="object-cover transition-opacity duration-300"
         />
+        {controls.enabled ? (
+          <>
+            <button
+              type="button"
+              aria-label="Ảnh trước"
+              disabled={!controls.navigation.canPrevious}
+              onClick={() => controls.step("previous")}
+              className="absolute left-2 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center border border-black/30 bg-white/90 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:opacity-30"
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+            <button
+              type="button"
+              aria-label="Ảnh sau"
+              disabled={!controls.navigation.canNext}
+              onClick={() => controls.step("next")}
+              className="absolute right-2 top-1/2 flex min-h-11 min-w-11 -translate-y-1/2 items-center justify-center border border-black/30 bg-white/90 text-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:opacity-30"
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+            <p className="sr-only" role="status">
+              Ảnh {controls.navigation.position} trên {controls.navigation.count}
+            </p>
+          </>
+        ) : null}
       </div>
 
       <nav className="mt-4 flex flex-wrap gap-3" aria-label={model.thumbnailsLabel}>
