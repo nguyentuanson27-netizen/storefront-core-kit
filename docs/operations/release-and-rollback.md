@@ -231,6 +231,23 @@ alone changes no page.
 
 Rollback is the same switch in reverse: set it to `false` and recreate `app`. There is nothing to migrate or clean up.
 
+## Collapsible shop filters (`SHOP_FILTER_DISCLOSURE_ENABLED`)
+
+A/B/C plan task C02. No migration. The filters, URLs, sort, page reset and results are unchanged: this only decides
+whether the existing GET filter form is collapsed behind a "Bộ lọc (n)" button below 1024px. Off by default in
+`.env.example` and `deploy/vps/env.example`; only the exact value `true` enables it. Off, `/shop` renders the same
+markup as before.
+
+On, the server still sends the form open with no button; the button appears and the form collapses only after the
+client measures the viewport, so a client that never runs the script keeps a usable form. Opening moves focus to the
+first field, Escape or applying a filter returns it to the button, removing a chip moves focus to the next chip (else
+the button), and a polite status line states the result count.
+
+Enable: set `SHOP_FILTER_DISCLOSURE_ENABLED=true` in `deploy/vps/.env.production` and recreate `app`
+(`--no-build --no-deps --force-recreate`; a plain restart keeps the old environment), then verify with
+`compose exec app node -e 'if (process.env.SHOP_FILTER_DISCLOSURE_ENABLED !== "true") process.exit(1)'`.
+Rollback is the same switch in reverse; there is nothing to migrate or clean up.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

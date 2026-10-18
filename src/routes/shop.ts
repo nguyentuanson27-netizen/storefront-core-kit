@@ -13,7 +13,11 @@ import { buildProductListTracking } from "@/components/analytics/product-list-tr
 
 import { sealRoute, type RouteHandle } from "./core.tsx";
 import { SHOP_TITLE } from "./metadata/shop.ts";
-import { buildShopViewModel, type ShopViewModel } from "./shop-model.ts";
+import {
+  buildShopViewModel,
+  readShopFilterDisclosureEnabled,
+  type ShopViewModel,
+} from "./shop-model.ts";
 
 /** The shop listing's loader: the query, the page, the facets and the grid's tracking. */
 
@@ -69,6 +73,7 @@ export async function loadShopRoute({
       pageSize: SHOP_PAGE_SIZE,
       pricingRule,
       selectEventBySlug: listTracking.selectEventBySlug,
+      filterDisclosure: readShopFilterDisclosureEnabled(),
     }),
     refreshAfterMs,
     trackingEvent: listTracking.listEvent,
