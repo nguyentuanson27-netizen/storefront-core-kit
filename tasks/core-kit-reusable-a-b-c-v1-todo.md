@@ -15,12 +15,23 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 - [ ] G6 Human review + exact-head tests/runtime + release gate before enabling any new capability.
 - [ ] **GB1 — B1 child spec approval BEFORE B01/B03 /build:** approved bounded `pageSize` and pagination/URL/ordering/hidden/empty-state contract, curation data ownership and migration/rollback proposal, with reviewer link. **G3 schema/migration review must also pass before B01 writes Prisma schema, SQL or repository code.** Neither gate is granted by merging this plan.
 
+## Execution status — blocked tasks (gates are not waived)
+
+Gate evidence and per-slice records live in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
+
+- **BLOCKED on G1/F01 (owner contract):** F01, A01, A05, A06, A07, and transitively A02, A03, A04, A08, A09, A10, C04.
+- **BLOCKED on G2 (controlled POS readback):** A08, and transitively A09, A10, C04.
+- **BLOCKED on G3 (migration approval):** A02, A06, B04, B05, B06 (each needs new persistence), and B01 additionally on GB1.
+- **BLOCKED on GB1:** B01, B02, B03.
+- **BLOCKED on owner/evidence decision:** B08 (G4) and so B09; B10 (G5, needs real-image measurement) and so B11.
+- **Proceeding (no unmet gate, no schema change):** B07, C01, C02, C03, then C05.
+
 ## Dependency-ordered task checklist
 
-- [ ] **F00 — Revalidate audited matrix and ownership at implementation SHA** [Foundation; deps: none; Revalidation gate]
-  - [ ] Acceptance: At /build SHA, re-check the **already-delivered §2 matrix** source/test links, classifications and adoption decisions, recording only evidenced drift and reviewer approval.
-  - [ ] Verification: Compare pinned plan baseline against exact current source/test tree and record actual focused tests/CI when run.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **F00 — Revalidate audited matrix and ownership at implementation SHA** [Foundation; deps: none; Revalidation gate]
+  - [x] Acceptance: At /build SHA, re-check the **already-delivered §2 matrix** source/test links, classifications and adoption decisions, recording only evidenced drift and reviewer approval.
+  - [x] Verification: Compare pinned plan baseline against exact current source/test tree and record actual focused tests/CI when run.
+  - Evidence: revalidated at `main@a397e44` (baseline `1f71d61`): 0 code drift, 60/60 matrix paths present, local baseline `pnpm test` 1843 pass and `pnpm test:db` 478 pass; see [slice record](../docs/verification/core-kit-a-b-c-slice-record.md#f00--revalidation-of-the-2-gap-matrix). Reviewer acknowledgement is by the owner's delegated self-review instruction.
 
 - [ ] **F01 — Approve child contracts and POS evidence matrix** [Foundation; deps: F00; Human / external evidence gate]
   - [ ] Acceptance: Owner signs off on stacking/priority, paid/eligible/shipping bases, lineId, role, laq2 compatibility, reservation and rollback constraints.
