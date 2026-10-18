@@ -209,6 +209,8 @@ What the #29 change does **not** do: it bounds how long and how many connections
 limit, and the residual in the release table stands until one is decided.
 
 Verified locally (PostgreSQL 16 reset to a clean database, Chromium): `pnpm lint` 0 errors, `pnpm typecheck`, `pnpm test` 1929/1929,
-`pnpm test:db` 490/490, `pnpm build`, and the three affected browser specs 26/26 plus the unchanged OFF-regression specs run for the
-original PRs. A first `test:db` run showed three unrelated failures (homepage-position, sitemap, capacity-count); they came from rows
+`pnpm test:db` 490/490, `pnpm build`; the three specs that gained tests (`plp-filter-disclosure`, `pdp-mobile-interactions`,
+`cart-drawer`) 25/25; and a regression run of the specs that exercise the changed code with every flag in its default or test-server
+state (`discovery`, `pdp-promotion`, `storefront-media`, `variant-deep-link`, `storefront-commerce`, `selling-modes`,
+`search-overlay`) 31/31. A first `test:db` run showed three unrelated failures (homepage-position, sitemap, capacity-count); they came from rows
 left in the local database by earlier browser runs, and passed after the database was recreated.
