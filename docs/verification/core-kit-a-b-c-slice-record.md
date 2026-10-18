@@ -66,6 +66,17 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | C05 | #33 | `ec57980` | 15/15 checks success on `31c67f3` | `SEARCH_OVERLAY_ENABLED` (OFF; needs `SEARCH_SUGGESTIONS_ENABLED`) | flag OFF renders plain `/search` links; unmodified `editorial` and `evergreen-pages` specs pass against an OFF server | set either flag `false` and recreate `app`; no migration |
 | Review fixes (#29–#32) | #36 | `8b2132a` | 15/15 checks success on `6aa8df5` | none new | all five flags still default OFF; no migration; flag-OFF specs unchanged | revert the PR; the fixes are independent of each other |
 | Owner decision record (docs only) | #35 | `282ad83` | 13/13 checks success on `d6937d8` (owner branch with `main@8b2132a` merged in) | none | docs only; records policy, grants no gate | revert the PR |
+| G1/GB1 approval record (docs only) | #38 | `25d7e49` | 13/13 checks success on `73a29d5` | none | docs only | revert the PR |
+| A01 laq2 role lines and proof | #39 | _recorded after merge_ | _recorded after CI_ | none (unwired pure module) | no caller; `laq1` module untouched; no schema | revert the PR |
+
+## A01 — laq2 role lines and proof (pure code)
+
+`src/commerce/benefit-quote-proof.ts` implements the accepted [technical review](../specs/core-kit-benefit-quote-v1-technical-review.md) §2: stable `lineId`, `PAID`/`GIFT` roles, a separate derived HMAC key (`…proof-key:v2`), the `laq2` canonical grammar, and issue/verify with the same envelope bound as `laq1`. **Nothing calls it**: no checkout path, flag, schema or order write changed, and `checkout-quote-proof.ts` (`laq1`) is untouched.
+
+- **Independent vectors:** the three expected proofs in the test were computed by `tests/domain/fixtures/benefit-quote-proof-reference.py`, written from the spec alone, so the test cannot confirm the implementation's own mistakes. All three match byte for byte.
+- **Fail-closed validation at issue:** unique `lineId` (≤ 64), role money rules (gift free with campaign + entitlement; paid priced, no entitlement), exact `quantity × unit = total`, each role uses a variant once, derived totals recomputed from the lines, at most one grant (owner policy), tier index < 8, gift lines ≤ 5, paid lines ≤ 50, every named campaign granted.
+- **Cross-version:** an `laq1` token never verifies as `laq2` and the reverse; an `laq2` payload MAC'd under the `laq1` key is rejected.
+- **Not covered here (other tasks):** persistence (A02, G3), reservation aggregation (A03), render/submit adapters (A04), real checkout (A08, G2).
 
 ## B07 — bounded search suggestions
 

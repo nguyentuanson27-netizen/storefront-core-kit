@@ -38,10 +38,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: Human design review plus controlled POS evidence plan; no API mutation in plan-only PR.
   - Evidence: Owner policy selected 2026-10-18: [approval record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md), [technical F01 draft](../docs/specs/core-kit-benefit-quote-v1.md); **G1 satisfied 2026-10-18** by the owner's approval of the [technical review](../docs/specs/core-kit-benefit-quote-v1-technical-review.md). The controlled POS evidence *plan* is in the child spec §4; the evidence itself (G2) is **not** collected and still blocks A08.
 
-- [ ] **A01 — Design/test v2 role lines and laq2 proof** [A; deps: F01; Approved A contract]
-  - [ ] Acceptance: PAID X + GIFT X are distinct signed lines; invalid duplicate IDs/roles/prices fail closed.
-  - [ ] Verification: `pnpm test:domain` quote/proof regressions, bounds, tamper and legacy vectors.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **A01 — Design/test v2 role lines and laq2 proof** [A; deps: F01; Approved A contract]
+  - [x] Acceptance: PAID X + GIFT X are distinct signed lines; invalid duplicate IDs/roles/prices fail closed.
+  - [x] Verification: `pnpm test:domain` quote/proof regressions, bounds, tamper and legacy vectors.
+  - Evidence: PR #39; code `src/commerce/benefit-quote-proof.ts` (pure, not wired: no caller, no flag, no schema); tests `tests/domain/benefit-quote-proof.test.ts` (17) with vectors computed independently by `tests/domain/fixtures/benefit-quote-proof-reference.py`. Local: lint 0 errors, typecheck, `pnpm test` all pass. Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **A02 — Add immutable benefit order persistence** [A; deps: A01; Migration review]
   - [ ] Acceptance: Same-variation role lines round-trip with stable audit facts; legacy rows with no v2 data remain readable.
