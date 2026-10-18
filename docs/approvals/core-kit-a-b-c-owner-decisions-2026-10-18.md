@@ -50,3 +50,15 @@
 | G6 / release | **BLOCKED for new activation** | Exact-SHA tests/CI, security/rollback, explicit release permission |
 
 Do not infer that owner approval of these four proposals authorizes external API writes, migrations, toggling production flags or merging implementation PRs.
+
+## Addendum — technical review decisions (2026-10-18)
+
+After [#37](../specs/core-kit-benefit-quote-v1-technical-review.md) the owner replied **"duyệt đề xuất 1-5, tiếp tục làm"**, approving the five decisions listed in that PR, each as recommended:
+
+1. Legacy-discounted lines count toward an order-wide A1 basis at their effective price but receive no A1 price benefit.
+2. Store-wide A1 scope skips the A1-vs-legacy publish refusal; the runtime rules apply.
+3. One ambiguous legacy line refuses the whole campaign for that checkout.
+4. `?page=1` is accepted and canonicalizes to `/new-arrivals`.
+5. Bounds: A06 8 tiers / 5 gifts per campaign, B04 12 featured products, B05 8 related products per product.
+
+Effect: the [F01](../specs/core-kit-benefit-quote-v1-technical-review.md) and [B1](../specs/core-kit-new-arrivals-curation-v1-technical-review.md) technical reviews are accepted, which closes **G1** and **GB1** for the code they unblock (A01, A05; B03 parser/metadata). **Not approved by this reply:** any per-slice G3 schema/SQL/rollback; G2; G5; G6; the B06 dependency on a trusted-image-host rule; verification that a hand-edited deferrable unique shows no Prisma drift (B01).

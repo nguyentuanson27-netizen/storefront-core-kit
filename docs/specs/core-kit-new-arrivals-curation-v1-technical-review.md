@@ -1,6 +1,6 @@
-# Core Kit curated New Arrivals v1 — GB1 technical review (PROPOSED, for reviewer sign-off)
+# Core Kit curated New Arrivals v1 — GB1 technical review (ACCEPTED by owner 2026-10-18)
 
-**Status:** PROPOSAL. Closes nothing by itself. GB1 stays open until a reviewer accepts §1–§4 and links it from the [checklist](../../tasks/core-kit-reusable-a-b-c-v1-todo.md); B01 additionally needs its [G3 proposal](../proposals/g3-additive-migration-proposals.md) approved.
+**Status:** **ACCEPTED.** The owner approved proposals 1–5 on 2026-10-18 (see [decision addendum](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md#addendum--technical-review-decisions-2026-10-18)), including `?page=1` accepted with canonical `/new-arrivals`. This satisfies **GB1**. B01 additionally needs its own [G3 proposal](../proposals/g3-additive-migration-proposals.md) approved.
 **Child of:** [B1 child spec](./core-kit-new-arrivals-curation-v1.md). Owner values (`pageSize = 24`, max 500, `?page=N`, 404, stored-slot pagination, accessible empty state) are taken as given and **not** reopened.
 
 Grounded in: `src/app/new-arrivals/page.tsx` (editorial route), `src/routes/metadata/new-arrivals.ts`, `src/routes/shop.ts` (`SHOP_PAGE_SIZE = 24`, `notFound()` past the last page), `src/commerce/storefront-discovery.ts` (`parsePage`). No code accompanies this document.
@@ -24,7 +24,7 @@ Parser (mirror of `/shop`'s `parsePage`, then tightened by the derived bound):
 | repeated `page` parameter (`?page=2&page=3`) | 404 (no "first wins" ambiguity) |
 | other, unrelated query parameters | ignored; never part of the canonical URL |
 
-Past the *actual* last page (`page > max(ceil(selectionCount/24), 1)`) → 404, decided from one bounded count read. `?page=1` is accepted and renders page 1 with canonical `/new-arrivals` (no redirect), matching how `/shop` treats it. Reviewer to confirm that choice (alternative: 404).
+Past the *actual* last page (`page > max(ceil(selectionCount/24), 1)`) → 404, decided from one bounded count read. `?page=1` is accepted and renders page 1 with canonical `/new-arrivals` (no redirect), matching how `/shop` treats it. **Owner accepted** this choice.
 
 ## 2. Behavior matrix
 
@@ -64,6 +64,6 @@ Current metadata is title "Hàng mới" + description (`buildNewArrivalsMetadata
 
 | Item | After acceptance |
 | --- | --- |
-| GB1 technical child-spec review | Closed (parser bounds, metadata/SEO, query budget fixed) |
+| GB1 technical child-spec review | **Closed** (parser bounds, metadata/SEO, query budget fixed) |
 | G3 for B01 | **Not closed** — see the proposal |
 | Implementation | Not started; B01/B02/B03 remain blocked until the above are linked in the checklist |

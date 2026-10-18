@@ -1,6 +1,6 @@
 # Core Kit curated New Arrivals v1 — GB1 child specification
 
-**Status:** OWNER PAGE/UX POLICY APPROVED on 2026-10-18; **technical child-spec/migration review pending**. GB1 is not automatically completed by this draft, and **G3 stays blocked** until the specific additive persistence/SQL design is reviewed.
+**Status:** OWNER PAGE/UX POLICY APPROVED on 2026-10-18; **technical review ACCEPTED 2026-10-18** (see the `-technical-review` document); **migration review pending**. GB1 is not automatically completed by this draft, and **G3 stays blocked** until the specific additive persistence/SQL design is reviewed.
 **Parents:** [A/B/C umbrella spec](./core-kit-reusable-capabilities-a-b-c-v1.md) (`5/B1), [plan B01–B03](../../tasks/core-kit-reusable-a-b-c-v1-plan.md), [owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md).
 
 ## 1. Owner-approved decisions

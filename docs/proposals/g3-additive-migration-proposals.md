@@ -1,6 +1,6 @@
 # G3 additive migration proposals — A02, A06, B01, B04, B05, B06 (PROPOSED, nothing applied)
 
-**Status:** DRAFT FOR REVIEW. The owner approved *drafting* additive designs ([decision record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) §3). **No schema diff, SQL file or migration is in the repository, and none may be added until the section for that slice is approved.** Each section is its own G3 checkbox; approving one does not approve another.
+**Status:** DRAFT FOR REVIEW (bounds confirmed by the owner 2026-10-18; no slice approved). The owner approved *drafting* additive designs ([decision record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) §3). **No schema diff, SQL file or migration is in the repository, and none may be added until the section for that slice is approved.** Each section is its own G3 checkbox; approving one does not approve another.
 
 Existing facts these proposals rely on (all from `prisma/schema.prisma` on `main`):
 
@@ -187,6 +187,6 @@ CHECKs: `char_length("guideKey") BETWEEN 1 AND 64`; `"imageUrl" ~ '^https://'` a
 - [ ] `pnpm prisma:validate` and `prisma migrate diff` clean (no drift).
 - [ ] OFF path proven to issue zero statements on the new objects.
 - [ ] Deploy order written in `docs/operations/release-and-rollback.md`.
-- [ ] Proposed bounds confirmed or replaced by the owner (A06: 8 tiers / 5 gifts; B04: 12; B05: 8).
+- [x] Proposed bounds **confirmed by the owner 2026-10-18** (A06: 8 tiers / 5 gifts; B04: 12; B05: 8). The bounds are approved; the schema, SQL and rollback of each slice are still **not** approved.
 
 A07 (selected-gift state) is not in the G3 list; if it needs a table (`cartId`, `campaignId`, `giftVariantId`, `quantity`, unique on the triple) it gets its own proposal after A05/A06 settle the entitlement model.
