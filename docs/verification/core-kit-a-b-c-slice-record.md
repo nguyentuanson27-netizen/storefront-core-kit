@@ -60,7 +60,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | C02 | #30 | `26bce5a` | 15/15 checks success on `aa6d6c5` | `SHOP_FILTER_DISCLOSURE_ENABLED` (OFF) | flag OFF renders the unchanged always-open form; the unmodified `discovery.spec.ts` passes against an OFF server | set the flag `false` and recreate `app`; no migration |
 | C01 | #31 | `ca8dceb` | 15/15 checks success on `9c82d26` | `PDP_MOBILE_INTERACTIONS_ENABLED` (OFF) | flag OFF renders the unchanged gallery and detail; unmodified `pdp-promotion`, `storefront-media`, `variant-deep-link` specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
 | C03 | #32 | `ebe7197` | 15/15 checks success on `05215fd` | `CART_DRAWER_ENABLED` (OFF) | flag OFF renders the plain header link; the server action answers `null` without a database read; unmodified cart/footer/not-found specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
-| C05 | #33 | _recorded after merge_ | _recorded after CI_ | `SEARCH_OVERLAY_ENABLED` (OFF; needs `SEARCH_SUGGESTIONS_ENABLED`) | flag OFF renders plain `/search` links; unmodified `editorial` and `evergreen-pages` specs pass against an OFF server | set either flag `false` and recreate `app`; no migration |
+| C05 | #33 | `ec57980` | 15/15 checks success on `31c67f3` | `SEARCH_OVERLAY_ENABLED` (OFF; needs `SEARCH_SUGGESTIONS_ENABLED`) | flag OFF renders plain `/search` links; unmodified `editorial` and `evergreen-pages` specs pass against an OFF server | set either flag `false` and recreate `app`; no migration |
 
 ## B07 — bounded search suggestions
 
@@ -158,3 +158,34 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
   suggestions without wrapping, Escape closes and returns focus; choosing a suggestion lands on its canonical PDP and closes the
   overlay; 14× Tab and 14× Shift+Tab stay inside; Ctrl-click opens a new tab and no dialog; 390×844 and 1440×900 axe clean, no overflow.
 - **Not claimed:** no screen reader; not a full ARIA combobox (the suggestions are a labelled list of links reached with arrows).
+
+## Release readiness (as of `main@ec57980`)
+
+**Nothing in this programme is enabled.** Seven slices are merged (F00, B07, C02, C01, C03, C05 plus this record); every behaviour
+change ships behind a server-side flag whose default is OFF, so a deployment that sets none of them behaves as before. No migration was
+added, so there is nothing to apply or roll back at the database.
+
+| Flag (all default OFF, exact `"true"` only) | Slice | Needs | Residual before production enablement |
+| --- | --- | --- | --- |
+| `SEARCH_SUGGESTIONS_ENABLED` | B07 | — | no dedicated rate limit (same exposure as `GET /shop?q=`); invisible until C05 |
+| `SHOP_FILTER_DISCLOSURE_ENABLED` | C02 | — | real-device and screen-reader pass; `/shop` content depends on a script to reveal (pre-existing) |
+| `PDP_MOBILE_INTERACTIONS_ENABLED` | C01 | — | real touch device; the bar covers ~70px at the bottom while showing |
+| `CART_DRAWER_ENABLED` | C03 | — | screen-reader pass; read-only by design |
+| `SEARCH_OVERLAY_ENABLED` | C05 | `SEARCH_SUGGESTIONS_ENABLED` | the B07 rate-limit decision; screen-reader pass |
+
+Each flag follows the runbook in [`docs/operations/release-and-rollback.md`](../operations/release-and-rollback.md): set it in
+`deploy/vps/.env.production`, recreate `app`, verify the value inside the container, and roll back by setting it `false`. Enabling any
+of them is a production change and still needs the owner's explicit approval (gate G6); this record does not grant it.
+
+### What the programme could not do, and why
+
+| Blocked | Reason | The owner's next step |
+| --- | --- | --- |
+| A01–A10, C04, F01 | F01 child contract (stacking, `lineId`/`laq2`, paid bases, capacity, rollback) is an owner decision; A08 additionally needs controlled Pancake readback (G2) | Approve the F01 child spec; arrange a test-environment Pancake readback for 0-VND gifts and same-variation PAID+GIFT rows |
+| B01–B03 | GB1 (finite `pageSize`, pagination, empty-state, ownership) and G3 (additive migration) | Approve the B1 child spec; review the migration design |
+| B04, B05, B06 | Each needs new persistence, so G3 | Approve the migration design for the ones wanted |
+| B08 → B09 | Owner/architecture decision | Decide in [ADR 0010 (proposed)](../decisions/0010-category-taxonomy-vs-collections.md); recommendation is KEEP collections, which skips B09 |
+| B10 → B11 | Needs comparable real-image measurements and a security review; the sandbox cannot reach the CDN | Run the plan in [image-delivery-decision.md](../audits/image-delivery-decision.md); skip B11 unless a bottleneck is shown |
+
+No gate was waived, no checkbox was ticked for a blocked task, and no production system, Pancake order or database outside the
+local test instance was touched.
