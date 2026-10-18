@@ -1,5 +1,5 @@
 /**
- * Page grammar and arithmetic for the curated New Arrivals listing (B1, accepted GB1 technical review:
+ * Page grammar and arithmetic for the curated new-arrivals listing (B1, accepted GB1 technical review:
  * docs/specs/core-kit-new-arrivals-curation-v1-technical-review.md §1).
  *
  * Pure: the parser rejects out-of-bound values before any database read can happen, and the paging

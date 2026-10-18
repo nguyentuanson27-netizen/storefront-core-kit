@@ -1,5 +1,5 @@
 /**
- * Persistence for the curated New Arrivals selection (B01; design approved in
+ * Persistence for the curated new-arrivals selection (B01; design approved in
  * docs/approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md).
  *
  * This is the only module that reads or writes `NewArrivalsSelection`. The stored `position` is the
