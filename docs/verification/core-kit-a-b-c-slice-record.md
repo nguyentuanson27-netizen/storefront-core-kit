@@ -79,7 +79,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | A02 benefit order persistence | #48 | `2a3c68c` | 15/15 checks success on `465493941ba1ff55f86fec806c2ec3dea2f2d163` | none (no code writes the columns yet) | additive nullable columns; legacy rows and old writers unchanged; rollback = leave the columns | revert before any v2 order exists; otherwise leave the columns |
 | A04 laq2 render/persist adapters (synthetic) | #49 | `aae270c` | 15/15 checks success on `003e660c7555f5177f99228cb59d0374b020cb12` | none (unwired) | no caller; legacy quotes and `laq1` untouched | revert the PR |
 | A06 benefit campaign admin lifecycle | #50 | `82a8b36` | 15/15 checks success on `e4e6a8ca5b0e965c4e73863424edd901d3bda97a` | none (nothing reads campaigns until A08) | additive tables; legacy `PromotionCampaign` untouched; legacy publish path unchanged | revert before any campaign matters; otherwise leave the tables |
-| A07 selected-gift state and fresh entitlement | #51 | _recorded after merge_ | _recorded after CI_ | none (nothing calls it until A08) | additive table; paid `CartItem` untouched | revert before any choice matters; otherwise leave the table |
+| A07 selected-gift state and fresh entitlement | #51 | `52f4662` | 15/15 checks success on `ab644772f9e3884748e9a4341caf0dc7441c0029` | none (nothing calls it until A08) | additive table; paid `CartItem` untouched | revert before any choice matters; otherwise leave the table |
 
 ## A01 — laq2 role lines and proof (pure code)
 
