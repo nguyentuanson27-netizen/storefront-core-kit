@@ -13,6 +13,7 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 - [ ] G4 Category/collections decision before B09 (otherwise SKIP).
 - [ ] G5 Image proxy measurements/security decision before B11 (otherwise SKIP).
 - [ ] G6 Human review + exact-head tests/runtime + release gate before enabling any new capability.
+- [ ] **GB1 — B1 child spec approval BEFORE B01/B03 /build:** approved bounded `pageSize` and pagination/URL/ordering/hidden/empty-state contract, curation data ownership and migration/rollback proposal, with reviewer link. **G3 schema/migration review must also pass before B01 writes Prisma schema, SQL or repository code.** Neither gate is granted by merging this plan.
 
 ## Dependency-ordered task checklist
 
@@ -71,9 +72,9 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
   - [ ] Verification: `pnpm test:domain` upsell proof/timeout/bounds and `pnpm test:db` candidate visibility.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **B01 — Persist curated new-arrivals membership and order** [B; deps: F00; Required for B1]
-  - [ ] Acceptance: Atomic bounded add/remove/reorder; empty set is durable and never inferred from mirrored creation date.
-  - [ ] Verification: `pnpm prisma:validate`, `pnpm test:db` curation/reorder/concurrency.
+- [ ] **B01 — Persist curated new-arrivals membership and order** [B; deps: F00; BLOCKED: GB1 child spec + G3 migration approval before /build]
+  - [ ] Acceptance: **GB1 child spec + G3 schema/migration approval linked before any code**; approved finite `pageSize`, durable atomic manual selection/order, empty without created-at backfill and old-writer compatibility.
+  - [ ] Verification: Check signed-off child spec/migration links first, then `pnpm prisma:validate` and `pnpm test:db` curation/reorder/concurrency/migration.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
 - [ ] **B02 — Expose admin-only arrivals curator** [B; deps: B01; Admin auth review]
@@ -81,9 +82,9 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
   - [ ] Verification: `pnpm test:domain` admin/auth and `pnpm test:db` writes; authenticated HTTP smoke.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **B03 — Add ON/OFF curated arrivals read model** [B; deps: B01, B02; Route/SEO parity]
-  - [ ] Acceptance: OFF keeps current empty/editorial page; ON+empty renders no product cards; ON+selection keeps saved valid order without fallback.
-  - [ ] Verification: `pnpm test:domain` route-boundary/manifest and `pnpm test:db` listing parity; browser a11y at 390/1440.
+- [ ] **B03 — Add ON/OFF curated arrivals read model** [B; deps: B01, B02; GB1 pagination/empty-state approval + route/SEO parity]
+  - [ ] Acceptance: **Recheck approved GB1 spec**: OFF original editorial/no data query; ON+empty editorial frame and accessible empty-list status (zero cards, no fallback/redirect); ON+selection preserves manual order and canonical pricing across bounded pages.
+  - [ ] Verification: `pnpm test:domain` page bounds (N-1/N/N+1/2N+1, N = approved `pageSize`), cross-page order, hidden/no-backfill and invalid pages; `pnpm test:db` listing/query bounds; browser axe/keyboard at 390×844, 768 and 1440 for OFF/ON-empty/pagination.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
 - [ ] **B04 — Curate homepage featured products without copying collections** [B; deps: F00; Gap/audit first]
@@ -168,7 +169,7 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 - [ ] CP-A1: A04 OFF-only synthetic laq2/legacy parity plus A05 frozen paid eligibility and mixed-cart shipping; real checkout integration reserved for A08 after A07.
 - [ ] CP-A2: A06/A07/A08 admin/gift/POS acceptance, feature OFF and compatibility.
 - [ ] CP-A3: A09/A10 read-only proof + bounded idempotent upsell (optional).
-- [ ] CP-B1: B01/B02/B03 curated manual ordering OFF/empty/ON route truth.
+- [ ] CP-B1: **GB1 approved child spec and G3 migration review BEFORE B01 code; GB1 rechecked at B03**; finite page-size, correct manual order across page boundaries, OFF original editorial, ON + empty editorial frame with accessible empty-list status/zero cards, and ON curated listing.
 - [ ] CP-B2: B04/B05/B06/B07 independent merchandising and search gates.
 - [ ] CP-B3: B08 decision and B09 optional-only implementation.
 - [ ] CP-B4: B10 evidence and B11 optional-only implementation.
