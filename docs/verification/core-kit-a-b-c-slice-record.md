@@ -55,4 +55,24 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 
 | Task | PR | Merged SHA | Exact-head CI | Flag (default) | OFF compatibility | Rollback |
 | --- | --- | --- | --- | --- | --- | --- |
-| F00 | _this PR_ | _recorded after merge_ | docs only | — | no code change | revert the PR |
+| F00 | #28 | `81438ef` | 13/13 checks success on `51bdd46` | — | no code change | revert the PR |
+| B07 | #29 | _recorded after merge_ | _recorded below_ | `SEARCH_SUGGESTIONS_ENABLED` (OFF) | flag OFF returns `DISABLED` before validation or any catalog statement (asserted at 0 statements); `/search`, `/shop` untouched | set the flag `false` and recreate `app`; no migration |
+
+## B07 — bounded search suggestions
+
+- **What shipped:** a read model, not a UI and not a new route. `searchStorefrontSuggestions(input)` (server action,
+  `src/routes/search-suggestions.ts`) returns the narrow `SearchSuggestionsModel`; nothing renders it until C05.
+- **Authorities reused, none forked:** the query goes through `parseStorefrontDiscoverySearchParams` (same trimming and
+  80-character bound as `/shop`), the rows come from `createStorefrontCatalogRepository().listDiscoveryPage` (same
+  visibility, shop scope, effective promotional price and stock), and prices/availability/PDP links come from
+  `buildProductCardModel`. "See all" is `buildStorefrontDiscoveryHref`, so it is exactly the `/shop` listing for the query.
+- **Bounds:** query 2–80 characters, non-strings and control characters refused (not coerced or truncated), at most 6
+  suggestions (page size and a second slice), 1,500 ms ceiling then `UNAVAILABLE`, and a fixed statement count (13
+  today, asserted equal for 1 and 7 results and under a ceiling of 16).
+- **Leak check:** the response carries slug, name, PDP path, trusted image, formatted price text and an availability
+  word. A test asserts no internal variant id, vendor variation id, raw price or stock count is serialized.
+- **Failure shape:** a thrown catalog error or a timeout becomes `{ ok: false, reason: "UNAVAILABLE" }`; the message never
+  reaches the browser.
+- **Verified locally** (PostgreSQL 16): `pnpm lint` 0 errors, `pnpm typecheck`, `pnpm test` 1862/1862 (19 new),
+  `tests/database/search-suggestions.test.ts` 6/6, `pnpm build`.
+- **Not claimed:** no browser, keyboard or axe run, because no UI changed. Those belong to C05.
