@@ -462,6 +462,15 @@ model OrderMirror {
   merchandiseSubtotalVnd BigInt?
   shippingFeeVnd         BigInt?
   totalVnd               BigInt?
+  /// NULL = legacy quote (`laq1`); 2 = benefit quote (`laq2`). Written only by A08 once it exists.
+  quoteVersion           Int?
+  /// The frozen facts of the one granted benefit campaign (v2 only; NULL when none was granted): its id,
+  /// the eligible paid quantity, the basis before any A1 discount, and the reached tier (NULL = no tier).
+  /// They are what the `laq2` proof canonicalizes, so an order can rebuild the exact proof bytes.
+  benefitCampaignId      String?
+  benefitEligibleQuantity Int?
+  benefitBasisVnd        BigInt?
+  benefitTierIndex       Int?
   createdAt              DateTime            @default(now())
   updatedAt              DateTime            @updatedAt
   user                   User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -497,9 +506,21 @@ model OrderLineSnapshot {
   promotionDiscountType    PromotionDiscountType?
   promotionPercentageValue Int?
   promotionFixedPriceVnd   BigInt?
+  /// Benefit order facts (A/B/C plan A02), all NULL on legacy rows and on every row written by code
+  /// that predates them. A v2 quote line has a stable `lineId` and a `PAID` or `GIFT` role; the
+  /// migration adds the shape CHECK (a gift is free, a paid line is not, `lineId` and role come
+  /// together) and a unique `(orderId, lineId)`. The campaign facts are a snapshot, not a foreign key:
+  /// finalized order history must never change when a campaign does.
+  lineId                   String?
+  lineRole                 String?
+  benefitCampaignId        String?
+  benefitKind              String?
+  benefitCampaignName      String?
+  entitlementKey           String?
   createdAt                DateTime               @default(now())
   order                    OrderMirror            @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
+  @@unique([orderId, lineId])
   @@index([orderId])
 }
 
