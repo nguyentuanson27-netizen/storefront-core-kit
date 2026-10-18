@@ -40,7 +40,7 @@ A gate is only satisfied by the artifact named in the plan. Merging planning or 
 | --- | --- | --- | --- |
 | G1 / F01 — benefit quote contract | A01–A10, C04 | **SATISFIED 2026-10-18** (policy and technical review approved) | [Owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md), [F01 draft](../specs/core-kit-benefit-quote-v1.md). **Technical review ACCEPTED by the owner 2026-10-18:** [overlap predicate, `laq2` encoding, vectors](../specs/core-kit-benefit-quote-v1-technical-review.md) |
 | G2 — controlled Pancake readback of 0-VND gift, same-variation PAID+GIFT, differently priced PAID rows | A08 (and so A09, A10, C04) | **BLOCKED — no controlled POS evidence** | Approved test-environment readback evidence per enabled use case |
-| G3 — additive migration and old/new code coexistence | A02, A06, B01, B04, B05, B06; B09 only if reopened | **Additive DESIGN DIRECTION approved; concrete migrations remain BLOCKED** | [Owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md). Each real schema/SQL diff, rollback, coexistence and tests require separate review. **Drafts for review:** [G3 proposals](../proposals/g3-additive-migration-proposals.md) (nothing applied) |
+| G3 — additive migration and old/new code coexistence | A02, A06, B01, B04, B05, B06; B09 only if reopened | **Per-slice review DONE 2026-10-18 under the owner's delegation** ([record](../approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md)); applying to a shared/production DB stays a G6 step | [Owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md). Each real schema/SQL diff, rollback, coexistence and tests require separate review. **Drafts for review:** [G3 proposals](../proposals/g3-additive-migration-proposals.md) (nothing applied) |
 | GB1 — curated arrivals contract | B01, B03 | **SATISFIED 2026-10-18** (policy and technical review approved); G3 for B01 still BLOCKED | [B1 draft](../specs/core-kit-new-arrivals-curation-v1.md); **technical review ACCEPTED by the owner 2026-10-18:** [parser bounds, metadata, query budget](../specs/core-kit-new-arrivals-curation-v1-technical-review.md); [owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) |
 | G4 — category vs collections | B08 → B09 | **OWNER ACCEPTED 2026-10-18: KEEP collections, B09 SKIPPED** | [ADR 0010](../decisions/0010-category-taxonomy-vs-collections.md); no new taxonomy implementation |
 | G5 — image delivery measurement and security decision | B10 → B11 | **BLOCKED — needs comparable real-image measurement** | Measurements plus security design review |
@@ -68,7 +68,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | Owner decision record (docs only) | #35 | `282ad83` | 13/13 checks success on `d6937d8` (owner branch with `main@8b2132a` merged in) | none | docs only; records policy, grants no gate | revert the PR |
 | G1/GB1 approval record (docs only) | #38 | `25d7e49` | 13/13 checks success on `73a29d5` | none | docs only | revert the PR |
 | A01 laq2 role lines and proof | #39 | `384cab8` | 15/15 checks success on `d905ec7` | none (unwired pure module) | no caller; `laq1` module untouched; no schema | revert the PR |
-| A05 benefit eligibility and shipping basis | #40 | _recorded after merge_ | _recorded after CI_ | none (unwired pure module) | no caller; legacy pricing and shipping modules untouched | revert the PR |
+| A05 benefit eligibility and shipping basis | #40 | `dfa98a5` | 15/15 checks success on `3fa4804` | none (unwired pure module) | no caller; legacy pricing and shipping modules untouched | revert the PR |
+| Delegated decisions + G3 review (docs) and A03 capacity demand | #41 | _recorded after merge_ | _recorded after CI_ | none | A03 is an unwired pure helper plus tests over the unchanged reservation path; no schema | revert the PR |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -85,6 +86,10 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 
 - One campaign per checkout (two with in-scope lines => none, no ranking); a legacy-discounted line is basis-only; an ambiguous in-scope line refuses the campaign; `Q_paid_cart` counts all paid units, gifts none; tier chosen once from the frozen basis, then `S_final_paid` drives shipping through the existing function.
 - Assumption to revisit in A06 (not owner-specified): v1 price steps are **percentage** steps using the legacy rounding rule (a test compares it to the resolver); gift steps carry no price. Fixed-amount tiers are not implemented.
+
+## A03 — capacity demand for PAID + GIFT lines
+
+`reserveOrderCapacity` and `planCapacityResources` already merge duplicate purchased variants, and `CapacityReservation` is unique on `(orderId, variantId)`. A03 therefore changes **no** locking or reservation code: `src/commerce/benefit-capacity-demand.ts` (unwired) derives the reservation input from the signed role lines so the held quantity always includes the gift. Database tests drive the real reservation path: PAID X×1 + GIFT X×1 holds one row of 2; stock 1 refuses atomically, including unrelated lines; two concurrent checkouts on stock 2 allow exactly one; a retry does not double-hold.
 
 ## B07 — bounded search suggestions
 

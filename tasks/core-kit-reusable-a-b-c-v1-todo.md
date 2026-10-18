@@ -9,7 +9,7 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 - [ ] G0 Review this /plan's **completed** 13-capability source/test/reuse matrix (§2 of plan). F00 subsequently revalidates it at the implementation SHA; do not defer initial matrix until after plan approval.
 - [x] **G1 ACCEPTED 2026-10-18** (owner approved the technical review). Original text: technical child-spec review was required. Owner approved option A F01 business policies (single A1 campaign, no same-line legacy stacking, `lineId`/`laq2`, paid bases). [Decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) and [F01 child-spec draft](../docs/specs/core-kit-benefit-quote-v1.md) must be technically reviewed/merged before the G1 implementation gate closes. The technical proposal was accepted: [F01 technical review](../docs/specs/core-kit-benefit-quote-v1-technical-review.md) (accepted).
 - [ ] G2 Controlled Pancake acceptance/readback proves 0-VND gift, same-variation PAID+GIFT and differently-priced PAID rows **for each enabled use case**, or case remains OFF.
-- [ ] **G3 per-slice SQL/migration review remains BLOCKED.** Owner approved additive **design direction and drafting** only, not any concrete Prisma schema diff, migration SQL, rollback or deployment. Drafts for review: [G3 proposals](../docs/proposals/g3-additive-migration-proposals.md) (nothing applied; all per-slice approvals open). [Decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md).
+- [x] **G3 per-slice review DONE 2026-10-18 under the owner's delegation** ("tự đề xuất quyết định"): A02, A06, B01, B04, B05, B06 approved in the [delegated decision record](../docs/approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md). Applying any migration to a shared/production database is still a G6 step. Original text: per-slice SQL/migration review remained BLOCKED. Owner approved additive **design direction and drafting** only, not any concrete Prisma schema diff, migration SQL, rollback or deployment. Drafts for review: [G3 proposals](../docs/proposals/g3-additive-migration-proposals.md) (nothing applied; all per-slice approvals open). [Decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md).
 - [x] **G4 OWNER DECISION ACCEPTED:** [ADR 0010](../docs/decisions/0010-category-taxonomy-vs-collections.md) keeps collections; B08 decided; B09 **SKIPPED, not implemented**.
 - [ ] G5 Image proxy measurements/security decision before B11 (otherwise SKIP).
 - [ ] G6 Human review + exact-head tests/runtime + release gate before enabling any new capability.
@@ -48,10 +48,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: `pnpm prisma:validate` and `pnpm test:db` snapshot schema/rollback/legacy readback.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **A03 — Aggregate gift and paid stock through existing locks** [A; deps: A01, A02; Capacity safety gate]
-  - [ ] Acceptance: PAID X×1 + GIFT X×1 holds quantity 2 in one order/variant reservation; stock 1 refuses all atomically.
-  - [ ] Verification: `pnpm test:db` capacity-reservation/mirror-handoff/concurrency and `pnpm test:domain` capacity resources.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **A03 — Aggregate gift and paid stock through existing locks** [A; deps: A01, A02; Capacity safety gate]
+  - [x] Acceptance: PAID X×1 + GIFT X×1 holds quantity 2 in one order/variant reservation; stock 1 refuses all atomically.
+  - [x] Verification: `pnpm test:db` capacity-reservation/mirror-handoff/concurrency and `pnpm test:domain` capacity resources.
+  - Evidence: PR #41; `src/commerce/benefit-capacity-demand.ts` derives the reservation input from PAID/GIFT lines and the **existing** `reserveOrderCapacity` (lock order, composite expansion, floors, all-or-none) is unchanged; it already merged duplicate variants. Tests: `tests/domain/benefit-capacity-demand.test.ts` (5), `tests/database/benefit-capacity.test.ts` (5: one row quantity 2, stock 1 refuses atomically incl. other lines, gift of another variant, two concurrent checkouts on stock 2 => one wins, idempotent retry). Does not need A02's columns (the ledger is keyed by order and variant). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **A04 — Stage laq2 proof/render adapters with synthetic fixtures (OFF)** [A; deps: A01, A02, A03; OFF-only infrastructure]
   - [ ] Acceptance: `laq1` remains legacy-only; synthetic `laq2` benefit lines prove signature/amount/role parity, while **real buyer benefit checkout stays OFF until A08**.
