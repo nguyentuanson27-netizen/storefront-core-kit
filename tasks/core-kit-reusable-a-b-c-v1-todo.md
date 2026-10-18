@@ -17,7 +17,7 @@ Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umb
 ## Dependency-ordered task checklist
 
 - [ ] **F00 — Revalidate audited matrix and ownership at implementation SHA** [Foundation; deps: none; Revalidation gate]
-  - [ ] Acceptance: At /build SHA, re-check the **already-delivered `2 matrix** source/test links, classifications and adoption decisions, recording only evidenced drift and reviewer approval.
+  - [ ] Acceptance: At /build SHA, re-check the **already-delivered §2 matrix** source/test links, classifications and adoption decisions, recording only evidenced drift and reviewer approval.
   - [ ] Verification: Compare pinned plan baseline against exact current source/test tree and record actual focused tests/CI when run.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
