@@ -257,7 +257,7 @@ test("A06 two administrators publishing conflicting campaigns at once: exactly o
   await cleanup();
 });
 
-test("A06 disabling is always allowed, repeatable, and the campaign can be published again", async () => {
+test("A06 disabling is repeatable, but an already-started campaign cannot be published again", async () => {
   await cleanup();
   const campaign = await create(tierDraft("disable"));
   await publish(campaign.id);
@@ -270,7 +270,8 @@ test("A06 disabling is always allowed, repeatable, and the campaign can be publi
 
   assert.deepEqual(await disableBenefitCampaign(prisma, { id: campaign.id, now: NOW }), { ok: true, id: campaign.id, version: 3 });
   assert.deepEqual(await disableBenefitCampaign(prisma, { id: "nope", now: NOW }), { ok: false, reason: "NOT_FOUND" });
-  assert.equal((await publish(campaign.id, 3)).ok, true);
+  assert.deepEqual(await publish(campaign.id, 3), { ok: false, reason: "ALREADY_STARTED" });
+  assert.equal((await prisma.benefitCampaign.findUniqueOrThrow({ where: { id: campaign.id } })).isEnabled, false);
   await cleanup();
 });
 
@@ -322,5 +323,98 @@ test("A06 deleting a catalog row removes the target or gift that pointed at it",
   await prisma.productMirror.delete({ where: { id: trigger.productId } });
   assert.equal(await prisma.benefitCampaignTarget.count({ where: { campaignId: campaign.id } }), 0);
   assert.equal(await prisma.benefitCampaign.count({ where: { id: campaign.id } }), 1, "the campaign itself stays");
+  await cleanup();
+});
+
+
+test("A06 distinct variants of one product may publish separately, but a whole-product target conflicts", async () => {
+  await cleanup();
+  const sameProduct = await product("variants");
+  const secondVariant = await prisma.variantMirror.create({
+    data: {
+      id: `${PREFIX}-variant-l`,
+      pancakeVariationId: `${PREFIX}-variant-l`,
+      productId: sameProduct.productId,
+      syncedAt: EARLY,
+    },
+  });
+
+  const sizeM = await create(tierDraft("variant-m", { targets: [{ variantId: sameProduct.variantId }] }));
+  const sizeL = await create(tierDraft("variant-l", { targets: [{ variantId: secondVariant.id }] }));
+  assert.equal((await publish(sizeM.id)).ok, true);
+  assert.equal((await publish(sizeL.id)).ok, true, "distinct variants of one product must not conflict");
+
+  const entireProduct = await create(tierDraft("entire-product", { targets: [{ productId: sameProduct.productId }] }));
+  const refused = await publish(entireProduct.id);
+  assert.ok(!refused.ok && refused.reason === "CONFLICT");
+  assert.deepEqual(
+    refused.conflicts?.map(({ id }) => id).sort(),
+    [sizeM.id, sizeL.id].sort(),
+    "a product target covers both variants",
+  );
+  await cleanup();
+});
+
+test("A06 legacy variant targets do not block a different sibling variant", async () => {
+  await cleanup();
+  const sameProduct = await product("legacy-variants");
+  const secondVariant = await prisma.variantMirror.create({
+    data: {
+      id: `${PREFIX}-legacy-variant-l`,
+      pancakeVariationId: `${PREFIX}-legacy-variant-l`,
+      productId: sameProduct.productId,
+      syncedAt: EARLY,
+    },
+  });
+  await prisma.promotionCampaign.create({
+    data: {
+      kind: "PROMOTION",
+      name: `${PREFIX}-legacy-variant-only`,
+      discountType: "PERCENTAGE",
+      percentageValue: 10,
+      isEnabled: true,
+      enabledAt: EARLY,
+      targets: { create: [{ variantId: secondVariant.id }] },
+    },
+  });
+
+  const otherVariant = await create(tierDraft("other-legacy-variant", { targets: [{ variantId: sameProduct.variantId }] }));
+  assert.equal((await publish(otherVariant.id)).ok, true);
+  await cleanup();
+});
+
+test("A06 publish fails closed above the 500-row enabled legacy conflict scan limit", async () => {
+  await cleanup();
+  const candidate = await create(tierDraft("scan-legacy-candidate"));
+  await prisma.promotionCampaign.createMany({
+    data: Array.from({ length: 501 }, (_unused, index) => ({
+      kind: "PROMOTION",
+      name: `${PREFIX}-scan-legacy-${index}`,
+      discountType: "PERCENTAGE",
+      percentageValue: 10,
+      isEnabled: true,
+      enabledAt: EARLY,
+      startsAt: new Date("2027-01-01T00:00:00.000Z"),
+    })),
+  });
+  assert.deepEqual(await publish(candidate.id), { ok: false, reason: "CONFLICT_SCAN_LIMIT" });
+  assert.equal((await prisma.benefitCampaign.findUniqueOrThrow({ where: { id: candidate.id } })).isEnabled, false);
+  await cleanup();
+});
+
+test("A06 publish fails closed above the 500-row enabled benefit conflict scan limit", async () => {
+  await cleanup();
+  const candidate = await create(tierDraft("scan-benefit-candidate"));
+  await prisma.benefitCampaign.createMany({
+    data: Array.from({ length: 501 }, (_unused, index) => ({
+      kind: "QUANTITY_TIER",
+      name: `${PREFIX}-scan-benefit-${index}`,
+      isEnabled: true,
+      enabledAt: EARLY,
+      startsAt: new Date("2027-01-01T00:00:00.000Z"),
+    })),
+  });
+  assert.deepEqual(await publish(candidate.id), { ok: false, reason: "CONFLICT_SCAN_LIMIT" });
+  assert.equal((await prisma.benefitCampaign.findUniqueOrThrow({ where: { id: candidate.id } })).isEnabled, false);
   await cleanup();
 });
