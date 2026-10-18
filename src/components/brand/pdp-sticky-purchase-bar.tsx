@@ -44,12 +44,15 @@ export function focusMissingOption(panel: HTMLElement | null, key: PurchaseOptio
 export function PdpStickyPurchaseBar({
   cta,
   price,
+  preorderLabel,
   message,
   onAdd,
   onChoose,
 }: Readonly<{
   cta: PurchaseCtaState;
   price: Readonly<{ displayText: string; compareAtText: string | null }>;
+  /** The panel's own preorder marker (`view.preorderMessage`), empty when the option is not a preorder. */
+  preorderLabel: string;
   message: string;
   onAdd: () => void;
   onChoose: (key: PurchaseOptionKey) => void;
@@ -83,6 +86,11 @@ export function PdpStickyPurchaseBar({
             </>
           ) : null}
           {price.displayText}
+          {cta.kind === "preorder" && preorderLabel ? (
+            <span data-preorder-marker="" className="mt-0.5 block text-xs font-semibold uppercase tracking-[0.12em]">
+              {preorderLabel}
+            </span>
+          ) : null}
           {message ? (
             <span aria-hidden="true" className="mt-0.5 block truncate text-xs font-normal text-black/65">
               {message}

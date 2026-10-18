@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
+import { BRAND } from "../../src/brand/index.ts";
 import { prisma } from "../../src/db/prisma.ts";
 import { BUYER_AXE_TAGS } from "./axe-tags";
 
@@ -18,6 +19,7 @@ const SHOP_ID = 920_015;
 const runId = `${Date.now()}-${process.pid}`;
 const syncedAt = new Date("2026-10-18T04:00:00.000Z");
 
+const preorderSlug = `pdp-mobile-preorder-${runId}`;
 const slug = `pdp-mobile-${runId}`;
 const name = `Mobile Parka ${runId}`;
 const IMAGES = [1, 2, 3].map((n) => `https://content.pancake.vn/images/9/9/9/pdp-mobile-${n}.jpg`);
@@ -118,6 +120,39 @@ test.beforeAll(async () => {
   await make("olive-l", "Olive", "L", [IMAGES[2]!], 3);
   await make("black-l", "Black", "L", [IMAGES[0]!], 0);
 
+  // A PREORDER product with nothing ready: its only option sells as a preorder.
+  const preorderProduct = await prisma.productMirror.create({
+    data: {
+      pancakeShopId: SHOP_ID,
+      pancakeProductId: `pdp-mobile-preorder-${runId}`,
+      slug: preorderSlug,
+      name: `Mobile Preorder ${runId}`,
+      primaryImageUrl: IMAGES[0],
+      isPresent: true,
+      isActive: true,
+      syncedAt,
+      content: { create: { status: "PUBLISHED", editorialDescription: "Preorder test." } },
+      sellingPolicy: { create: { sellingMode: "PREORDER", negativeStockLimit: -20 } },
+    },
+  });
+  const preorderVariant = await prisma.variantMirror.create({
+    data: {
+      pancakeVariationId: `pdp-mobile-preorder-var-${runId}`,
+      productId: preorderProduct.id,
+      color: "Black",
+      size: "M",
+      pancakeImageUrls: [IMAGES[0]!],
+      isPresent: true,
+      isActive: true,
+      pancakeRetailPrice: 450_000,
+      pancakeRetailPriceAfterDiscount: 450_000,
+      syncedAt,
+    },
+  });
+  await prisma.warehouseStock.create({
+    data: { variantId: preorderVariant.id, pancakeWarehouseId: `wh-preorder-${runId}`, quantity: 0, syncedAt },
+  });
+
   server = spawn(process.execPath, [NEXT_CLI, "dev", "--hostname", HOST, "--port", String(PORT)], {
     cwd: APP_ROOT,
     env: {
@@ -126,6 +161,9 @@ test.beforeAll(async () => {
       BETTER_AUTH_URL: BASE_URL,
       NEXT_TELEMETRY_DISABLED: "1",
       PDP_MOBILE_INTERACTIONS_ENABLED: "true",
+      // Test server only: the preorder case needs selling modes on. The other products have no policy, so they stay STANDARD.
+      SELLING_MODES_ENABLED: "true",
+      SELLING_MODE_PREORDER_ENABLED: "true",
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -216,6 +254,56 @@ test("an out-of-stock combination cannot be chosen, so the bar keeps asking for 
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(barButton(page)).toHaveText("Chọn kích cỡ");
   await expect(barButton(page)).toBeEnabled();
+});
+
+test("a preorder option carries the brand's preorder marker in the bar, from the panel's own message", async ({ page }) => {
+  await page.goto(`${BASE_URL}/shop/${preorderSlug}`, { waitUntil: "networkidle" });
+  await choose(page, "Black");
+  await choose(page, "M");
+  // The panel states it (its live region), and the bar must not be the one surface that does not.
+  await expect(page.getByRole("status").filter({ hasText: BRAND.copy.preorderLabel }).first()).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(bar(page)).toBeVisible();
+  await expect(bar(page).locator("[data-preorder-marker]")).toHaveText(BRAND.copy.preorderLabel);
+  await expect(barButton(page)).toHaveText("Thêm vào giỏ hàng");
+  await assertQuality(page);
+});
+
+test("a ready (non-preorder) option shows no preorder marker in the bar", async ({ page }) => {
+  await open(page);
+  await choose(page, "Olive");
+  await choose(page, "L");
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(bar(page)).toBeVisible();
+  await expect(bar(page).locator("[data-preorder-marker]")).toHaveCount(0);
+});
+
+test("scrolling past the product detail hides the bar, so it never covers the footer, even for keyboard users", async ({ page }) => {
+  await open(page);
+  await expect(bar(page)).toBeVisible();
+
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(bar(page)).toBeHidden();
+
+  // The last footer link is reachable and nothing is painted over it.
+  const footerLinks = page.locator("footer a[href]");
+  const last = footerLinks.last();
+  await last.scrollIntoViewIfNeeded();
+  await last.focus();
+  await expect(last).toBeFocused();
+  await expect(bar(page)).toBeHidden();
+  const probe = await last.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const inViewport = box.top >= 0 && box.bottom <= window.innerHeight;
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    return { inViewport, reachable: hit === element || element.contains(hit) };
+  });
+  expect(probe).toEqual({ inViewport: true, reachable: true });
+  await assertQuality(page);
+
+  // Coming back up to the product, the bar returns.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(bar(page)).toBeVisible();
 });
 
 test("gallery: buttons, arrow keys, Home/End and a touch swipe move the frame without wrapping", async ({ page }) => {

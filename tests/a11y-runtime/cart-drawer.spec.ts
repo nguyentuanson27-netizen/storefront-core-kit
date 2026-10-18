@@ -215,6 +215,32 @@ test("closing restores focus; following a link inside closes the drawer", async 
   await expect(dialog(page)).toHaveCount(0);
 });
 
+test("two activations in the same tick cost one server read, and the drawer still fills", async ({ page }) => {
+  await addToBag(page);
+  let reads = 0;
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    if (request.method() === "POST" && request.headers()["next-action"]) reads += 1;
+    await route.fallback();
+  });
+
+  // Both clicks are dispatched before React can re-render, as with a held Enter or a double tap.
+  await cartLink(page).evaluate((element) => {
+    (element as HTMLAnchorElement).click();
+    (element as HTMLAnchorElement).click();
+  });
+  await expect(dialog(page).getByRole("list", { name: "Sản phẩm trong giỏ hàng" })).toContainText(name);
+  await page.waitForTimeout(500);
+  expect(reads).toBe(1);
+
+  // After closing, opening again is a new read, not blocked by the old guard.
+  await dialog(page).getByRole("button", { name: /Đóng/ }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await cartLink(page).click();
+  await expect(dialog(page).getByRole("list", { name: "Sản phẩm trong giỏ hàng" })).toContainText(name);
+  expect(reads).toBe(2);
+});
+
 test("a modified click keeps the link a link and does not open the drawer", async ({ page }) => {
   await page.goto(`${BASE_URL}/shop`, { waitUntil: "networkidle" });
   const [popup] = await Promise.all([

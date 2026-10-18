@@ -201,12 +201,13 @@ test("the CTA never reports canAdd unless the selection view says it can", () =>
 
 /* ---------------------------------------------------------------- sticky bar */
 
-test("the sticky bar needs a measured, narrow viewport and a panel that is out of view", () => {
-  const base = { ready: true, wide: false, panelIntersecting: false, ctaKind: "choose" as const };
+test("the sticky bar needs a measured, narrow viewport, an off-screen panel and the shopper still inside the detail region", () => {
+  const base = { ready: true, wide: false, panelIntersecting: false, regionIntersecting: true, ctaKind: "choose" as const };
   assert.equal(resolveStickyBarVisible(base), true);
   assert.equal(resolveStickyBarVisible({ ...base, ready: false }), false, "never before measurement");
   assert.equal(resolveStickyBarVisible({ ...base, wide: true }), false, "never on a wide viewport");
   assert.equal(resolveStickyBarVisible({ ...base, panelIntersecting: true }), false, "the real action is on screen");
+  assert.equal(resolveStickyBarVisible({ ...base, regionIntersecting: false }), false, "scrolled past the detail region: it would only cover the footer");
   assert.equal(resolveStickyBarVisible({ ...base, ctaKind: "none" }), false, "nothing to buy");
   for (const ctaKind of ["pending", "choose", "unavailable", "preorder", "ready"] as const) {
     assert.equal(resolveStickyBarVisible({ ...base, ctaKind }), true, ctaKind);

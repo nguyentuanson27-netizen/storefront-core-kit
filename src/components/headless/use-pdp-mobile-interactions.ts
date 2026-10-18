@@ -101,19 +101,25 @@ export function usePdpGalleryControls({ enabled, activeIndex, imageCount, onChan
   };
 }
 
+/** The bar's height plus a little air, in CSS pixels; the region stops counting once it ends above this. */
+export const STICKY_BAR_CLEARANCE_PX = 80;
+
 export type UsePdpStickyBarInput = Readonly<{
   enabled: boolean;
   /** The element that holds the real purchase panel; the bar shows when it leaves the viewport. */
   panelRef: RefObject<HTMLElement | null>;
+  /** The whole product detail region; the bar hides once the shopper scrolls past it. */
+  regionRef: RefObject<HTMLElement | null>;
   /** At or above this the bar never shows. The brand's breakpoint, e.g. `(min-width: 1024px)`. */
   wideQuery: string;
   ctaKind: PurchaseCtaKind;
 }>;
 
-export function usePdpStickyBar({ enabled, panelRef, wideQuery, ctaKind }: UsePdpStickyBarInput) {
+export function usePdpStickyBar({ enabled, panelRef, regionRef, wideQuery, ctaKind }: UsePdpStickyBarInput) {
   const [ready, setReady] = useState(false);
   const [wide, setWide] = useState(true);
   const [panelIntersecting, setPanelIntersecting] = useState(true);
+  const [regionIntersecting, setRegionIntersecting] = useState(true);
 
   useEffect(() => {
     if (!enabled) return;
@@ -142,7 +148,24 @@ export function usePdpStickyBar({ enabled, panelRef, wideQuery, ctaKind }: UsePd
     return () => observer.disconnect();
   }, [enabled, panelRef]);
 
+  useEffect(() => {
+    if (!enabled) return;
+    const region = regionRef.current;
+    if (region === null) return;
+    // A negative bottom margin shrinks the viewport by the bar's height: the region stops
+    // "intersecting" the moment the bar would start covering what lies below it.
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const latest = entries[entries.length - 1];
+        if (latest) setRegionIntersecting(latest.isIntersecting);
+      },
+      { threshold: 0, rootMargin: `0px 0px -${STICKY_BAR_CLEARANCE_PX}px 0px` },
+    );
+    observer.observe(region);
+    return () => observer.disconnect();
+  }, [enabled, regionRef]);
+
   return {
-    visible: enabled && resolveStickyBarVisible({ ready, wide, panelIntersecting, ctaKind }),
+    visible: enabled && resolveStickyBarVisible({ ready, wide, panelIntersecting, regionIntersecting, ctaKind }),
   };
 }
