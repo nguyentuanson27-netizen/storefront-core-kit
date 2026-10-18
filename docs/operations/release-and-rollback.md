@@ -265,6 +265,22 @@ Enable: set `PDP_MOBILE_INTERACTIONS_ENABLED=true` in `deploy/vps/.env.productio
 `compose exec app node -e 'if (process.env.PDP_MOBILE_INTERACTIONS_ENABLED !== "true") process.exit(1)'`. Rollback is the
 same switch in reverse; there is nothing to migrate.
 
+## Cart drawer (`CART_DRAWER_ENABLED`)
+
+A/B/C plan task C03. No migration. A read-only summary of the shopper's own cart opened from the header cart link.
+Every figure (line prices, availability words, subtotal, whether checkout is offered) is `buildCartViewModel`'s, the same
+model `/cart` renders, passed through the `readStorefrontCartDrawer` server action; the drawer recalculates nothing and edits
+nothing. Quantity changes stay on `/cart`. Off by default in `.env.example` and `deploy/vps/env.example`; only the exact value
+`true` enables it. Off, the header link is a plain link and the action answers `null` without reading the database.
+
+The dialog traps Tab, closes on Escape, the close button, the backdrop or following any link inside it, restores focus to the
+cart link, and drops a response that arrives after it was closed or after a newer open. A modified click (Ctrl/Cmd/Shift/Alt,
+middle) and a client without scripting still follow the link to `/cart`.
+
+Enable: set `CART_DRAWER_ENABLED=true` in `deploy/vps/.env.production`, recreate `app` (`--no-build --no-deps --force-recreate`),
+verify with `compose exec app node -e 'if (process.env.CART_DRAWER_ENABLED !== "true") process.exit(1)'`. Rollback is the same
+switch in reverse; there is nothing to migrate.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

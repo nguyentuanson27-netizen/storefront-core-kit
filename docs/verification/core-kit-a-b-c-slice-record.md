@@ -58,7 +58,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | F00 | #28 | `81438ef` | 13/13 checks success on `51bdd46` | — | no code change | revert the PR |
 | B07 | #29 | `75e69b4` | 15/15 checks success on `fab04ba` | `SEARCH_SUGGESTIONS_ENABLED` (OFF) | flag OFF returns `DISABLED` before validation or any catalog statement (asserted at 0 statements); `/search`, `/shop` untouched | set the flag `false` and recreate `app`; no migration |
 | C02 | #30 | `26bce5a` | 15/15 checks success on `aa6d6c5` | `SHOP_FILTER_DISCLOSURE_ENABLED` (OFF) | flag OFF renders the unchanged always-open form; the unmodified `discovery.spec.ts` passes against an OFF server | set the flag `false` and recreate `app`; no migration |
-| C01 | #31 | _recorded after merge_ | _recorded after CI_ | `PDP_MOBILE_INTERACTIONS_ENABLED` (OFF) | flag OFF renders the unchanged gallery and detail; unmodified `pdp-promotion`, `storefront-media`, `variant-deep-link` specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
+| C01 | #31 | `ca8dceb` | 15/15 checks success on `9c82d26` | `PDP_MOBILE_INTERACTIONS_ENABLED` (OFF) | flag OFF renders the unchanged gallery and detail; unmodified `pdp-promotion`, `storefront-media`, `variant-deep-link` specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
+| C03 | #32 | _recorded after merge_ | _recorded after CI_ | `CART_DRAWER_ENABLED` (OFF) | flag OFF renders the plain header link; the server action answers `null` without a database read; unmodified cart/footer/not-found specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
 
 ## B07 — bounded search suggestions
 
@@ -118,3 +119,22 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
   no horizontal overflow; "Chọn màu" moves focus to the first colour and hides the bar over the real panel; adding from the bar adds via
   the panel's action; Home/End/arrow keys and a touch swipe move the gallery without wrapping and a vertical drag does not.
 - **Not claimed:** no real touch device or screen reader; swipe is synthesized pointer events.
+
+## C03 — cart drawer (read-only)
+
+- **Scope decision:** v1 is a read-only summary. The plan's "stale/double mutations do not lose buyer data" is met by not mutating:
+  quantity edits stay on `/cart`, where the canonical cart mutation and its feedback live. Editing in the drawer would be a separate
+  slice and must reuse `useCartLine`.
+- **No money recalculation:** `buildCartDrawerView(buildCartViewModel(lines))` passes the route's own line prices, availability words,
+  subtotal and `canCheckout` through (asserted equal to the cart model's), and drops the internal `variantId` and the tracking flag.
+- **State rules** (`cart-drawer-model.ts`, pure): every open starts `loading` with no view, so the previous contents are never shown as
+  current; a response for an older open or after close is dropped; a second open while loading is ignored; a failed read retries in
+  place; a `null` result (capability off) is an error state, not an empty cart.
+- **Findings from the browser run, both fixed in this PR:** (1) the dialog rendered inside the header's utility `<nav>` and inherited
+  `.utility-nav a:not(:last-child){display:none}` on narrow viewports, hiding its own links — it is now portaled to `document.body`;
+  (2) axe flagged the black "Thanh toán" button (global `a` colour beat the Tailwind utility; contrast 1.11:1) — fixed with `text-white!`.
+- **Verified in Chromium** (local, PostgreSQL 16, dev server flag ON): server HTML has a plain `/cart` link and no dialog; empty cart opens
+  focused on the dialog, Escape closes and returns focus to the link, page scroll restored; a cart line shows the same subtotal digits the
+  `/cart` HTML contains; Tab and Shift+Tab cycle 8 presses each without leaving the dialog; close restores focus and a link inside closes
+  the drawer; Ctrl-click opens a new tab and no dialog; 390×844 and 1440×900 axe clean with no horizontal overflow.
+- **Not claimed:** no screen reader; the drawer is not opened automatically after add-to-cart.
