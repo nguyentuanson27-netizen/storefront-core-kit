@@ -55,7 +55,7 @@ F00 revalidate the /plan gap matrix at implementation SHA → F01 owner contract
     [A03, A04, A05, A06, A07, POS evidence] → A08 real A1 checkout render/submit + POS parity
     A08 → A09 read-only upsell → A10 canonical add-one checkout action (no cart drawer)
 
-F00 → B01 selection storage → B02 admin → B03 flagged New Arrivals
+F00 → [GB1 child spec approval + G3 additive-migration review] → B01 selection storage → B02 admin → B03 flagged New Arrivals (GB1 still required)
 F00 → B04 homepage featured; B05 related override; B06 size media; B07 suggestions
 F00 → B08 category decision → B09 only if approved
 F00 → B10 image measurement → B11 only if approved
@@ -67,14 +67,15 @@ A08 → C04 checkout gift UI (not a C03 prerequisite)
 R00 repeats release/verification for each independently enabled slice.
 ```
 
-B01–B07, C01/C02/C03 can proceed independently after F00. B08/B10 research does not authorize B09/B11. A04 creates **OFF-only** versioned quote plumbing with synthetic data and is not a live A1 checkout integration; A08 completes real buyer render/submit after A05 and A07. A10 consumes existing canonical `src/commerce/storefront-cart-actions.ts` and checkout quote authority, with **no C03 dependency**. C04 consumes A08's server quote/`src/routes/checkout-model.ts`, with **no C03 dependency**. A separate adapter may depend on C03 only if it actually embeds the drawer. B07 is required only by C05's optional search overlay, not C02 filtering. Parallel schema, checkout and shared-interface work must coordinate reviewed contracts.
+B01–B03 cannot start /build merely after F00: **GB1 approval of the B1 child spec and G3 schema/migration review are prerequisites to B01**, and B03 independently checks the approved pagination/route contract. B04–B07 and C01/C02/C03 can proceed independently after F00. B08/B10 research does not authorize B09/B11. A04 creates **OFF-only** versioned quote plumbing with synthetic data and is not a live A1 checkout integration; A08 completes real buyer render/submit after A05 and A07. A10 consumes existing canonical `src/commerce/storefront-cart-actions.ts` and checkout quote authority, with **no C03 dependency**. C04 consumes A08's server quote/`src/routes/checkout-model.ts`, with **no C03 dependency**. A separate adapter may depend on C03 only if it actually embeds the drawer. B07 is required only by C05's optional search overlay, not C02 filtering. Parallel schema, checkout and shared-interface work must coordinate reviewed contracts.
 
 ## 4. Non-negotiable interfaces and behavior
 
 - **Gift lines:** `PAID X×1 + GIFT X×1` is two distinct `lineId`+role lines (0-VND only for GIFT), not duplicate paid CartItem rows; laq1 remains legacy-only, laq2 signs full quote/entitlement. Historic orders without v2 fields remain readable.
 - **Capacity:** existing `@@unique([orderId, variantId])` reservation stays the default; paid+gift same SKU demands a single locked reservation of **quantity 2**, including composite expansion, idempotent retry and SYNC_UNKNOWN mirror handoff.
 - **Thresholds:** `Q_paid_eligible(campaign)` and `S_basis(campaign)` are scoped/frozen per campaign **before A1 discounts**. Shipping uses whole-cart paid `Q_paid_cart` and post-benefit `S_final_paid`; the current policy is strict `S_final_paid > freeShippingSubtotalVnd` OR `Q_paid_cart >= freeShippingMinQuantity`. No gift/unit fallback, quantity-0 shipping invocation, post-tier eligibility oscillation or browser-owned money.
-- **New Arrivals:** default flag OFF preserves editorial-only route with no list queries; ON+empty stays empty; ON+published selection renders manually ordered cards using existing catalog/price/availability and canonical PDP URLs, not a second shop filter/sort.
+- **New Arrivals:** default flag OFF preserves the editorial-only route, its view model, and zero curated-listing queries; ON+empty preserves the editorial frame and renders a clearly announced, accessible empty-list state with zero product cards and no backfill/redirect; ON+published selection renders manually ordered cards using existing catalog/price/availability and canonical PDP URLs, not a second shop filter/sort.
+- **GB1 — B1 approval before implementation:** review/approve a dedicated B1 child spec **before B01 writes a Prisma schema/migration or any curated repository code** and recheck it before B03. The child spec must decide a **positive finite page-size limit** (named `pageSize`), maximum page/selection bounds, pagination mechanism and canonical page URLs, stable manual order across pages, handling of hidden/unpublished items without substitution/backfill, invalid/out-of-range pages, empty-state accessibility, data ownership, and additive schema/old-writer rollout/rollback. **G3 migration approval also applies before schema/SQL changes.** This plan does not select a default `pageSize` or approve any migration.
 - **Safety:** server-authorized admin writes, bounded data/quotes/queries, trusted sources, no La.Na-specific brand/theme, no shadow price or capacity engine, no vendor readback claims without controlled proof.
 - **Optional:** B3 taxonomy and B6 image proxy are conditional. Default OFF remains in place for A1/A2 and other behavior changes.
 
@@ -90,7 +91,7 @@ B01–B07, C01/C02/C03 can proceed independently after F00. B08/B10 research doe
 
 **CP-A3 (A09–A10):** bounded read-only upsell, idempotent add-one, never reduced existing benefits; optional default OFF.
 
-**CP-B1 (B01–B03):** atomic curated order and OFF-editorial / ON-empty / ON-curated release independent of legacy listing order.
+**CP-B1 (B01–B03):** **STOP until GB1 child spec is approved and G3 additive schema/migration review passes, before B01 code**. Verify approved finite page-size and page-link contract, atomic curated order across page boundaries, OFF editorial parity, ON + empty **editorial frame + accessible empty state** (no cards/redirect/backfill), ON + selected catalog projection, and no second `/shop` pricing/filter authority. B03 must recheck GB1 even after B01.
 
 **CP-B2 (B04–B07):** bounded feature-level acceptance for featured items, related fallback, guide media, search; admin/shop scope/security.
 
@@ -110,7 +111,7 @@ B01–B07, C01/C02/C03 can proceed independently after F00. B08/B10 research doe
 | Gift discounts make free shipping appear/disappear incorrectly | Frozen pre-A1 eligible basis; shipping after benefits with whole-cart paid quantity |
 | Migration breaks old orders/writers | Additive schema first; compatibility and rollback tests with flags OFF |
 | Admin or suggestion leaks tenant/product state | Server authorization and shop scope; bounded inputs, queries and trusted projections |
-| B1 becomes second search/price owner | Only manual order differs; route consumes shop price/stock/card authority |
+| B1 becomes second search/price owner or ships unreviewed pagination/schema | GB1 child spec and G3 schema review **before B01**, independently rechecked at B03; bounded, stable cross-page manual order; route consumes existing shop price/stock/card authority |
 | B3/B6 over-generalize the kit | B08/B10 decision gates before code; may be skipped |
 | C client code recalculates purchase values | Use routes/headless and server facts; keyboard/browser/accessibility checks |
 
@@ -153,9 +154,9 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 | A07 | Persist selected gift state and enforce fresh entitlement | A01, A05, A06 | Approved gift choice contract |
 | A08 | Prove POS create/readback parity and complete gated A1 | A03, A04, A05, A06, A07 | External POS acceptance; default OFF |
 | A09 | Build bounded read-only promotion upsell evaluator | A05, A08 | Optional/default OFF |
-| B01 | Persist curated new-arrivals membership and order | F00 | Required for B1 |
+| B01 | Persist curated new-arrivals membership and order | F00 | BLOCKED: GB1 child spec + G3 migration approval before /build |
 | B02 | Expose admin-only arrivals curator | B01 | Admin auth review |
-| B03 | Add ON/OFF curated arrivals read model | B01, B02 | Route/SEO parity |
+| B03 | Add ON/OFF curated arrivals read model | B01, B02 | GB1 pagination/empty-state approval + route/SEO parity |
 | B04 | Curate homepage featured products without copying collections | F00 | Gap/audit first |
 | B05 | Add optional related-products editorial override | F00 | Fallback must be reviewed |
 | B06 | Add optional trusted media for configured size guides | F00 | Optional/default OFF |
@@ -381,14 +382,15 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 
 **Intent:** Persist stable website-owned ordered product selection, independent of ProductMirror.createdAt, collections and shop sort.
 
-**Dependencies:** F00. **Gate:** Required for B1.
+**Dependencies:** F00. **Gate:** **BLOCKED until GB1 and G3 are approved before /build.** F00 completion alone does not authorize code.
 
 **Acceptance:**
-- [ ] Atomic bounded add/remove/reorder; empty set is durable and never inferred from mirrored creation date.
-- [ ] Pancake sync cannot overwrite ordered selection; old writer/migration compatibility proven.
+- [ ] **Before any schema, migration SQL or repository implementation:** B1 child spec has recorded owner/reviewer approval of selection identity, stable manual order, bounded pagination and `pageSize`, visibility/empty semantics, auth/data ownership and additive migration/old-writer/rollback plan; the actual Prisma schema/migration design is separately reviewed under G3. Neither gate is waived by approving this umbrella plan.
+- [ ] Atomic bounded add/remove/reorder; empty selection is durable, independent of `ProductMirror.createdAt`; persistence does not overwrite current collections or mirror ownership.
+- [ ] Pancake sync cannot overwrite ordered selection; concurrent edits/invalid input are safe, old writers and migration coexist, and a selected item removed/hidden is never replaced from unrelated products.
 
 **Verification (future implementation, not this PR):**
-- [ ] `pnpm prisma:validate`, `pnpm test:db` curation/reorder/concurrency.
+- [ ] Record **GB1 child spec and G3 schema review links before /build**; only then run `pnpm prisma:validate`, `pnpm test:db` for curation, ordering, concurrency, migration and backwards-compatibility.
 
 **Likely touched/reviewed files** (not exact diff promises):
 - `prisma/schema.prisma`
@@ -419,14 +421,15 @@ Pure contracts: `tests/domain/*.test.ts` (RED/GREEN). Database/migrations/concur
 
 **Intent:** Extend the current editorial-only /new-arrivals route with flagged manual-order product cards using shop catalog, price, stock, publication and route shell authority.
 
-**Dependencies:** B01, B02. **Gate:** Route/SEO parity.
+**Dependencies:** B01, B02. **Gate:** **GB1 approved pagination/empty-state contract**, plus route/SEO parity. B01/B02 completion alone cannot bypass GB1.
 
 **Acceptance:**
-- [ ] OFF keeps current empty/editorial page; ON+empty renders no product cards; ON+selection keeps saved valid order without fallback.
-- [ ] Published/valid products link to canonical PDP; hidden/stale entries skipped; shop filtering and ranking unchanged.
+- [ ] **GB1 child spec approval is recorded before this read-model implementation.** It defines a positive, finite `pageSize` limit and bounded pages, pagination/query/canonical-URL behavior, and whether visibility filtering precedes/follows pagination without backfill; no default `pageSize` is silently invented by this plan.
+- [ ] **Flag OFF:** the current editorial frame, empty route view model and metadata/route shell remain unchanged, with no curated data queries. **Flag ON + zero curated products:** preserve the editorial frame and render a **visible, screen-reader-accessible empty-list status** with zero product cards; no redirect, created-at fallback or automatic backfill.
+- [ ] **Flag ON + selections:** canonical `/shop` catalog/price/availability and PDP links, published/valid products only, saved manual order preserved **across every page** with no duplicate/missing valid items; hidden/stale IDs are skipped without replacement; existing `/shop` filters/ranking unaffected. Handle invalid and out-of-range page requests according to the approved GB1 contract.
 
 **Verification (future implementation, not this PR):**
-- [ ] `pnpm test:domain` route-boundary/manifest and `pnpm test:db` listing parity; browser a11y at 390/1440.
+- [ ] `pnpm test:domain` for route/manifest, **pagination boundaries at N-1/N/N+1/2N+1 items (N = approved finite `pageSize`)**, stable manual order across page transitions, missing/hidden selection, invalid/out-of-range page requests and no backfill; `pnpm test:db` query bounds/listing parity; browser/axe/keyboard checks for **OFF editorial**, **ON + empty accessible status with editorial frame**, ON nonempty and page links at 390×844, 768 and 1440px.
 
 **Likely touched/reviewed files** (not exact diff promises):
 - `src/routes/new-arrivals.ts`
