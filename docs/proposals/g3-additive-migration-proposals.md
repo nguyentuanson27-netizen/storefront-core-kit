@@ -1,6 +1,6 @@
-# G3 additive migration proposals — A02, A06, B01, B04, B05, B06 (PROPOSED, nothing applied)
+# G3 additive migration designs — A02, A06, B01, B04, B05, B06 (approved by delegation, none applied yet)
 
-**Status:** DRAFT FOR REVIEW (bounds confirmed by the owner 2026-10-18; no slice approved). The owner approved *drafting* additive designs ([decision record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) §3). **No schema diff, SQL file or migration is in the repository, and none may be added until the section for that slice is approved.** Each section is its own G3 checkbox; approving one does not approve another.
+**Status:** **A02, A06, B01, B04, B05, B06 APPROVED under the owner's delegation** — see the [delegated decision record](../approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md) for the review outcome and the changes it made to the drafts below (A06 is percentage-only; B06 reuses `parseTrustedProductImageUrl`). Approval permits writing the migration as implementation, tested on CI/local databases only; applying anything to a shared or production database remains a G6 deployment step. The owner approved *drafting* additive designs ([decision record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) §3). **No schema diff, SQL file or migration is in the repository, and none may be added until the section for that slice is approved.** Each section is its own G3 checkbox; approving one does not approve another.
 
 Existing facts these proposals rely on (all from `prisma/schema.prisma` on `main`):
 
