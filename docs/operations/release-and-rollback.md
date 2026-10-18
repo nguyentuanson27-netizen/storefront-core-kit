@@ -212,6 +212,25 @@ mirror as usual; negative stock simply stops selling until it is positive again.
 the flag back on restores them. Never delete `ProductSellingPolicy` rows to "reset" a product: the admin "Mặc định"
 choice does that one product at a time and records who did it.
 
+## Search suggestions (`SEARCH_SUGGESTIONS_ENABLED`)
+
+A/B/C plan task B07. No migration and no new table: a suggestion is the first few rows of the canonical `/shop`
+discovery read for the same `q`, so visibility, effective price and availability are the listing's own. The flag is
+**off** by default in `.env.example` and `deploy/vps/env.example`; only the exact value `true` enables it. While it is
+off the `searchStorefrontSuggestions` server action answers `DISABLED` before validating the query or reading the
+catalog, and `/search` and `/shop` are unchanged either way.
+
+Bounds are code constants in `src/commerce/storefront-search-suggestions.ts`: query 2–80 characters (the same maximum
+`/shop` accepts for `q`), at most 6 suggestions, a 1,500 ms ceiling after which the caller gets `UNAVAILABLE`.
+
+Enable by setting `SEARCH_SUGGESTIONS_ENABLED=true` in `deploy/vps/.env.production` and recreating the `app`
+container (`--no-build --no-deps --force-recreate`, as for selling modes; a plain restart keeps the old environment).
+Verify with `compose exec app node -e 'if (process.env.SEARCH_SUGGESTIONS_ENABLED !== "true") process.exit(1)'`.
+Nothing renders suggestions until the optional overlay (task C05) is shipped and wired by a brand, so enabling this flag
+alone changes no page.
+
+Rollback is the same switch in reverse: set it to `false` and recreate `app`. There is nothing to migrate or clean up.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

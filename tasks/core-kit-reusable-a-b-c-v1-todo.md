@@ -113,10 +113,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: `pnpm test:domain` validation, `pnpm test:db` storage; PDP browser/a11y fallback.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **B07 — Add bounded search suggestion read model** [B; deps: F00; Independent]
-  - [ ] Acceptance: Hidden/stale products omitted; suggestions count, input length, latency and DB query volume bounded.
-  - [ ] Verification: `pnpm test:domain` discovery/search and `pnpm test:db` suggestions visibility/price tests.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **B07 — Add bounded search suggestion read model** [B; deps: F00; Independent]
+  - [x] Acceptance: Hidden/stale products omitted; suggestions count, input length, latency and DB query volume bounded.
+  - [x] Verification: `pnpm test:domain` discovery/search and `pnpm test:db` suggestions visibility/price tests.
+  - Evidence: PR #29; code `src/commerce/storefront-search-suggestions.ts`, `src/routes/search-suggestions-model.ts`, `src/routes/search-suggestions.ts` (server action); flag `SEARCH_SUGGESTIONS_ENABLED` default OFF. Local on base `main@81438ef`: lint 0 errors, typecheck, `pnpm test` 1862 pass, `tests/database/search-suggestions.test.ts` 6 pass, `pnpm build` OK. Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **B08 — Decide category taxonomy versus current collections** [B; deps: F00; Owner/architecture gate]
   - [ ] Acceptance: Reviewed ADR chooses KEEP collections or ADD separate taxonomy, with exact ownership, keys, indexation and orphan rules.
