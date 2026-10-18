@@ -145,8 +145,10 @@ export type BenefitScopeFacts = Readonly<{
   name: string;
   startsAt: Date | null;
   endsAt: Date | null;
-  /** The products the campaign covers (a variant target contributes its product); null = store-wide. */
+  /** Explicit product targets; null = store-wide. */
   productIds: ReadonlySet<string> | null;
+  /** Explicit variant IDs and their parent product IDs. */
+  variantProductIds: ReadonlyMap<string, string>;
 }>;
 
 export type BenefitConflict = Readonly<{
@@ -167,10 +169,15 @@ export function windowsIntersect(
   return leftStart < rightEnd && rightStart < leftEnd;
 }
 
-function scopesIntersect(left: ReadonlySet<string> | null, right: ReadonlySet<string> | null): boolean {
-  if (left === null || right === null) return true;
-  const [small, large] = left.size <= right.size ? [left, right] : [right, left];
-  for (const id of small) if (large.has(id)) return true;
+function scopesIntersect(left: BenefitScopeFacts, right: BenefitScopeFacts): boolean {
+  if (left.productIds === null || right.productIds === null) return true;
+  for (const productId of left.productIds) if (right.productIds.has(productId)) return true;
+  for (const [variantId, productId] of left.variantProductIds) {
+    if (right.productIds.has(productId) || right.variantProductIds.has(variantId)) return true;
+  }
+  for (const productId of right.variantProductIds.values()) {
+    if (left.productIds.has(productId)) return true;
+  }
   return false;
 }
 
@@ -190,14 +197,14 @@ export function findBenefitPublishConflicts(
   const conflicts: BenefitConflict[] = [];
   for (const other of enabledBenefit) {
     if (other.id === candidate.id) continue;
-    if (windowsIntersect(candidate, other) && scopesIntersect(candidate.productIds, other.productIds)) {
+    if (windowsIntersect(candidate, other) && scopesIntersect(candidate, other)) {
       conflicts.push({ with: "BENEFIT", id: other.id, name: other.name });
     }
   }
   if (candidate.productIds !== null) {
     for (const other of enabledLegacy) {
       if (other.productIds === null) continue;
-      if (windowsIntersect(candidate, other) && scopesIntersect(candidate.productIds, other.productIds)) {
+      if (windowsIntersect(candidate, other) && scopesIntersect(candidate, other)) {
         conflicts.push({ with: "LEGACY", id: other.id, name: other.name });
       }
     }
