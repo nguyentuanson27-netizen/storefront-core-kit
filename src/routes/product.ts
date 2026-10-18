@@ -18,7 +18,11 @@ import { readSearchExposure } from "@/seo/search-exposure";
 import { buildStorefrontProductStructuredData } from "@/seo/storefront-product-structured-data";
 
 import { sealRoute, type RouteHandle } from "./core.tsx";
-import { buildProductViewModel, type ProductViewModel } from "./product-model.ts";
+import {
+  buildProductViewModel,
+  readPdpMobileInteractionsEnabled,
+  type ProductViewModel,
+} from "./product-model.ts";
 
 /** The product page's loader: the product, its related grid, the deep link, and the JSON-LD. */
 
@@ -31,6 +35,8 @@ export type ProductRouteData = ProductViewModel &
   Readonly<{
     /** Server-resolved: a deployment that publishes no dataLayer must not have one created here. */
     commerceTrackingEnabled: boolean;
+    /** Server-resolved gate for gallery swipe/keys and the sticky mobile purchase bar (default off). */
+    mobileInteractionsEnabled: boolean;
     /** The related grid's own `view_item_list`; the shell carries the product view event. */
     relatedListEvent: ReturnType<typeof buildProductListTracking>["listEvent"];
   }>;
@@ -91,6 +97,7 @@ export async function loadProductRoute({
         relatedSelectEventBySlug: relatedTracking.selectEventBySlug,
       }),
       commerceTrackingEnabled: isCommerceTrackingEnabled(),
+      mobileInteractionsEnabled: readPdpMobileInteractionsEnabled(),
       relatedListEvent: relatedTracking.listEvent,
     },
     refreshAfterMs: promotion.refreshAfterMs,

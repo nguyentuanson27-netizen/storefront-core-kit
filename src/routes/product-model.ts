@@ -37,6 +37,13 @@ export type RelatedProduct = Readonly<{
   variants: StorefrontVariantFacts[];
 }>;
 
+/** Strictly `"true"` turns swipe/keys and the sticky mobile purchase bar on; anything else is OFF. */
+export function readPdpMobileInteractionsEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return env.PDP_MOBILE_INTERACTIONS_ENABLED === "true";
+}
+
 export type ProductViewModel = Readonly<{
   slug: string;
   name: string;

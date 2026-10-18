@@ -119,6 +119,7 @@ function render(data: ProductRouteData) {
         productName={data.name}
         initialGalleryIndex={data.initialGalleryIndex}
         galleryIndexByVariantId={data.galleryIndexByVariantId}
+        mobileInteractions={data.mobileInteractionsEnabled}
         beforePanel={beforePanel}
         afterPanel={afterPanel}
       />
