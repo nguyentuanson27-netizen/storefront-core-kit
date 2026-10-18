@@ -77,6 +77,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | B05 related-products override | #46 | `0c8993d` | 15/15 checks success on `0ca638b` | `RELATED_PRODUCTS_OVERRIDE_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `related-products` spec passes | set the flag `false` and recreate `app`; leave the table |
 | B06 size-guide chart images | #47 | `89d9b84` | 15/15 checks success on `b88ddad` | `SIZE_GUIDE_MEDIA_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `evergreen-pages` spec passes | set the flag `false` and recreate `app`; leave the table |
 | A02 benefit order persistence | #48 | _recorded after merge_ | _recorded after CI_ | none (no code writes the columns yet) | additive nullable columns; legacy rows and old writers unchanged; rollback = leave the columns | revert before any v2 order exists; otherwise leave the columns |
+| A04 laq2 render/persist adapters (synthetic) | #49 | _recorded after merge_ | _recorded after CI_ | none (unwired) | no caller; legacy quotes and `laq1` untouched | revert the PR |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -127,6 +128,10 @@ Migration `20261018160000_add_new_arrivals_selection`: `NewArrivalsSelection` (u
 ## A02 — benefit order persistence
 
 Six nullable columns on `OrderLineSnapshot`; on `OrderMirror` `quoteVersion` and the granted campaign's frozen facts (campaign id, eligible quantity, basis, tier index — **added to the approved design while building A04**, because the `laq2` proof canonicalizes them and an order must be able to rebuild the exact proof bytes from what it stored); a unique `(orderId, lineId)` and two shape CHECKs. Legacy rows are all NULL and satisfy the first branch vacuously; old writers that never set the columns keep working; no fake gift is ever created for an old order. **The database tests caught the same trap twice in the first drafts of the CHECKs:** a CHECK passes when its expression is NULL, so `lineId` without a role, and order facts on a legacy order (`quoteVersion` NULL), slipped through. The shipped SQL tests `lineRole IS NOT NULL` and `quoteVersion IS NOT NULL` explicitly and each legacy branch requires every new column to be NULL. `CapacityReservation` is untouched (A03). **Coexistence hazard recorded in the proposal still applies:** old code reading a v2 order would see a gift as an ordinary 0-VND line, so nothing may write v2 orders (A08) before the code that understands them has been deployed, and rollback is flag OFF plus draining v2 orders, never a code rollback first.
+
+## A04 — laq2 adapters on synthetic fixtures
+
+`src/commerce/benefit-quote-adapters.ts` connects A05 (eligibility), A01 (proof), A02 (rows) and A03 (reservation input) without any caller. The property it exists to pin down: **the proof rendered from the evaluation equals, byte for byte, the proof rebuilt from the rows read back from the database** — for a gift quote, a tier discount, a grant that no line happens to carry (all lines legacy-discounted), and a no-grant order. Building A04 exposed that the stored order lacked the granted campaign's id and frozen facts; those columns were added to A02 before A02 shipped (see A02). Real buyer checkout does not use any of this until A08, which still needs controlled Pancake readback (G2).
 
 ## B07 — bounded search suggestions
 
