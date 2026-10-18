@@ -76,7 +76,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | B04 homepage featured selection | #45 | `0f79c8b` | 15/15 checks success on `4ed3f30` | `HOMEPAGE_FEATURED_ENABLED` (OFF) | flag OFF: the loader never reads the selection; automatic discovery unchanged | set the flag `false` and recreate `app`; leave the tables |
 | B05 related-products override | #46 | `0c8993d` | 15/15 checks success on `0ca638b` | `RELATED_PRODUCTS_OVERRIDE_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `related-products` spec passes | set the flag `false` and recreate `app`; leave the table |
 | B06 size-guide chart images | #47 | `89d9b84` | 15/15 checks success on `b88ddad` | `SIZE_GUIDE_MEDIA_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `evergreen-pages` spec passes | set the flag `false` and recreate `app`; leave the table |
-| A02 benefit order persistence | #48 | _recorded after merge_ | _recorded after CI_ | none (no code writes the columns yet) | additive nullable columns; legacy rows and old writers unchanged; rollback = leave the columns | revert before any v2 order exists; otherwise leave the columns |
+| A02 benefit order persistence | #48 | `2a3c68c` | 15/15 checks success on `465493941ba1ff55f86fec806c2ec3dea2f2d163` | none (no code writes the columns yet) | additive nullable columns; legacy rows and old writers unchanged; rollback = leave the columns | revert before any v2 order exists; otherwise leave the columns |
 | A04 laq2 render/persist adapters (synthetic) | #49 | _recorded after merge_ | _recorded after CI_ | none (unwired) | no caller; legacy quotes and `laq1` untouched | revert the PR |
 
 ## A01 — laq2 role lines and proof (pure code)
