@@ -3,6 +3,7 @@ import {
   describeGuestShippingPromotionHeadline,
   readGuestShippingPolicy,
 } from "../../commerce/guest-shipping-policy.ts";
+import { readCartDrawerEnabled } from "../../routes/cart-drawer-model.ts";
 import {
   buildPublicBrandFacts,
   describePublicAddress,
@@ -38,6 +39,8 @@ export type SiteFooterModel = Readonly<{
 export type SiteChromeContent = Readonly<{
   promotion: SitePromotionModel;
   footer: SiteFooterModel;
+  /** Server-resolved (`CART_DRAWER_ENABLED`, default off): the header cart link opens a drawer. */
+  cartDrawerEnabled: boolean;
 }>;
 
 export function buildSiteChromeContent(): SiteChromeContent {
@@ -54,5 +57,6 @@ export function buildSiteChromeContent(): SiteChromeContent {
       address: describePublicAddress(),
       supportHours: describePublicSupportHours(),
     },
+    cartDrawerEnabled: readCartDrawerEnabled(),
   };
 }

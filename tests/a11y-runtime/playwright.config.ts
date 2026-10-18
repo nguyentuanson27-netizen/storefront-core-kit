@@ -17,6 +17,7 @@ export default defineConfig({
     "admin-editor.spec.ts",
     "admin-editor-compact.spec.ts",
     "admin-promotions.spec.ts",
+    "cart-drawer.spec.ts",
     "checkout.spec.ts",
     "collection-breadcrumb.spec.ts",
     "collection-landing.spec.ts",

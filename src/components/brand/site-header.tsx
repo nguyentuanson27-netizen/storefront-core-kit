@@ -1,8 +1,9 @@
 import Link from "next/link";
 
 import { BRAND, NAVIGATION } from "@/brand";
+import { CartDrawerTrigger } from "@/components/brand/cart-drawer";
 
-export function SiteHeader() {
+export function SiteHeader({ cartDrawer = false }: Readonly<{ cartDrawer?: boolean }>) {
   return (
     <header className="site-header">
       <a className="skip-link" href="#main-content">
@@ -36,11 +37,15 @@ export function SiteHeader() {
         </div>
 
         <nav className="utility-nav" aria-label="Tiện ích">
-          {NAVIGATION.utility.map((item) => (
-            <Link key={item.href} href={item.href}>
-              {item.label}
-            </Link>
-          ))}
+          {NAVIGATION.utility.map((item) =>
+            cartDrawer && item.href === "/cart" ? (
+              <CartDrawerTrigger key={item.href} href={item.href} label={item.label} />
+            ) : (
+              <Link key={item.href} href={item.href}>
+                {item.label}
+              </Link>
+            ),
+          )}
         </nav>
       </div>
     </header>
