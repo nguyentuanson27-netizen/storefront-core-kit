@@ -33,6 +33,7 @@ export default defineConfig({
     "not-found-recovery.spec.ts",
     "pdp-language.spec.ts",
     "pdp-promotion.spec.ts",
+    "plp-filter-disclosure.spec.ts",
     "related-products.spec.ts",
     "selling-modes.spec.ts",
     "storefront-commerce.spec.ts",

@@ -143,10 +143,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: `pnpm test:domain` PDP models and `tests/a11y-runtime/pdp-promotion.spec.ts`.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **C02 — Add headless PLP filter interaction** [C; deps: F00; Canonical discovery; no B07]
-  - [ ] Acceptance: Existing URL-backed filters and no-JS forms remain canonical; filter drawer/chips and focus states do not depend on B07 or C05.
-  - [ ] Verification: `pnpm test:domain` filter model and `tests/a11y-runtime/discovery.spec.ts` browser/keyboard.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **C02 — Add headless PLP filter interaction** [C; deps: F00; Canonical discovery; no B07]
+  - [x] Acceptance: Existing URL-backed filters and no-JS forms remain canonical; filter drawer/chips and focus states do not depend on B07 or C05.
+  - [x] Verification: `pnpm test:domain` filter model and `tests/a11y-runtime/discovery.spec.ts` browser/keyboard.
+  - Evidence: PR #30; `src/components/headless/plp-filter-model.ts` (pure), `use-plp-filter-disclosure.ts` (hook), brand adapter `src/components/brand/listing-filter-region.tsx`; flag `SHOP_FILTER_DISCLOSURE_ENABLED` default OFF. Local on base `main@75e69b4`: lint 0 errors, typecheck, new domain tests, `plp-filter-disclosure.spec.ts` 7/7 plus the unchanged `discovery.spec.ts` 2/2 in Chromium (390×844, 768×1024, 1440×900, axe, keyboard). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **C03 — Add optional accessible headless cart drawer** [C; deps: F00; Independent]
   - [ ] Acceptance: Keyboard focus trap/restore and Escape work; stale/double mutations do not lose buyer data.

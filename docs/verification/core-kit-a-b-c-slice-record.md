@@ -56,7 +56,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | Task | PR | Merged SHA | Exact-head CI | Flag (default) | OFF compatibility | Rollback |
 | --- | --- | --- | --- | --- | --- | --- |
 | F00 | #28 | `81438ef` | 13/13 checks success on `51bdd46` | — | no code change | revert the PR |
-| B07 | #29 | _recorded after merge_ | _recorded below_ | `SEARCH_SUGGESTIONS_ENABLED` (OFF) | flag OFF returns `DISABLED` before validation or any catalog statement (asserted at 0 statements); `/search`, `/shop` untouched | set the flag `false` and recreate `app`; no migration |
+| B07 | #29 | `75e69b4` | 15/15 checks success on `fab04ba` | `SEARCH_SUGGESTIONS_ENABLED` (OFF) | flag OFF returns `DISABLED` before validation or any catalog statement (asserted at 0 statements); `/search`, `/shop` untouched | set the flag `false` and recreate `app`; no migration |
+| C02 | #30 | _recorded after merge_ | _recorded after CI_ | `SHOP_FILTER_DISCLOSURE_ENABLED` (OFF) | flag OFF renders the unchanged always-open form; the unmodified `discovery.spec.ts` passes against an OFF server | set the flag `false` and recreate `app`; no migration |
 
 ## B07 — bounded search suggestions
 
@@ -76,3 +77,25 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 - **Verified locally** (PostgreSQL 16): `pnpm lint` 0 errors, `pnpm typecheck`, `pnpm test` 1862/1862 (19 new),
   `tests/database/search-suggestions.test.ts` 6/6, `pnpm build`.
 - **Not claimed:** no browser, keyboard or axe run, because no UI changed. Those belong to C05.
+- **Known residual before enabling (B07):** the suggestion action has no dedicated rate limit. It is the same read and
+  the same exposure as `GET /shop?q=`, which has none either; add one when C05 puts it behind an input.
+
+## C02 — headless PLP filter interaction
+
+- **What shipped:** `plp-filter-model.ts` (pure reducer for a collapsible filter panel, active-filter count, chip-removal
+  focus target, result announcement), `use-plp-filter-disclosure.ts` (media query, focus, Escape wiring) and a brand
+  adapter `ListingFilterRegion`. Wired into `/shop` only behind `SHOP_FILTER_DISCLOSURE_ENABLED`.
+- **No second authority:** the model never builds an href, parses a query, sorts or prices. Chips are the route's own
+  `activeFilters` links (`buildShopActiveFilters`), so removing one keeps the others and resets the page exactly as before.
+  Sort is not counted as a filter (asserted). Copy lives in the brand adapter, not the headless model.
+- **Progressive enhancement:** before the client measures the viewport the panel is visible and there is no button; the
+  button and the collapse appear only below the brand's breakpoint (`(min-width: 1024px)` in the default brand).
+- **Verified in Chromium** (local, PostgreSQL 16, dev server with the flag ON): 390×844 collapsed → opens to the first
+  field → axe clean both states; Escape returns focus to the trigger; applying closes the panel, labels `Bộ lọc, 1 đang áp dụng`
+  and updates the status text; keyboard chip removal keeps other filters and focuses the next chip, and the last chip focuses
+  the trigger; 768×1024 still collapsed, 1440×900 open with no trigger, no horizontal overflow; the server HTML for a
+  no-script client has the open form and no `aria-expanded` button. The unmodified `discovery.spec.ts` (flag OFF) passes.
+- **Finding, not caused by this change:** `/shop` streams behind `loading.tsx`, so with scripting disabled the page
+  content stays in a hidden streaming container until a script reveals it. That is true with this flag off or on. The
+  no-script check therefore asserts the HTML the server sends, not a script-disabled render. It is worth its own task.
+- **Not claimed:** no real-device or screen-reader run; the live region and focus order are exercised with Playwright and axe only.

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { BRAND } from "@/brand";
+import { ListingFilterShell } from "@/components/brand/listing-filter-shell";
 import { ListingRefineForm } from "@/components/brand/listing-refine-form";
 import { ProductCard, type ProductCardTone } from "@/components/brand/product-card";
 import { createStorefrontRoute } from "@/routes/factory";
@@ -25,6 +26,9 @@ const controlClassName =
 
 const chipClassName =
   "inline-flex min-h-11 items-center gap-2 border border-black/25 px-4 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition-colors hover:border-black hover:bg-black hover:text-white focus-visible:outline-2 focus-visible:outline-offset-4";
+
+const triggerClassName =
+  "inline-flex min-h-11 w-full items-center justify-between border border-black px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] focus-visible:outline-2 focus-visible:outline-offset-4 lg:hidden";
 
 const linkClassName =
   "inline-flex min-h-11 items-center text-xs font-semibold uppercase tracking-[0.14em] underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-4";
@@ -62,24 +66,15 @@ function render(data: ShopViewModel) {
           ) : null}
         </div>
 
-        {data.activeFilters.length > 0 ? (
-          <ul className="mt-6 flex flex-wrap gap-3" aria-label="Bộ lọc đang áp dụng">
-            {data.activeFilters.map((filter) => (
-              <li key={filter.value}>
-                <Link
-                  className={chipClassName}
-                  href={filter.href}
-                  scroll={false}
-                  aria-label={`Bỏ lọc ${filter.label}`}
-                >
-                  {filter.label}
-                  <span aria-hidden="true">×</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
+        <ListingFilterShell
+          enabled={data.filterDisclosure}
+          stateKey={data.stateHref}
+          activeFilters={data.activeFilters}
+          totalCount={data.totalCount}
+          wideQuery="(min-width: 1024px)"
+          triggerClassName={`mt-6 ${triggerClassName}`}
+          chipClassName={chipClassName}
+        >
         <ListingRefineForm
           key={data.stateHref}
           action="/shop"
@@ -193,6 +188,7 @@ function render(data: ShopViewModel) {
             </button>
           </div>
         </ListingRefineForm>
+        </ListingFilterShell>
       </section>
 
       {data.totalCount === 0 ? (

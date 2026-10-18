@@ -80,6 +80,12 @@ export type ShopViewModel = Readonly<{
    * the route then refuses.
    */
   limits: Readonly<{ query: number; priceVnd: number }>;
+  /**
+   * Whether the brand should collapse the filter form behind a button on narrow viewports
+   * (`SHOP_FILTER_DISCLOSURE_ENABLED`, default off). Off leaves the always-open form the page has
+   * always had; the filters, URLs and results are identical either way.
+   */
+  filterDisclosure: boolean;
 }>;
 
 export type ShopViewModelInput = Readonly<{
@@ -94,7 +100,15 @@ export type ShopViewModelInput = Readonly<{
   pageSize: number;
   pricingRule?: StorefrontPricingRule;
   selectEventBySlug: ReadonlyMap<string, TrackingEvent>;
+  filterDisclosure?: boolean;
 }>;
+
+/** Strictly `"true"` turns the collapsible filter panel on; anything else, including unset, is OFF. */
+export function readShopFilterDisclosureEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return env.SHOP_FILTER_DISCLOSURE_ENABLED === "true";
+}
 
 export type ShopFilterKey = "query" | "collection" | "color" | "size" | "minPrice" | "maxPrice" | "availability";
 
@@ -233,5 +247,6 @@ export function buildShopViewModel(input: ShopViewModelInput): ShopViewModel {
       query: STOREFRONT_DISCOVERY_LIMITS.query,
       priceVnd: STOREFRONT_DISCOVERY_LIMITS.priceVnd,
     }),
+    filterDisclosure: input.filterDisclosure === true,
   });
 }
