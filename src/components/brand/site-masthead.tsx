@@ -11,14 +11,15 @@ import { SiteHeader } from "@/components/brand/site-header";
 export function SiteMasthead({
   promotion,
   cartDrawer = false,
-}: Readonly<{ promotion: SitePromotionModel; cartDrawer?: boolean }>) {
+  searchOverlay = false,
+}: Readonly<{ promotion: SitePromotionModel; cartDrawer?: boolean; searchOverlay?: boolean }>) {
   return (
     <div className="site-masthead">
       {/* The landmark keeps the short, stable name; the headline is the content it introduces. */}
       <aside aria-label={promotion.label} className="promotion-shell">
         {promotion.headline}
       </aside>
-      <SiteHeader cartDrawer={cartDrawer} />
+      <SiteHeader cartDrawer={cartDrawer} searchOverlay={searchOverlay} />
     </div>
   );
 }

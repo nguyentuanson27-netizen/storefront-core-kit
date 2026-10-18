@@ -82,7 +82,11 @@ export function SiteChrome({
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(document) }}
         />
       ))}
-      <SiteMasthead promotion={model.content.promotion} cartDrawer={model.content.cartDrawerEnabled} />
+      <SiteMasthead
+        promotion={model.content.promotion}
+        cartDrawer={model.content.cartDrawerEnabled}
+        searchOverlay={model.content.searchOverlayEnabled}
+      />
       <main id="main-content">{children}</main>
       <SiteFooter model={model.content.footer} />
       <TrackingPageView />

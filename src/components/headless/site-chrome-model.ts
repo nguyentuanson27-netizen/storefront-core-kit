@@ -4,6 +4,7 @@ import {
   readGuestShippingPolicy,
 } from "../../commerce/guest-shipping-policy.ts";
 import { readCartDrawerEnabled } from "../../routes/cart-drawer-model.ts";
+import { readSearchOverlayEnabled } from "../../routes/search-suggestions-model.ts";
 import {
   buildPublicBrandFacts,
   describePublicAddress,
@@ -41,6 +42,8 @@ export type SiteChromeContent = Readonly<{
   footer: SiteFooterModel;
   /** Server-resolved (`CART_DRAWER_ENABLED`, default off): the header cart link opens a drawer. */
   cartDrawerEnabled: boolean;
+  /** Server-resolved (`SEARCH_OVERLAY_ENABLED` and search suggestions on): the search link opens an overlay. */
+  searchOverlayEnabled: boolean;
 }>;
 
 export function buildSiteChromeContent(): SiteChromeContent {
@@ -58,5 +61,6 @@ export function buildSiteChromeContent(): SiteChromeContent {
       supportHours: describePublicSupportHours(),
     },
     cartDrawerEnabled: readCartDrawerEnabled(),
+    searchOverlayEnabled: readSearchOverlayEnabled(),
   };
 }

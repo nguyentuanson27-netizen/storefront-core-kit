@@ -1,8 +1,9 @@
 import type { StorefrontProductMedia, TrustedProductImage } from "../commerce/product-media.ts";
 import { buildStorefrontDiscoveryHref } from "../commerce/storefront-discovery.ts";
-import type {
-  StorefrontSearchSuggestionCandidates,
-  StorefrontSearchSuggestionFailure,
+import {
+  readStorefrontSearchSuggestionsEnabled,
+  type StorefrontSearchSuggestionCandidates,
+  type StorefrontSearchSuggestionFailure,
 } from "../commerce/storefront-search-suggestions.ts";
 import type {
   StorefrontPricingRule,
@@ -92,4 +93,14 @@ export function buildSearchSuggestionsModel(
     totalCount: candidates.totalCount,
     remainingCount: Math.max(candidates.totalCount - items.length, 0),
   });
+}
+
+/**
+ * Strictly `"true"` turns the search overlay on, and only while search suggestions are on too: an
+ * overlay with nothing to suggest would open onto an error. Anything else, including unset, is OFF.
+ */
+export function readSearchOverlayEnabled(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  return env.SEARCH_OVERLAY_ENABLED === "true" && readStorefrontSearchSuggestionsEnabled(env);
 }
