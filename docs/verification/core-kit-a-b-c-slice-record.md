@@ -76,6 +76,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | B04 homepage featured selection | #45 | `0f79c8b` | 15/15 checks success on `4ed3f30` | `HOMEPAGE_FEATURED_ENABLED` (OFF) | flag OFF: the loader never reads the selection; automatic discovery unchanged | set the flag `false` and recreate `app`; leave the tables |
 | B05 related-products override | #46 | `0c8993d` | 15/15 checks success on `0ca638b` | `RELATED_PRODUCTS_OVERRIDE_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `related-products` spec passes | set the flag `false` and recreate `app`; leave the table |
 | B06 size-guide chart images | #47 | _recorded after merge_ | _recorded after CI_ | `SIZE_GUIDE_MEDIA_ENABLED` (OFF) | flag OFF: the table is never read; the unmodified `evergreen-pages` spec passes | set the flag `false` and recreate `app`; leave the table |
+| A02 benefit order persistence | #48 | _recorded after merge_ | _recorded after CI_ | none (no code writes the columns yet) | additive nullable columns; legacy rows and old writers unchanged; rollback = leave the columns | revert before any v2 order exists; otherwise leave the columns |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -122,6 +123,10 @@ Migration `20261018160000_add_new_arrivals_selection`: `NewArrivalsSelection` (u
 ## B06 — size-guide chart images
 
 `SIZE_GUIDE_MEDIA_ENABLED` (default OFF). **Trusted-host rule decided under the delegation: reuse `parseTrustedProductImageUrl`**, so no new host is introduced and G5 is not a prerequisite. One new table, database CHECKs repeating the application bounds, an admin page listing the configured charts, and a render-time re-check of every stored URL. **Found while testing:** an image makes the chart grid item grow to its intrinsic width and overflow at 390px, and shrinking the items turns the table's scroll box into an axe `scrollable-region-focusable` violation; both are handled **only when an image is present** (`min-w-0` plus a focusable, labelled scroll region), so the OFF markup is unchanged.
+
+## A02 — benefit order persistence
+
+Six nullable columns on `OrderLineSnapshot`; on `OrderMirror` `quoteVersion` and the granted campaign's frozen facts (campaign id, eligible quantity, basis, tier index — **added to the approved design while building A04**, because the `laq2` proof canonicalizes them and an order must be able to rebuild the exact proof bytes from what it stored); a unique `(orderId, lineId)` and two shape CHECKs. Legacy rows are all NULL and satisfy the first branch vacuously; old writers that never set the columns keep working; no fake gift is ever created for an old order. **The database tests caught the same trap twice in the first drafts of the CHECKs:** a CHECK passes when its expression is NULL, so `lineId` without a role, and order facts on a legacy order (`quoteVersion` NULL), slipped through. The shipped SQL tests `lineRole IS NOT NULL` and `quoteVersion IS NOT NULL` explicitly and each legacy branch requires every new column to be NULL. `CapacityReservation` is untouched (A03). **Coexistence hazard recorded in the proposal still applies:** old code reading a v2 order would see a gift as an ordinary 0-VND line, so nothing may write v2 orders (A08) before the code that understands them has been deployed, and rollback is flag OFF plus draining v2 orders, never a code rollback first.
 
 ## B07 — bounded search suggestions
 

@@ -43,10 +43,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: `pnpm test:domain` quote/proof regressions, bounds, tamper and legacy vectors.
   - Evidence: PR #39; code `src/commerce/benefit-quote-proof.ts` (pure, not wired: no caller, no flag, no schema); tests `tests/domain/benefit-quote-proof.test.ts` (17) with vectors computed independently by `tests/domain/fixtures/benefit-quote-proof-reference.py`. Local: lint 0 errors, typecheck, `pnpm test` all pass. Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [ ] **A02 — Add immutable benefit order persistence** [A; deps: A01; Migration review]
-  - [ ] Acceptance: Same-variation role lines round-trip with stable audit facts; legacy rows with no v2 data remain readable.
-  - [ ] Verification: `pnpm prisma:validate` and `pnpm test:db` snapshot schema/rollback/legacy readback.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **A02 — Add immutable benefit order persistence** [A; deps: A01; Migration review]
+  - [x] Acceptance: Same-variation role lines round-trip with stable audit facts; legacy rows with no v2 data remain readable.
+  - [x] Verification: `pnpm prisma:validate` and `pnpm test:db` snapshot schema/rollback/legacy readback.
+  - Evidence: PR #48; migration `20261018200000_add_benefit_order_persistence` (nullable `lineId`, `lineRole`, `benefitCampaignId`, `benefitKind`, `benefitCampaignName`, `entitlementKey` on `OrderLineSnapshot`; `quoteVersion` plus the granted campaign's frozen facts `benefitCampaignId`, `benefitEligibleQuantity`, `benefitBasisVnd`, `benefitTierIndex` on `OrderMirror` (what the `laq2` proof canonicalizes, so an order can rebuild the exact proof bytes); unique `(orderId, lineId)`; shape CHECKs; `prisma migrate diff` empty; verified on a fresh database too). Tests: `tests/database/benefit-order-schema.test.ts` (8): legacy line without the columns reads back NULL; PAID X + GIFT X of one variation round-trip as two lines; legacy and v2 orders side by side; `lineId` unique per order but reusable across orders; **13 malformed v2 shapes refused by the database**; only quote versions NULL/2; campaign facts are a snapshot (no key). No application code writes the columns yet (A04/A08). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [x] **A03 — Aggregate gift and paid stock through existing locks** [A; deps: A01, A02; Capacity safety gate]
   - [x] Acceptance: PAID X×1 + GIFT X×1 holds quantity 2 in one order/variant reservation; stock 1 refuses all atomically.

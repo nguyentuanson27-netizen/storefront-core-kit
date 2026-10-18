@@ -90,5 +90,13 @@ test("deployed schema stores the immutable guest checkout snapshot fields", asyn
     { column_name: "promotionDiscountType", data_type: "USER-DEFINED", is_nullable: "YES" },
     { column_name: "promotionPercentageValue", data_type: "integer", is_nullable: "YES" },
     { column_name: "promotionFixedPriceVnd", data_type: "bigint", is_nullable: "YES" },
+    // A02 benefit order facts. Appended and nullable like the promotion audit above: every column is
+    // NULL on legacy rows, so the immutable snapshot contract is unchanged.
+    { column_name: "lineId", data_type: "text", is_nullable: "YES" },
+    { column_name: "lineRole", data_type: "text", is_nullable: "YES" },
+    { column_name: "benefitCampaignId", data_type: "text", is_nullable: "YES" },
+    { column_name: "benefitKind", data_type: "text", is_nullable: "YES" },
+    { column_name: "benefitCampaignName", data_type: "text", is_nullable: "YES" },
+    { column_name: "entitlementKey", data_type: "text", is_nullable: "YES" },
   ]);
 });

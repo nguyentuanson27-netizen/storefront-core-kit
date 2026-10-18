@@ -34,6 +34,10 @@ entitlementKey      String?
 
 // OrderMirror — additive
 quoteVersion  Int?      // NULL = legacy (laq1); 2 = laq2
+benefitCampaignId       String? // added while building A04 (see below)
+benefitEligibleQuantity Int?   // added while building A04: the proof canonicalizes the grant's
+benefitBasisVnd         BigInt? // frozen facts, so the order must store them to rebuild the bytes
+benefitTierIndex        Int?
 ```
 
 ```sql
@@ -57,6 +61,7 @@ ALTER TABLE "OrderMirror" ADD CONSTRAINT "OrderMirror_quoteVersion_known"
   CHECK ("quoteVersion" IS NULL OR "quoteVersion" = 2);
 ```
 
+- **Implementation note (A02, found by the database test):** a CHECK passes when its expression is NULL, so a v2 branch that tests `"lineRole" IN (...)` lets `lineId` without a role through. The shipped SQL adds `"lineRole" IS NOT NULL` and a legacy branch requiring every new column to be NULL.
 - **Legacy:** every existing row has `NULL` in all new columns → constraints vacuously true; `laq1` rebuild from persisted lines unchanged. No fake gifts are ever backfilled.
 - **Not changed:** `CapacityReservation @@unique([orderId, variantId])` stays; PAID X + GIFT X is aggregated into one reservation (A03).
 - **Coexistence hazard (must be reviewed):** old code reading a v2 order would see a `GIFT` line as an ordinary 0-VND line, and `SYNC_UNKNOWN` recovery or resubmission from old code could rebuild the POS payload incorrectly. Hence rollback is *flag OFF and drain/reconcile v2 orders before any code rollback*; the runbook must say so.
