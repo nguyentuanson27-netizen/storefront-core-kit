@@ -59,7 +59,8 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | B07 | #29 | `75e69b4` | 15/15 checks success on `fab04ba` | `SEARCH_SUGGESTIONS_ENABLED` (OFF) | flag OFF returns `DISABLED` before validation or any catalog statement (asserted at 0 statements); `/search`, `/shop` untouched | set the flag `false` and recreate `app`; no migration |
 | C02 | #30 | `26bce5a` | 15/15 checks success on `aa6d6c5` | `SHOP_FILTER_DISCLOSURE_ENABLED` (OFF) | flag OFF renders the unchanged always-open form; the unmodified `discovery.spec.ts` passes against an OFF server | set the flag `false` and recreate `app`; no migration |
 | C01 | #31 | `ca8dceb` | 15/15 checks success on `9c82d26` | `PDP_MOBILE_INTERACTIONS_ENABLED` (OFF) | flag OFF renders the unchanged gallery and detail; unmodified `pdp-promotion`, `storefront-media`, `variant-deep-link` specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
-| C03 | #32 | _recorded after merge_ | _recorded after CI_ | `CART_DRAWER_ENABLED` (OFF) | flag OFF renders the plain header link; the server action answers `null` without a database read; unmodified cart/footer/not-found specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
+| C03 | #32 | `ebe7197` | 15/15 checks success on `05215fd` | `CART_DRAWER_ENABLED` (OFF) | flag OFF renders the plain header link; the server action answers `null` without a database read; unmodified cart/footer/not-found specs pass against an OFF server | set the flag `false` and recreate `app`; no migration |
+| C05 | #33 | _recorded after merge_ | _recorded after CI_ | `SEARCH_OVERLAY_ENABLED` (OFF; needs `SEARCH_SUGGESTIONS_ENABLED`) | flag OFF renders plain `/search` links; unmodified `editorial` and `evergreen-pages` specs pass against an OFF server | set either flag `false` and recreate `app`; no migration |
 
 ## B07 — bounded search suggestions
 
@@ -138,3 +139,22 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
   `/cart` HTML contains; Tab and Shift+Tab cycle 8 presses each without leaving the dialog; close restores focus and a link inside closes
   the drawer; Ctrl-click opens a new tab and no dialog; 390×844 and 1440×900 axe clean with no horizontal overflow.
 - **Not claimed:** no screen reader; the drawer is not opened automatically after add-to-cart.
+
+## C05 — search overlay
+
+- **What shipped:** `search-overlay-model.ts` (pure): open/close, input status (`short|loading|ready|empty|error`), request-id and
+  text sequencing, arrow-key map between the field and the suggestions, announcement. `use-search-overlay.ts`: 200 ms debounce, the
+  B07 server action, focus, Escape, Tab trap, scroll lock. Brand `SearchOverlayTrigger` (dialog portaled to `document.body`).
+- **Consumes B07 unchanged:** the overlay renders `SearchSuggestionsModel` as given (card price text, availability, PDP path, true
+  total, canonical see-all href) and decides no price or URL. The field is a real `<form action="/shop" method="get">`.
+- **Stale-answer rule, proven in the browser:** the first server action is delayed 2 s while a second, shorter query is answered
+  immediately; after the slow answer arrives the list still shows the second query's single result.
+- **Entry points:** the utility bar link is hidden below 1024px by the existing header CSS, so the trigger is also wired into the
+  Menu disclosure's search link; both are plain links to `/search` without scripting.
+- **Flag coupling:** `readSearchOverlayEnabled` requires `SEARCH_SUGGESTIONS_ENABLED` too, so the overlay can never open onto `DISABLED`.
+- **Verified in Chromium** (local, PostgreSQL 16, both flags on): server HTML has a plain `/search` link and no dialog; open focuses
+  the field with a hint and no list; typing shows 6 of 8 matches with "Có 8 sản phẩm phù hợp." and a see-all link to `/shop?q=overlay`,
+  inactive products never appear; no match says so and Enter still goes to `/shop?q=…`; ArrowDown/ArrowUp move between field and
+  suggestions without wrapping, Escape closes and returns focus; choosing a suggestion lands on its canonical PDP and closes the
+  overlay; 14× Tab and 14× Shift+Tab stay inside; Ctrl-click opens a new tab and no dialog; 390×844 and 1440×900 axe clean, no overflow.
+- **Not claimed:** no screen reader; not a full ARIA combobox (the suggestions are a labelled list of links reached with arrows).

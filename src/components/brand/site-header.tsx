@@ -2,8 +2,12 @@ import Link from "next/link";
 
 import { BRAND, NAVIGATION } from "@/brand";
 import { CartDrawerTrigger } from "@/components/brand/cart-drawer";
+import { SearchOverlayTrigger } from "@/components/brand/search-overlay";
 
-export function SiteHeader({ cartDrawer = false }: Readonly<{ cartDrawer?: boolean }>) {
+export function SiteHeader({
+  cartDrawer = false,
+  searchOverlay = false,
+}: Readonly<{ cartDrawer?: boolean; searchOverlay?: boolean }>) {
   return (
     <header className="site-header">
       <a className="skip-link" href="#main-content">
@@ -27,11 +31,15 @@ export function SiteHeader({ cartDrawer = false }: Readonly<{ cartDrawer?: boole
           <details>
             <summary>Menu</summary>
             <nav className="mobile-menu" aria-label="Điều hướng chính trên di động">
-              {[...NAVIGATION.primary, ...NAVIGATION.mobileUtility].map((item) => (
-                <Link key={item.href} href={item.href}>
-                  {item.label}
-                </Link>
-              ))}
+              {[...NAVIGATION.primary, ...NAVIGATION.mobileUtility].map((item) =>
+                searchOverlay && item.href === "/search" ? (
+                  <SearchOverlayTrigger key={item.href} href={item.href} label={item.label} />
+                ) : (
+                  <Link key={item.href} href={item.href}>
+                    {item.label}
+                  </Link>
+                ),
+              )}
             </nav>
           </details>
         </div>
@@ -40,6 +48,8 @@ export function SiteHeader({ cartDrawer = false }: Readonly<{ cartDrawer?: boole
           {NAVIGATION.utility.map((item) =>
             cartDrawer && item.href === "/cart" ? (
               <CartDrawerTrigger key={item.href} href={item.href} label={item.label} />
+            ) : searchOverlay && item.href === "/search" ? (
+              <SearchOverlayTrigger key={item.href} href={item.href} label={item.label} />
             ) : (
               <Link key={item.href} href={item.href}>
                 {item.label}

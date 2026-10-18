@@ -281,6 +281,25 @@ Enable: set `CART_DRAWER_ENABLED=true` in `deploy/vps/.env.production`, recreate
 verify with `compose exec app node -e 'if (process.env.CART_DRAWER_ENABLED !== "true") process.exit(1)'`. Rollback is the same
 switch in reverse; there is nothing to migrate.
 
+## Search overlay (`SEARCH_OVERLAY_ENABLED`)
+
+A/B/C plan task C05. No migration. A dialog opened from the header search link (in the utility bar on wide viewports and in the
+Menu disclosure below 1024px) with a search field and the bounded suggestions from `searchStorefrontSuggestions` (B07). It
+**requires `SEARCH_SUGGESTIONS_ENABLED=true` as well**: `readSearchOverlayEnabled` is false unless both are exactly `true`, so an
+overlay never opens onto a disabled suggestion endpoint. Off by default in `.env.example` and `deploy/vps/env.example`. Off, the
+header link is a plain link to `/search` and `/search` itself is unchanged.
+
+The field is a real GET form to `/shop?q=`, so Enter always works whether or not suggestions load. Suggestions are debounced
+(200 ms), a response is applied only if it answers the text currently in the box and the latest request, and every failure shows a
+message rather than a stale list. Escape, the close button, the backdrop or following a link closes it and restores focus to the
+header link. Modified clicks and clients without scripting still reach `/search`.
+
+Enable: set both `SEARCH_SUGGESTIONS_ENABLED=true` and `SEARCH_OVERLAY_ENABLED=true` in `deploy/vps/.env.production`, recreate
+`app` (`--no-build --no-deps --force-recreate`), verify each with `compose exec app node -e 'if (process.env.SEARCH_OVERLAY_ENABLED !== "true") process.exit(1)'`.
+Rollback is either switch in reverse (overlay off keeps suggestions available to other callers; suggestions off also disables the
+overlay); there is nothing to migrate. The suggestion action has no dedicated rate limit, the same exposure as `GET /shop?q=`
+(see the B07 residual in the slice record); decide on one before enabling this in production.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.

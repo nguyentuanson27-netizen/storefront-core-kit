@@ -163,10 +163,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: `pnpm test:domain` checkout view model, `tests/a11y-runtime/checkout.spec.ts` keyboard/browser.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **C05 — Add optional search overlay after bounded suggestions** [C; deps: B07; Optional/default OFF]
-  - [ ] Acceptance: Overlay consumes B07's approved bounded suggestions and keyboard/empty/error states, never blocking C02/no-JS search.
-  - [ ] Verification: `pnpm test:domain` overlay model and `tests/a11y-runtime/discovery.spec.ts` runtime/focus.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **C05 — Add optional search overlay after bounded suggestions** [C; deps: B07; Optional/default OFF]
+  - [x] Acceptance: Overlay consumes B07's approved bounded suggestions and keyboard/empty/error states, never blocking C02/no-JS search.
+  - [x] Verification: `pnpm test:domain` overlay model and `tests/a11y-runtime/discovery.spec.ts` runtime/focus. (Browser evidence is the new `search-overlay.spec.ts`; `discovery.spec.ts` and the editorial/evergreen specs are the OFF regression.)
+  - Evidence: PR #33; `src/components/headless/search-overlay-model.ts` (pure), `use-search-overlay.ts`, brand `src/components/brand/search-overlay.tsx`; flag `SEARCH_OVERLAY_ENABLED` default OFF, effective only with `SEARCH_SUGGESTIONS_ENABLED`. Local on base `main@ebe7197`: lint 0 errors, typecheck, `pnpm test`, `search-overlay.spec.ts` 10/10 in Chromium (390×844, 1440×900, axe, keyboard, Tab trap, stale-response case). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **R00 — Repeat quality/rollback verification for each enabled slice** [Release; deps: F00; Every implementation PR]
   - [ ] Acceptance: Each released capability has real tests/build/CI/runtime evidence and a reversible enablement plan.

@@ -37,6 +37,7 @@ export default defineConfig({
     "pdp-promotion.spec.ts",
     "plp-filter-disclosure.spec.ts",
     "related-products.spec.ts",
+    "search-overlay.spec.ts",
     "selling-modes.spec.ts",
     "storefront-commerce.spec.ts",
     "storefront-composite.spec.ts",
