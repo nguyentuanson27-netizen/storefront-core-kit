@@ -58,10 +58,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: `pnpm test:domain` fixture quote/proof, `pnpm test:db` snapshot/legacy readback and flag-OFF regression.
   - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
 
-- [ ] **A05 — Implement pure paid-only tier eligibility and shipping basis** [A; deps: F01; Stacking must be approved]
-  - [ ] Acceptance: A×1 eligible + B×2 ineligible => campaign count 1, shipping count 3; no eligible units => campaign 0 but shipping count positive.
-  - [ ] Verification: `pnpm test:domain` benefit/guest-shipping-policy tests including all threshold boundaries.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [x] **A05 — Implement pure paid-only tier eligibility and shipping basis** [A; deps: F01; Stacking must be approved]
+  - [x] Acceptance: A×1 eligible + B×2 ineligible => campaign count 1, shipping count 3; no eligible units => campaign 0 but shipping count positive.
+  - [x] Verification: `pnpm test:domain` benefit/guest-shipping-policy tests including all threshold boundaries.
+  - Evidence: PR #40; code `src/commerce/benefit-eligibility.ts` (pure, not wired); tests `tests/domain/benefit-eligibility.test.ts` (19): mixed cart A×1 eligible + B×2 ineligible => eligible 1, shipping count 3; no eligible units; strict 999,999 / 1,000,000 / 1,000,001 and quantity 2 / 3 boundaries; tier just below/at/above; one-pass; legacy-discounted basis-only; ambiguous and multi-campaign refusal; rounding parity with `resolvePromotionPricing`. Six mutations of the production code each fail a test. Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
 - [ ] **A06 — Add benefit campaign admin lifecycle and persistence** [A; deps: A05, F01; Admin/schema approval]
   - [ ] Acceptance: Non-admin or invalid campaign write fails closed; enabled conflicting rules resolve per approved contract.
