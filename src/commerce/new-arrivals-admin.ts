@@ -50,12 +50,16 @@ function isProductId(value: unknown): value is string {
   );
 }
 
-function parsePosition(raw: unknown): number | null | "INVALID" {
+function parsePosition(raw: unknown, maxItems: number): number | null | "INVALID" {
   if (raw === undefined || raw === null || raw === "") return null;
   if (typeof raw !== "string" || !/^[1-9][0-9]{0,2}$/.test(raw)) return "INVALID";
   const position = Number(raw);
-  return position <= NEW_ARRIVALS_MAX_ITEMS ? position : "INVALID";
+  return position <= maxItems ? position : "INVALID";
 }
+
+/** Both curated surfaces share these rules; only the ceiling differs (500 here, 12 on the homepage). */
+export type OrderedSelectionLimits = Readonly<{ maxItems: number }>;
+const DEFAULT_LIMITS: OrderedSelectionLimits = Object.freeze({ maxItems: NEW_ARRIVALS_MAX_ITEMS });
 
 export type NewArrivalsOrderInput = Readonly<{
   revision: unknown;
@@ -76,16 +80,19 @@ export type NewArrivalsEditPlan =
  * the row's current place; ties keep their rendered order, so saving without touching anything is a
  * no-op on the order.
  */
-export function planNewArrivalsOrder(input: NewArrivalsOrderInput): NewArrivalsEditPlan {
+export function planNewArrivalsOrder(
+  input: NewArrivalsOrderInput,
+  { maxItems }: OrderedSelectionLimits = DEFAULT_LIMITS,
+): NewArrivalsEditPlan {
   const revision = parseNewArrivalsRevision(input.revision);
   if (revision === null) return { ok: false, reason: "INVALID" };
   if (
     !Array.isArray(input.productIds) ||
     !Array.isArray(input.positions) ||
     !Array.isArray(input.removals) ||
-    input.productIds.length > NEW_ARRIVALS_MAX_ITEMS ||
+    input.productIds.length > maxItems ||
     input.positions.length !== input.productIds.length ||
-    input.removals.length > NEW_ARRIVALS_MAX_ITEMS ||
+    input.removals.length > maxItems ||
     !input.productIds.every(isProductId) ||
     !input.removals.every(isProductId)
   ) {
@@ -98,7 +105,7 @@ export function planNewArrivalsOrder(input: NewArrivalsOrderInput): NewArrivalsE
 
   const rows: { productId: string; key: number; index: number }[] = [];
   for (const [index, productId] of ids.entries()) {
-    const position = parsePosition(input.positions[index]);
+    const position = parsePosition(input.positions[index], maxItems);
     if (position === "INVALID") return { ok: false, reason: "INVALID" };
     if (removed.has(productId)) continue;
     rows.push({ productId, key: position ?? index + 1, index });
@@ -107,12 +114,15 @@ export function planNewArrivalsOrder(input: NewArrivalsOrderInput): NewArrivalsE
   return { ok: true, revision, productIds: rows.map(({ productId }) => productId) };
 }
 
-export function planNewArrivalsAppend(input: Readonly<{
-  revision: unknown;
-  /** The current order as the page rendered it. */
-  productIds: readonly unknown[];
-  productId: unknown;
-}>): NewArrivalsEditPlan {
+export function planNewArrivalsAppend(
+  input: Readonly<{
+    revision: unknown;
+    /** The current order as the page rendered it. */
+    productIds: readonly unknown[];
+    productId: unknown;
+  }>,
+  { maxItems }: OrderedSelectionLimits = DEFAULT_LIMITS,
+): NewArrivalsEditPlan {
   const revision = parseNewArrivalsRevision(input.revision);
   if (revision === null || !isProductId(input.productId)) return { ok: false, reason: "INVALID" };
   if (!Array.isArray(input.productIds) || !input.productIds.every(isProductId)) {
@@ -121,6 +131,6 @@ export function planNewArrivalsAppend(input: Readonly<{
 
   const current = input.productIds as string[];
   if (current.includes(input.productId)) return { ok: false, reason: "ALREADY_PRESENT" };
-  if (current.length >= NEW_ARRIVALS_MAX_ITEMS) return { ok: false, reason: "TOO_MANY" };
+  if (current.length >= maxItems) return { ok: false, reason: "TOO_MANY" };
   return { ok: true, revision, productIds: [...current, input.productId] };
 }

@@ -1,15 +1,23 @@
 import { connection } from "next/server";
 
 import { createCollectionDefinitionRepository } from "@/commerce/collection-definition-repository";
+import { listHomepageFeatured } from "@/commerce/homepage-featured-repository";
 import { readGuestShippingPolicy } from "@/commerce/guest-shipping-policy";
-import { listConfiguredStorefrontDiscoveryPage } from "@/commerce/storefront-catalog-runtime";
+import {
+  listConfiguredStorefrontDiscoveryPage,
+  listConfiguredStorefrontProductsByIds,
+} from "@/commerce/storefront-catalog-runtime";
 import { parseStorefrontDiscoverySearchParams } from "@/commerce/storefront-discovery";
 import { buildProductListTracking } from "@/components/analytics/product-list-tracking";
 import { buildPublicBrandFacts } from "@/content/public-brand-facts";
 import { prisma } from "@/db/prisma";
 import { PancakeConfigError } from "@/integrations/pancake/config";
 import { sealRoute, type RouteHandle } from "./core.tsx";
-import { buildHomeViewModel, type HomeViewModel } from "./home-model.ts";
+import {
+  buildHomeViewModel,
+  readHomepageFeaturedEnabled,
+  type HomeViewModel,
+} from "./home-model.ts";
 
 /**
  * The home route's loader: every fetch, the tracking event and the refresh window, in one place.
@@ -28,8 +36,29 @@ export type HomeRouteProps = Readonly<{
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }>;
 
+/**
+ * The administrator's curated homepage selection, or `null` to fall back to automatic discovery.
+ *
+ * Only runs with `HOMEPAGE_FEATURED_ENABLED` on; off, the homepage never touches the selection.
+ * An empty selection, or one whose products are all hidden, also answers `null` so the homepage is
+ * never blank because of curation. Hidden products are dropped in place and not replaced.
+ */
+async function loadFeatured(now: Date) {
+  const slots = await listHomepageFeatured(prisma);
+  if (slots.length === 0) return null;
+  const { products, pricingRule, refreshAfterMs } = await listConfiguredStorefrontProductsByIds({
+    productIds: slots.map(({ productId }) => productId),
+    now,
+  });
+  return products.length === 0 ? null : { products, pricingRule, refreshAfterMs };
+}
+
 async function loadEdit(now: Date) {
   try {
+    if (readHomepageFeaturedEnabled()) {
+      const featured = await loadFeatured(now);
+      if (featured !== null) return featured;
+    }
     const page = await listConfiguredStorefrontDiscoveryPage({
       discovery: parseStorefrontDiscoverySearchParams({}),
       pageSize: 20,

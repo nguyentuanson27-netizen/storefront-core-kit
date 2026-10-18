@@ -92,6 +92,7 @@ model User {
   orders        OrderMirror[]
   sellingPoliciesUpdated ProductSellingPolicy[] @relation("SellingPolicyUpdatedBy")
   newArrivalsUpdated NewArrivalsSelection[] @relation("NewArrivalsUpdatedBy")
+  homepageFeaturedUpdated HomepageFeaturedProduct[] @relation("HomepageFeaturedUpdatedBy")
 
   @@map("user")
 }
@@ -184,6 +185,7 @@ model ProductMirror {
   merchantFacts     ProductMerchantFacts?
   sellingPolicy     ProductSellingPolicy?
   newArrivalsSelection NewArrivalsSelection?
+  homepageFeatured HomepageFeaturedProduct?
   slugHistory       ProductSlugHistory[]
   promotionTargets  PromotionTarget[]
 
@@ -593,6 +595,29 @@ model NewArrivalsSelection {
 /// Single-row optimistic-concurrency token for the New Arrivals selection, like
 /// `PromotionPricingRevision`: bounded by construction, advanced in the same transaction as any write.
 model NewArrivalsSelectionState {
+  id        String   @id @default("current")
+  revision  BigInt   @default(0)
+  updatedAt DateTime @updatedAt
+}
+
+/// One slot of the homepage featured selection (A/B/C plan B04). Website-owned and deliberately
+/// independent of `CollectionDefinition.featuredProductSlugs`: nothing is copied from a collection.
+/// Same construction as `NewArrivalsSelection` -- a unique product, a unique deferrable position, and a
+/// CHECK that makes the owner-approved ceiling of 12 a database fact.
+model HomepageFeaturedProduct {
+  id              String        @id @default(cuid())
+  productId       String        @unique
+  position        Int           @unique
+  addedAt         DateTime      @default(now())
+  updatedByUserId String?
+  product         ProductMirror @relation(fields: [productId], references: [id], onDelete: Cascade)
+  updatedBy       User?         @relation("HomepageFeaturedUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([updatedByUserId])
+}
+
+/// Single-row optimistic-concurrency token for the homepage featured selection.
+model HomepageFeaturedState {
   id        String   @id @default("current")
   revision  BigInt   @default(0)
   updatedAt DateTime @updatedAt

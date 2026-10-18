@@ -73,6 +73,7 @@ Each entry: task, PR, merged SHA, CI result on the exact head, flag(s) and defau
 | B01 curated new-arrivals persistence | #42 | `beaabad` | 15/15 checks success on `a4d3165` (the first head `c7ee406` failed `verify`: two source comments tripped the U1 language inventory; fixed in `a4d3165`) | none needed (nothing reads the tables until B03) | additive migration: two new tables, no existing object altered; no caller | flag/route do not exist yet, so nothing to switch; revert the PR before any row exists, otherwise leave the tables |
 | B02 admin new-arrivals curator | #43 | `ecdcb1a` | 15/15 checks success on `20e7e4e` | none (admin-only page; public route untouched until B03) | admin surface only; no public read; no migration | revert the PR; data stays in the B01 tables |
 | B03 curated new-arrivals listing | #44 | _recorded after merge_ | _recorded after CI_ | `NEW_ARRIVALS_CURATION_ENABLED` (OFF) | flag OFF: same page and metadata, `?page=` ignored, no curated query; unmodified `editorial`/`evergreen-pages` specs pass against an OFF server | set the flag `false` and recreate `app`; leave the tables |
+| B04 homepage featured selection | #45 | _recorded after merge_ | _recorded after CI_ | `HOMEPAGE_FEATURED_ENABLED` (OFF) | flag OFF: the loader never reads the selection; automatic discovery unchanged | set the flag `false` and recreate `app`; leave the tables |
 
 ## A01 — laq2 role lines and proof (pure code)
 
@@ -107,6 +108,10 @@ Migration `20261018160000_add_new_arrivals_selection`: `NewArrivalsSelection` (u
 ## B03 — curated new-arrivals listing
 
 `NEW_ARRIVALS_CURATION_ENABLED` (default OFF). OFF: the loader returns an empty view model and metadata is the original (`searchParams` is never read, no curated query). ON: parse `?page=` (404 before any read when malformed, repeated or above 21), count stored slots, cut the page by stored rank, hydrate through `listProductsByIds` — the same visibility, stock and promotion projection as `/shop`, hidden products dropped in place with no refill. Empty selection, or a page whose slots are all hidden, keeps the editorial frame with a `role="status"` line and zero cards. Page 2+ titles read "Hàng mới — Trang N". **Deviation from the technical review §3, recorded:** no canonical tag is added, because `/new-arrivals` is not an indexable listing path today and the review forbids a new indexation default; sitemap and robots are untouched. `connection()` runs in both modes so the runtime flag is not baked in at build time (the page was already dynamic).
+
+## B04 — homepage featured selection
+
+`HOMEPAGE_FEATURED_ENABLED` (default OFF). Two new tables with the B01 construction (unique product, unique deferrable position, `CHECK position < 12`, one revision row), an admin page `/admin/homepage-featured` that reuses the accepted planner with `maxItems = 12`, and one branch in `loadEdit` of the home loader. **Decisions taken under the delegation:** ON with an empty selection, or with no currently visible curated product, falls back to automatic discovery (the homepage is never blank because of curation); hidden products are dropped in place, never replaced; the selection never reads or writes `CollectionDefinition`.
 
 ## B07 — bounded search suggestions
 

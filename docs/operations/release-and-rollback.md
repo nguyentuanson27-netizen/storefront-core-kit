@@ -332,6 +332,25 @@ then set `NEW_ARRIVALS_CURATION_ENABLED=true` in `deploy/vps/.env.production` an
 Rollback is the switch in reverse: set it to `false` and recreate `app`. Leave the tables and their rows in place; they
 are never dropped once they hold data, and an older build ignores them.
 
+## Curated homepage selection (`HOMEPAGE_FEATURED_ENABLED`)
+
+A/B/C plan task B04. The migration `20261018170000_add_homepage_featured` adds two **new** tables and alters nothing else,
+so it is safe to deploy with the flag off. Off by default in `.env.example` and `deploy/vps/env.example`; only the exact
+value `true` enables it. Off, the homepage "Tuyển chọn" shelf is the automatic discovery it has always been and the
+selection is never read.
+
+On, the shelf lists the selection an administrator keeps at `/admin/homepage-featured` — at most **12** products (a
+database CHECK, not only an application rule), in that order, independent of any collection (nothing is copied from
+`featuredProductSlugs`). A product that is hidden, inactive or gone is dropped from the shelf and its slot is not refilled.
+If the selection is empty, or none of its products is currently visible, the shelf falls back to automatic discovery so
+the homepage is never blank because of curation.
+
+Order of operations: deploy the migration, deploy the code with the flag off, curate the list, then set
+`HOMEPAGE_FEATURED_ENABLED=true` in `deploy/vps/.env.production` and recreate `app` (`--no-build --no-deps
+--force-recreate`), then verify with
+`compose exec app node -e 'if (process.env.HOMEPAGE_FEATURED_ENABLED !== "true") process.exit(1)'`.
+Rollback: set it to `false` and recreate `app`; leave the tables and rows in place.
+
 ## Pancake write safety during rollback
 
 Application or database rollback does not undo a Pancake order accepted by the external POS.
