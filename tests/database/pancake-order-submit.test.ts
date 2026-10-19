@@ -159,6 +159,52 @@ test("submission rejects mismatched or unproven Pancake shop scope before any ex
   }
 });
 
+test("A08 v2 order cannot fall through the legacy Pancake single-variation submit path", async () => {
+  const key = "benefit-off";
+  const order = await createDraft(key);
+  await prisma.orderMirror.update({
+    where: { id: order.id },
+    data: {
+      quoteVersion: 2,
+      benefitCampaignId: "benefit-test",
+      benefitEligibleQuantity: 2,
+      benefitBasisVnd: BigInt(1_000_000),
+      benefitTierIndex: 0,
+    },
+  });
+  await prisma.orderLineSnapshot.updateMany({
+    where: { orderId: order.id },
+    data: {
+      lineId: "p:local-variant",
+      lineRole: "PAID",
+      benefitCampaignId: "benefit-test",
+      benefitKind: "QUANTITY_TIER",
+      benefitCampaignName: "Existing tier",
+    },
+  });
+
+  let fetchCalls = 0;
+  let postCalls = 0;
+  const service = createPancakeOrderSubmissionService(prisma, {
+    async fetchCompleteCatalog() {
+      fetchCalls += 1;
+      return [liveVariation()];
+    },
+    async createOrder() {
+      postCalls += 1;
+      return { id: 1 };
+    },
+  });
+  assert.deepEqual(await service.submit({ publicCode: order.publicCode, shopId }), {
+    ok: false,
+    state: "REJECTED",
+    reason: "LOCAL_ORDER_INVALID",
+  });
+  assert.equal(fetchCalls, 0, "no external read when benefit dispatch is not implemented");
+  assert.equal(postCalls, 0, "must not silently send a laq2 order as a legacy order");
+  await cleanup(key);
+});
+
 test("stock drift is rejected outright before Pancake order creation", async () => {
   // Unlike a price move, stock is not something the buyer can reconfirm their way past, so this
   // stays terminal. P9b changed only the price half of what used to be one shared assertion.
