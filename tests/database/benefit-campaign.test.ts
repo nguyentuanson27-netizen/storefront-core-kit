@@ -383,20 +383,76 @@ test("A06 legacy variant targets do not block a different sibling variant", asyn
   await cleanup();
 });
 
+/** Seed deliberately conflicting database states to exercise the scan cap independently of admin publish. */
+async function seedEnabledScanRows(
+  kind: "benefit" | "legacy",
+  suffix: string,
+  { startsAt = EARLY, target }: { startsAt?: Date; target?: { productId: string } | { variantId: string } } = {},
+) {
+  const ids = Array.from({ length: 501 }, (_unused, index) => `${PREFIX}-${suffix}-${index}`);
+  if (kind === "benefit") {
+    await prisma.benefitCampaign.createMany({
+      data: ids.map((id) => ({ id, kind: "QUANTITY_TIER", name: id, isEnabled: true, enabledAt: EARLY, startsAt })),
+    });
+    if (target) {
+      await prisma.benefitCampaignTarget.createMany({ data: ids.map((campaignId) => ({ campaignId, ...target })) });
+    }
+  } else {
+    await prisma.promotionCampaign.createMany({
+      data: ids.map((id) => ({
+        id, kind: "PROMOTION", name: id, discountType: "PERCENTAGE", percentageValue: 10,
+        isEnabled: true, enabledAt: EARLY, startsAt,
+      })),
+    });
+    if (target) {
+      await prisma.promotionTarget.createMany({ data: ids.map((campaignId) => ({ campaignId, ...target })) });
+    }
+  }
+}
+
+test("A06 store-wide benefit skips the legacy scan even with 501 overlapping scoped campaigns", async () => {
+  await cleanup();
+  const p = await product("scan-store-wide");
+  const candidate = await create(tierDraft("scan-store-wide-candidate"));
+  await seedEnabledScanRows("legacy", "scan-wide-legacy", { target: { productId: p.productId } });
+  assert.equal((await publish(candidate.id)).ok, true, "F01 store-wide exception must not be scan-limited by legacy");
+  await cleanup();
+});
+
+test("A06 future non-overlapping campaigns never consume the conflict scan budget", async () => {
+  await cleanup();
+  const p = await product("scan-future");
+  const candidate = await create(tierDraft("scan-future-candidate", { targets: [{ productId: p.productId }] }));
+  const future = new Date("2027-01-01T00:00:00.000Z");
+  await seedEnabledScanRows("benefit", "scan-future-benefit", { startsAt: future, target: { productId: p.productId } });
+  await seedEnabledScanRows("legacy", "scan-future-legacy", { startsAt: future, target: { productId: p.productId } });
+  assert.equal((await publish(candidate.id)).ok, true, "later windows are disjoint from the candidate");
+  await cleanup();
+});
+
+test("A06 501 overlapping sibling-variant campaigns do not exhaust either scan", async () => {
+  await cleanup();
+  const p = await product("scan-siblings");
+  const sibling = await prisma.variantMirror.create({
+    data: {
+      id: `${PREFIX}-scan-sibling-l`,
+      pancakeVariationId: `${PREFIX}-scan-sibling-l`,
+      productId: p.productId,
+      syncedAt: EARLY,
+    },
+  });
+  const candidate = await create(tierDraft("scan-sibling-candidate", { targets: [{ variantId: p.variantId }] }));
+  await seedEnabledScanRows("benefit", "scan-sibling-benefit", { target: { variantId: sibling.id } });
+  await seedEnabledScanRows("legacy", "scan-sibling-legacy", { target: { variantId: sibling.id } });
+  assert.equal((await publish(candidate.id)).ok, true, "another variant of the same product is a disjoint scope");
+  await cleanup();
+});
+
 test("A06 publish fails closed above the 500-row enabled legacy conflict scan limit", async () => {
   await cleanup();
-  const candidate = await create(tierDraft("scan-legacy-candidate"));
-  await prisma.promotionCampaign.createMany({
-    data: Array.from({ length: 501 }, (_unused, index) => ({
-      kind: "PROMOTION",
-      name: `${PREFIX}-scan-legacy-${index}`,
-      discountType: "PERCENTAGE",
-      percentageValue: 10,
-      isEnabled: true,
-      enabledAt: EARLY,
-      startsAt: new Date("2027-01-01T00:00:00.000Z"),
-    })),
-  });
+  const p = await product("scan-legacy");
+  const candidate = await create(tierDraft("scan-legacy-candidate", { targets: [{ productId: p.productId }] }));
+  await seedEnabledScanRows("legacy", "scan-legacy-overflow", { target: { productId: p.productId } });
   assert.deepEqual(await publish(candidate.id), { ok: false, reason: "CONFLICT_SCAN_LIMIT" });
   assert.equal((await prisma.benefitCampaign.findUniqueOrThrow({ where: { id: candidate.id } })).isEnabled, false);
   await cleanup();
@@ -405,15 +461,7 @@ test("A06 publish fails closed above the 500-row enabled legacy conflict scan li
 test("A06 publish fails closed above the 500-row enabled benefit conflict scan limit", async () => {
   await cleanup();
   const candidate = await create(tierDraft("scan-benefit-candidate"));
-  await prisma.benefitCampaign.createMany({
-    data: Array.from({ length: 501 }, (_unused, index) => ({
-      kind: "QUANTITY_TIER",
-      name: `${PREFIX}-scan-benefit-${index}`,
-      isEnabled: true,
-      enabledAt: EARLY,
-      startsAt: new Date("2027-01-01T00:00:00.000Z"),
-    })),
-  });
+  await seedEnabledScanRows("benefit", "scan-benefit-overflow");
   assert.deepEqual(await publish(candidate.id), { ok: false, reason: "CONFLICT_SCAN_LIMIT" });
   assert.equal((await prisma.benefitCampaign.findUniqueOrThrow({ where: { id: candidate.id } })).isEnabled, false);
   await cleanup();

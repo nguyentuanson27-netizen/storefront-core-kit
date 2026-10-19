@@ -255,18 +255,44 @@ export async function publishBenefitCampaign(
       ...(await scopeOf(tx, campaign.targets)),
     };
 
-    const stillRunning = { OR: [{ endsAt: null }, { endsAt: { gt: now } }] };
+    // Limit only campaigns that could actually conflict. Unrelated scopes or disjoint
+    // half-open windows must not exhaust the 500-candidate safety budget.
+    const startsAt = campaign.startsAt;
+    const endsAt = campaign.endsAt;
+    const windowFilters = [
+      { OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
+      ...(startsAt === null ? [] : [{ OR: [{ endsAt: null }, { endsAt: { gt: startsAt } }] }]),
+      ...(endsAt === null ? [] : [{ OR: [{ startsAt: null }, { startsAt: { lt: endsAt } }] }]),
+    ];
+
+    const scoped = candidate.productIds !== null;
+    const productIds = [...(candidate.productIds ?? [])];
+    const targetMatches = {
+      OR: [
+        { productId: { in: [...new Set([...productIds, ...candidate.variantProductIds.values()])] } },
+        { variantId: { in: [...candidate.variantProductIds.keys()] } },
+        { variant: { is: { productId: { in: productIds } } } },
+      ],
+    };
     const [otherBenefit, legacy] = await Promise.all([
       tx.benefitCampaign.findMany({
-        where: { isEnabled: true, id: { not: id }, ...stillRunning },
+        where: {
+          isEnabled: true,
+          id: { not: id },
+          AND: windowFilters,
+          ...(scoped ? { OR: [{ targets: { none: {} } }, { targets: { some: targetMatches } }] } : {}),
+        },
         include: { targets: { select: { productId: true, variantId: true } } },
         take: 501,
       }),
-      tx.promotionCampaign.findMany({
-        where: { isEnabled: true, ...stillRunning },
-        include: { targets: { select: { productId: true, variantId: true } } },
-        take: 501,
-      }),
+      // F01 owner decision 2: a store-wide benefit never refuses on legacy scope.
+      scoped
+        ? tx.promotionCampaign.findMany({
+            where: { isEnabled: true, AND: windowFilters, targets: { some: targetMatches } },
+            include: { targets: { select: { productId: true, variantId: true } } },
+            take: 501,
+          })
+        : Promise.resolve([]),
     ]);
     if (otherBenefit.length > 500 || legacy.length > 500) return { ok: false, reason: "CONFLICT_SCAN_LIMIT" };
 

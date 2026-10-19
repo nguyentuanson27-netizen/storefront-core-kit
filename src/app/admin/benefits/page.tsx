@@ -39,9 +39,10 @@ const MESSAGES: Readonly<Record<string, string>> = {
   UNKNOWN_GIFT: "Có quà tặng không tồn tại trong danh mục.",
   NOT_FOUND: "Không tìm thấy ưu đãi.",
   STALE_VERSION: "Ưu đãi đã được thay đổi ở nơi khác. Tải lại trang rồi thử lại.",
-  ALREADY_STARTED: "Ưu đãi đã từng được bật nên không thể chỉnh sửa.",
+  ALREADY_STARTED: "Ưu đãi đã từng được bật nên không thể chỉnh sửa hoặc bật lại. Hãy tạo ưu đãi mới.",
   ALREADY_ENABLED: "Ưu đãi này đã được bật.",
   WINDOW_ENDED: "Thời gian của ưu đãi đã kết thúc.",
+  CONFLICT_SCAN_LIMIT: "Không thể bật ưu đãi vì có hơn 500 chiến dịch có thể trùng phạm vi và thời gian. Hãy thu hẹp phạm vi hoặc thời gian áp dụng.",
   CONFLICT: "Ưu đãi trùng phạm vi và thời gian với một ưu đãi đang bật.",
 };
 
