@@ -96,5 +96,5 @@ Vectors must be produced by an **independent reference computation** (e.g. a sho
 | Overlap predicate (spec §7 bullet 1) | **Accepted**; A05/A06 acceptance |
 | `laq2` encoding / key separation / vectors (spec §7 bullet 3) | **Accepted**; vectors produced in A01 |
 | Schema (spec §7 bullet 2) | **Not closed** — per-slice [G3 proposals](../proposals/g3-additive-migration-proposals.md) |
-| G2 Pancake readback | **Not closed** — controlled readback still required before A08 |
+| G2 Pancake source evidence | **2026-10-19 port-scope update:** La.Na's documented 2026-10-14/15 live adapter readback proves the two D-08 outbound line formats on its own shop; no repeat probe is required to port A08. Another shop is not certified; G6 still blocks production ON. See the [remaining plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md). |
 | A1/A2 enablement | Remains OFF; no production activation |
