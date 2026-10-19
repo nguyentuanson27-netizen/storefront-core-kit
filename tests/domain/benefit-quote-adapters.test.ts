@@ -168,6 +168,11 @@ test("A04 no grant: no campaign facts are stored and the rebuild still matches",
   });
   assert.equal(quoteFormatFor(evaluation), "laq1", "no campaign keeps the legacy format");
   const facts = buildBenefitQuoteFacts({ paidLines: paidInputs, gifts: [], evaluation });
+  assert.deepEqual(
+    projectSignedBenefitQuoteForPancake(facts),
+    { ok: false, reason: "VENDOR_PROJECTION_INVALID" },
+    "a no-grant quote belongs to laq1 and must not enter benefit vendor dispatch",
+  );
   const stored = persisted(facts, null);
   assert.equal(stored.order.benefitCampaignId, null);
   assert.equal(stored.order.benefitEligibleQuantity, null);
