@@ -203,6 +203,23 @@ test("A08 v2 order cannot fall through the legacy Pancake single-variation submi
   assert.equal(fetchCalls, 0, "no external read when benefit dispatch is not implemented");
   assert.equal(postCalls, 0, "must not silently send a laq2 order as a legacy order");
   await cleanup(key);
+
+  // The database has no cross-table CHECK linking order quoteVersion to its lines.
+  // Reject a partial v2 write even when the order header still says legacy.
+  const partialKey = "benefit-line-only";
+  const partial = await createDraft(partialKey);
+  await prisma.orderLineSnapshot.updateMany({
+    where: { orderId: partial.id },
+    data: { lineId: "p:local-variant", lineRole: "PAID" },
+  });
+  assert.deepEqual(await service.submit({ publicCode: partial.publicCode, shopId }), {
+    ok: false,
+    state: "REJECTED",
+    reason: "LOCAL_ORDER_INVALID",
+  });
+  assert.equal(fetchCalls, 0);
+  assert.equal(postCalls, 0);
+  await cleanup(partialKey);
 });
 
 test("stock drift is rejected outright before Pancake order creation", async () => {
