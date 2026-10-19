@@ -1,8 +1,8 @@
 /**
  * Synthetic-fixture adapters between the benefit pieces (A04 of the Core Kit A/B/C programme).
  *
- * Three pure mappings, all OFF-only infrastructure — nothing calls them from checkout, and real
- * buyer benefit checkout stays off until A08 has controlled POS readback:
+ * A04 mappings remain OFF-only infrastructure. A08 additionally projects signed and persisted
+ * laq2 facts to La.Na's proven D-08 Pancake vendor shape; no checkout or submit caller is wired yet.
  *
  * 1. A05's evaluation plus the chosen gifts → the facts the `laq2` proof attests to (A01).
  * 2. Those facts → the rows A02 persists (`OrderLineSnapshot` columns and the order-level frozen
