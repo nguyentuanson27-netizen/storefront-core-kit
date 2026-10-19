@@ -260,6 +260,19 @@ test("A04 inconsistent inputs are call-site errors", () => {
   assert.throws(() => toBenefitOrderRows(facts, campaignIdentity, new Map()), RangeError, "undescribed variant");
 });
 
+test("A08 rejects an unreached campaign step before vendor projection", () => {
+  const { facts } = giftScenario();
+  const notGranted = {
+    ...facts,
+    lines: facts.lines.filter((line) => line.role === "PAID"),
+    grants: [{ ...facts.grants[0]!, giftLineCount: 0, tierIndex: null }],
+  };
+  assert.deepEqual(projectBenefitQuoteFactsForPancake(notGranted), {
+    ok: false,
+    reason: "VENDOR_PROJECTION_INVALID",
+  });
+});
+
 test("A08 La.Na D-08 pure projection derives money only from the laq2 role lines", () => {
   const { facts } = giftScenario();
   const projected = projectBenefitQuoteFactsForPancake(facts);
