@@ -597,10 +597,9 @@ Reuse existing [La.Na gift-repair/reminder models](https://github.com/nguyentuan
 
 For each port PR, record exact head, relevant existing CI and the OFF rollback. Do **not** repeat vendor probes or broad manual test matrices. Only when choosing to activate in production, review target-shop configuration/known evidence boundary, security, data migration if changed, rollback, monitoring and owner go/no-go (G6).
 
-## 9. Handoff and merge discipline
+## 9. Handoff
 
-1. Review/approve this plan separately from the already merged umbrella spec.
-2. F00/F01 and their baseline review are already completed; the 2026-10-19 remaining-scope section governs unstarted work. No new migration or POS write is authorized by this plan.
-3. Split by one reviewed semantic capability. ADR 0005 governs changed-line scope; tests, migrations and rollback must accompany the behavior they prove.
-4. Link task ID, parent spec section, exact base/head SHA and verification in each implementation PR. Do not infer implementation completion from merged documentation.
-5. Ship and enable only the slices whose dependencies and external/production evidence are fulfilled. Deferred B3/B6 work stays deferred until separately approved.
+1. Review this **docs-only** scope reset; no app tests or live POS calls are required for documentation edits.
+2. Each future port PR should move one existing La.Na behaviour with the smallest Core Kit adapter, reusing recorded evidence and relevant existing tests. No unrelated refactor, generalized framework or new feature.
+3. If an old Core Kit child-spec sentence conflicts with the chosen La.Na D-08 vendor projection, correct that **specific wording** before A08 ships; do not add a new vendor experiment or silently change website money.
+4. Record exact-head CI, OFF fallback and any real target-shop uncertainty. A separate G6 owner decision is required to enable production.
