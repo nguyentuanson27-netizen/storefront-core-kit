@@ -13,7 +13,7 @@ shared environment, and no external POS write is performed by recording a slice.
 - **Revalidated at:** `main@a397e44dd6800481036e49d55fb2cfcdc885398b` (plan #27 merged).
 - **Drift in code:** none. `git diff 1f71d61..a397e44 --stat` changes only
   `tasks/core-kit-reusable-a-b-c-v1-plan.md` and `tasks/core-kit-reusable-a-b-c-v1-todo.md`.
-- **Path check:** all 60 distinct source/test paths named in the plan's §2 matrix exist in the tree.
+- **Path check:** all 60 distinct source/test paths named in [the original PR #27 plan's §2 matrix](https://github.com/nguyentuanson27-netizen/storefront-core-kit/blob/5af3fb826e5838fcfff451f5370ce4fc02ed5fc1/tasks/core-kit-reusable-a-b-c-v1-plan.md#2-audited-baseline-gap-matrix--delivered-in-this-plan-pr) exist in the historical baseline tree.
 - **Behavioural spot-checks against the matrix rows** (read from source at the SHA above):
   - A1/A4: `src/commerce/checkout-quote-proof.ts` has `PROOF_FORMAT = "laq1"` only; no `laq2`, no `lineId`
     anywhere under `src/`. `src/commerce/checkout-quote.ts` rejects a repeated `pancakeVariationId`
@@ -34,7 +34,7 @@ shared environment, and no external POS write is performed by recording a slice.
 
 ## Current gate status (updated 2026-10-19)
 
-The [remaining-work plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md#remaining-scope--lean-lana-port-2026-10-19) and tracker supersede old *blocked* labels for unstarted work. This status does **not** retroactively change the historical PR/CI evidence below, authorize POS calls or certify a different shop.
+The [short remaining-work plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md) and tracker supersede old *blocked* labels for unstarted work. This status does **not** retroactively change the historical PR/CI evidence below, authorize POS calls or certify a different shop.
 
 | Gate | Status for remaining port | Evidence / limitation |
 | --- | --- | --- |
@@ -47,9 +47,11 @@ The [remaining-work plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md#remaini
 | G5 / image proxy | **RESOLVED BY SKIP** | B10/B11 excluded; keep current trusted media. No new measurements or endpoint |
 | G6 / production release | **OPEN for any future activation** | Exact-head CI, appropriate shop evidence/operational decision, rollback and owner approval. **Not required to merge an OFF-only code port.** |
 
-**Remaining implementation:** A08 checkout/Pancake projection port, then C04 gift UI. A09 only when an existing relevant destination exists (Core Kit has no `/sale`); C03b deferred; A10/B09/B10/B11 SKIPPED. Already merged slices do not need replayed suites.
+**Remaining implementation:** A08 checkout/Pancake projection port, then C04 gift UI. A09 is SKIPPED for the current port (no equivalent `/sale` destination); C03b deferred; A10/B09/B10/B11 SKIPPED. Already merged slices do not need replayed suites.
 
-## Owner approval record — 2026-10-18
+## Owner approval record — 2026-10-18 (historical)
+
+This paragraph describes the approval state **on 2026-10-18**, before the later technical acceptance and 2026-10-19 port-only scope revision above.
 
 The owner explicitly selected **option A for all four choices**. [Approval record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) keeps these scopes distinct: F01 and GB1 owner policies are accepted but technical child-spec review is pending; G3 approved drafting additive designs **only**, not specific migration SQL; G4 accepts [ADR 0010](../decisions/0010-category-taxonomy-vs-collections.md) and skips B09. G2 (Pancake readback) and G5 (real-CDN measurements/security) remain BLOCKED. This is a documentation update — no runtime test, POS write, DB migration or production flag enablement was performed for these approvals.
 
@@ -259,7 +261,9 @@ Each flag follows the runbook in [`docs/operations/release-and-rollback.md`](../
 `deploy/vps/.env.production`, recreate `app`, verify the value inside the container, and roll back by setting it `false`. Enabling any
 of them is a production change and still needs the owner's explicit approval (gate G6); this record does not grant it.
 
-### What the programme could not do, and why
+### Historical pre-implementation blockers (superseded by current gate status)
+
+These rows are the original planning-time questions, **not current instructions**. Use the gate table above and the short plan for remaining work.
 
 | Blocked | Reason | The owner's next step |
 | --- | --- | --- |
