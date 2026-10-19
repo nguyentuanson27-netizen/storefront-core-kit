@@ -333,7 +333,11 @@ export function benefitQuoteFactsFromPersistedOrder(
 export function projectBenefitQuoteFactsForPancake(facts: BenefitQuoteProofFacts): VendorProjection {
   // laq2 is only for an actual granted A1 campaign. A paid-only no-grant
   // quote must stay on the legacy laq1 checkout path.
-  if (!areUsableBenefitQuoteFacts(facts) || facts.grants.length !== 1) {
+  if (
+    !areUsableBenefitQuoteFacts(facts) ||
+    facts.grants.length !== 1 ||
+    facts.grants[0]!.tierIndex === null
+  ) {
     return { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
   }
   return projectBenefitQuoteForVendor(
