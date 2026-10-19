@@ -6,10 +6,10 @@
  *
  * - a campaign is created as a draft and may be redefined only while it has never been enabled
  *   (`enabledAt IS NULL`), guarded by an optimistic `version`;
- * - publishing is one transaction that takes a transaction-scoped advisory lock, re-reads every other
- *   enabled benefit campaign and every enabled legacy campaign, applies the accepted overlap rules
- *   (`findBenefitPublishConflicts`), and only then sets `isEnabled`, so two administrators cannot
- *   publish conflicting campaigns together;
+ * - publishing takes a transaction-scoped advisory lock, reads at most 501 enabled campaigns per
+ *   table whose time and targets may overlap (legacy is skipped for store-wide candidates), applies
+ *   `findBenefitPublishConflicts`, and only then enables the campaign; more than 500 potential
+ *   conflicts fails closed, so concurrent benefit publishes cannot silently bypass the check;
  * - disabling is always allowed and never deletes anything.
  *
  * Residual, recorded rather than hidden: the legacy publish path does not take this advisory lock, so a
@@ -296,20 +296,36 @@ export async function publishBenefitCampaign(
     ]);
     if (otherBenefit.length > 500 || legacy.length > 500) return { ok: false, reason: "CONFLICT_SCAN_LIMIT" };
 
-    const toFacts = async (
-      rows: readonly { id: string; name: string; startsAt: Date | null; endsAt: Date | null; targets: { productId: string | null; variantId: string | null }[] }[],
-    ): Promise<BenefitScopeFacts[]> =>
-      Promise.all(
-        rows.map(async (row) => ({
-          id: row.id,
-          name: row.name,
-          startsAt: row.startsAt,
-          endsAt: row.endsAt,
-          ...(await scopeOf(tx, row.targets)),
-        })),
-      );
+    // Look up peer variant parents once, not one SQL query per campaign while holding the publish lock.
+    const variantIds = [
+      ...new Set(
+        [...otherBenefit, ...legacy].flatMap((row) =>
+          row.targets.flatMap((target) => (target.variantId === null ? [] : [target.variantId])),
+        ),
+      ),
+    ];
+    const variants = variantIds.length > 0
+      ? await tx.variantMirror.findMany({ where: { id: { in: variantIds } }, select: { id: true, productId: true } })
+      : [];
+    const parentByVariant = new Map(variants.map(({ id, productId }) => [id, productId]));
 
-    const conflicts = findBenefitPublishConflicts(candidate, await toFacts(otherBenefit), await toFacts(legacy));
+    const toFacts = (
+      rows: readonly { id: string; name: string; startsAt: Date | null; endsAt: Date | null; targets: { productId: string | null; variantId: string | null }[] }[],
+    ): BenefitScopeFacts[] =>
+      rows.map((row) => {
+        const productIds = row.targets.length === 0
+          ? null
+          : new Set(row.targets.flatMap((target) => (target.productId === null ? [] : [target.productId])));
+        const variantProductIds = new Map<string, string>();
+        for (const target of row.targets) {
+          if (target.variantId === null) continue;
+          const parentId = parentByVariant.get(target.variantId);
+          if (parentId !== undefined) variantProductIds.set(target.variantId, parentId);
+        }
+        return { id: row.id, name: row.name, startsAt: row.startsAt, endsAt: row.endsAt, productIds, variantProductIds };
+      });
+
+    const conflicts = findBenefitPublishConflicts(candidate, toFacts(otherBenefit), toFacts(legacy));
     if (conflicts.length > 0) return { ok: false, reason: "CONFLICT", conflicts };
 
     const enabled = await tx.benefitCampaign.update({
