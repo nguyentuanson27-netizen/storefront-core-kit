@@ -12,6 +12,8 @@ import {
   buildBenefitQuoteFacts,
   giftLineId,
   paidLineId,
+  projectSignedBenefitQuoteForPancake,
+  projectPersistedBenefitOrderForPancake,
   quoteFormatFor,
   toBenefitOrderRows,
   type BenefitCampaignIdentity,
@@ -251,4 +253,36 @@ test("A04 inconsistent inputs are call-site errors", () => {
   assert.throws(() => toBenefitOrderRows(facts, null, variants), RangeError, "campaign identity required");
   assert.throws(() => toBenefitOrderRows(facts, { ...campaignIdentity, id: "other" }, variants), RangeError);
   assert.throws(() => toBenefitOrderRows(facts, campaignIdentity, new Map()), RangeError, "undescribed variant");
+});
+
+test("A08 La.Na D-08 projection derives only from the laq2 signed role lines, not extra prices", () => {
+  const { facts } = giftScenario();
+  const projected = projectSignedBenefitQuoteForPancake(facts);
+  assert.ok(projected.ok);
+  if (!projected.ok) return;
+  assert.deepEqual(
+    projected.lines.map((line) => [line.pancakeVariationId, line.quantity, line.unitPriceVnd]),
+    [
+      ["pancake-x", 1, 499_000],
+      ["pancake-x", 1, 1_000],
+      ["pancake-y", 2, 100_000],
+    ],
+    "website gift stays 0 VND while Pancake receives offset paid/gift lines",
+  );
+  assert.equal(projected.paidTotalVnd, facts.paidSubtotalVnd);
+  assert.equal(projected.lines.reduce((sum, line) => sum + line.quantity * line.unitPriceVnd, 0), facts.paidSubtotalVnd);
+});
+
+test("A08 a persisted laq2 snapshot reconstructs the exact same Pancake payload and hash", () => {
+  const { facts } = giftScenario();
+  const stored = persisted(facts, campaignIdentity);
+  assert.deepEqual(
+    projectPersistedBenefitOrderForPancake(stored.order, stored.rows),
+    projectSignedBenefitQuoteForPancake(facts),
+  );
+  assert.deepEqual(
+    projectPersistedBenefitOrderForPancake({ ...stored.order, quoteVersion: null }, stored.rows),
+    { ok: false, reason: "VENDOR_PROJECTION_INVALID" },
+    "legacy order cannot be reinterpreted as a benefit vendor payload",
+  );
 });
