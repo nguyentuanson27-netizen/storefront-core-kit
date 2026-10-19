@@ -331,7 +331,11 @@ export function benefitQuoteFactsFromPersistedOrder(
  * Only Pancake receives the 1,000-VND offset representation.
  */
 export function projectSignedBenefitQuoteForPancake(facts: BenefitQuoteProofFacts): VendorProjection {
-  if (!areUsableBenefitQuoteFacts(facts)) return { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
+  // laq2 is only for an actual granted A1 campaign. A paid-only no-grant
+  // quote must stay on the legacy laq1 checkout path.
+  if (!areUsableBenefitQuoteFacts(facts) || facts.grants.length !== 1) {
+    return { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
+  }
   return projectBenefitQuoteForVendor(
     facts.lines.map((line) => ({
       lineId: line.lineId,
