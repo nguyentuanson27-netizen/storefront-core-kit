@@ -149,12 +149,14 @@ const scope = (
   productIds: string[] | null,
   startsAt: string | null = null,
   endsAt: string | null = null,
+  variants: readonly (readonly [string, string])[] = [],
 ): BenefitScopeFacts => ({
   id,
   name: `campaign ${id}`,
   startsAt: startsAt ? d(startsAt) : null,
   endsAt: endsAt ? d(endsAt) : null,
   productIds: productIds ? new Set(productIds) : null,
+  variantProductIds: new Map(variants),
 });
 
 test("A06 two benefit campaigns conflict when windows and scopes both intersect", () => {
@@ -189,6 +191,21 @@ test("A06 owner decision 2: a store-wide benefit campaign skips the legacy refus
     findBenefitPublishConflicts(scope("new", ["p1"], "2026-01-01", "2026-02-01"), [], [scope("legacy-wide", null, "2026-01-01", "2026-02-01")]),
     [],
   );
+});
+
+test("A06 explicit variants of one product do not conflict unless the variant or parent product matches", () => {
+  const sizeM = scope("size-m", [], null, null, [["variant-m", "product-a"]]);
+  const sizeL = scope("size-l", [], null, null, [["variant-l", "product-a"]]);
+  const sameVariant = scope("same-variant", [], null, null, [["variant-m", "product-a"]]);
+  const wholeProduct = scope("whole-product", ["product-a"]);
+
+  assert.deepEqual(findBenefitPublishConflicts(sizeM, [sizeL], []), [], "siblings are distinct targets");
+  assert.equal(findBenefitPublishConflicts(sizeM, [sameVariant], []).length, 1, "same variant conflicts");
+  assert.equal(findBenefitPublishConflicts(sizeM, [wholeProduct], []).length, 1, "product scope contains variant");
+  assert.equal(findBenefitPublishConflicts(wholeProduct, [sizeM], []).length, 1, "containment works in either direction");
+  assert.deepEqual(findBenefitPublishConflicts(sizeM, [], [sizeL]), [], "legacy sibling variant does not conflict");
+  assert.equal(findBenefitPublishConflicts(sizeM, [], [sameVariant]).length, 1, "same legacy variant conflicts");
+  assert.equal(findBenefitPublishConflicts(sizeM, [], [wholeProduct]).length, 1, "legacy product scope contains variant");
 });
 
 test("A06 a campaign never conflicts with itself, and several conflicts are all named", () => {

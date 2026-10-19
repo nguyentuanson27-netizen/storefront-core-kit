@@ -256,6 +256,19 @@ test("invalid input is refused with an announced message and nothing is stored",
   await scan(page);
 });
 
+test("A06 admin announces the scan cap and explains that a started campaign cannot be republished", async ({ page, context }) => {
+  await context.addCookies(adminCookies);
+
+  await page.goto(`${BASE_URL}${path}?error=CONFLICT_SCAN_LIMIT`, { waitUntil: "networkidle" });
+  const scanLimitAlert = page.getByRole("alert").filter({ hasText: "hơn 500 chiến dịch" });
+  await expect(scanLimitAlert).toBeFocused();
+  await scan(page);
+
+  await page.goto(`${BASE_URL}${path}?error=ALREADY_STARTED`, { waitUntil: "networkidle" });
+  const startedAlert = page.getByRole("alert").filter({ hasText: "không thể chỉnh sửa hoặc bật lại" });
+  await expect(startedAlert).toBeFocused();
+});
+
 test("a gift campaign resolves its gift by variation id", async ({ page, context }) => {
   await context.addCookies(adminCookies);
   await page.goto(`${BASE_URL}${path}`, { waitUntil: "networkidle" });
