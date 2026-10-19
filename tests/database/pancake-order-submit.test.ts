@@ -159,7 +159,7 @@ test("submission rejects mismatched or unproven Pancake shop scope before any ex
   }
 });
 
-test("A08 v2 order cannot fall through the legacy Pancake single-variation submit path", async () => {
+test("A08 unhandled v2 order safely returns to DRAFT without an external call", async () => {
   const key = "benefit-off";
   const order = await createDraft(key);
   await prisma.orderMirror.update({
@@ -197,15 +197,16 @@ test("A08 v2 order cannot fall through the legacy Pancake single-variation submi
   });
   assert.deepEqual(await service.submit({ publicCode: order.publicCode, shopId }), {
     ok: false,
-    state: "REJECTED",
-    reason: "LOCAL_ORDER_INVALID",
+    state: "DRAFT",
+    reason: "VALIDATION_UNAVAILABLE",
   });
+  assert.equal((await prisma.orderMirror.findUniqueOrThrow({ where: { id: order.id } })).state, "DRAFT");
   assert.equal(fetchCalls, 0, "no external read when benefit dispatch is not implemented");
   assert.equal(postCalls, 0, "must not silently send a laq2 order as a legacy order");
   await cleanup(key);
 
   // The database has no cross-table CHECK linking order quoteVersion to its lines.
-  // Reject a partial v2 write even when the order header still says legacy.
+  // Retryably block a partial v2 write even when the order header still says legacy.
   const partialKey = "benefit-line-only";
   const partial = await createDraft(partialKey);
   await prisma.orderLineSnapshot.updateMany({
@@ -214,9 +215,10 @@ test("A08 v2 order cannot fall through the legacy Pancake single-variation submi
   });
   assert.deepEqual(await service.submit({ publicCode: partial.publicCode, shopId }), {
     ok: false,
-    state: "REJECTED",
-    reason: "LOCAL_ORDER_INVALID",
+    state: "DRAFT",
+    reason: "VALIDATION_UNAVAILABLE",
   });
+  assert.equal((await prisma.orderMirror.findUniqueOrThrow({ where: { id: partial.id } })).state, "DRAFT");
   assert.equal(fetchCalls, 0);
   assert.equal(postCalls, 0);
   await cleanup(partialKey);

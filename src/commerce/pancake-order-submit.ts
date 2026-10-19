@@ -567,8 +567,9 @@ export function createPancakeOrderSubmissionService(
       return reject("SHOP_SCOPE_UNVERIFIED");
     }
     // A08 is not connected yet: the legacy submit path assumes one positive-price row per
-    // variation. It must never reinterpret a laq2 PAID/GIFT snapshot as a legacy order
-    // and drop/reprice its gift (or send an unproven vendor representation).
+    // variation. Never reinterpret laq2 PAID/GIFT rows as a legacy order or send an
+    // unproven vendor representation. Nothing was posted, so this is retryable:
+    // leave the DRAFT intact for the dedicated benefit submit path once installed.
     if (
       order.quoteVersion !== null ||
       order.lines.some((line) =>
@@ -578,7 +579,7 @@ export function createPancakeOrderSubmissionService(
         line.entitlementKey !== null
       )
     ) {
-      return reject("LOCAL_ORDER_INVALID");
+      return resetValidation();
     }
     const persistedShopId = order.pancakeShopId;
 
