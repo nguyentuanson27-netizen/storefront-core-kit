@@ -1,30 +1,29 @@
 # Core Kit reusable capabilities A/B/C — Execution checklist v1
 
-Status: **ACTIVE EXECUTION TRACKER**. Owner selected option A for F01, B1, G3 direction and G4 on 2026-10-18; this approval does not itself complete a feature, permit migration, POS writes or production release.
+Status: **REMAINING WORK ONLY (scope reset 2026-10-19)**. Port La.Na's current functionality with minimal adapters; no fresh feature, duplicate POS tests, shared migration or production activation. Completed PR entries below remain historical evidence.
 
 Planning base: `main@1f71d610387f1e000c89bc11732a79426fa0dfb8`; spec: [A/B/C umbrella spec](../docs/specs/core-kit-reusable-capabilities-a-b-c-v1.md); tasks: [detailed plan](./core-kit-reusable-a-b-c-v1-plan.md).
 
-## Approval and evidence gates (do not infer gate completion from policy selection)
+## Gates — revised for a source-code port, not a new product
 
-- [ ] G0 Review this /plan's **completed** 13-capability source/test/reuse matrix (§2 of plan). F00 subsequently revalidates it at the implementation SHA; do not defer initial matrix until after plan approval.
-- [x] **G1 ACCEPTED 2026-10-18** (owner approved the technical review). Original text: technical child-spec review was required. Owner approved option A F01 business policies (single A1 campaign, no same-line legacy stacking, `lineId`/`laq2`, paid bases). [Decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) and [F01 child-spec draft](../docs/specs/core-kit-benefit-quote-v1.md) must be technically reviewed/merged before the G1 implementation gate closes. The technical proposal was accepted: [F01 technical review](../docs/specs/core-kit-benefit-quote-v1-technical-review.md) (accepted).
-- [ ] G2 Controlled Pancake acceptance/readback proves 0-VND gift, same-variation PAID+GIFT and differently-priced PAID rows **for each enabled use case**, or case remains OFF.
-- [x] **G3 per-slice review DONE 2026-10-18 under the owner's delegation** ("tự đề xuất quyết định"): A02, A06, B01, B04, B05, B06 approved in the [delegated decision record](../docs/approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md). Applying any migration to a shared/production database is still a G6 step. Original text: per-slice SQL/migration review remained BLOCKED. Owner approved additive **design direction and drafting** only, not any concrete Prisma schema diff, migration SQL, rollback or deployment. Drafts for review: [G3 proposals](../docs/proposals/g3-additive-migration-proposals.md) (nothing applied; all per-slice approvals open). [Decision record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md).
-- [x] **G4 OWNER DECISION ACCEPTED:** [ADR 0010](../docs/decisions/0010-category-taxonomy-vs-collections.md) keeps collections; B08 decided; B09 **SKIPPED, not implemented**.
-- [ ] G5 Image proxy measurements/security decision before B11 (otherwise SKIP).
-- [ ] G6 Human review + exact-head tests/runtime + release gate before enabling any new capability.
-- [x] **GB1 ACCEPTED 2026-10-18** (owner approved the technical review; **G3 for B01 still required before B01 code**). Original text: child-spec technical review BEFORE B01/B03 /build: owner approved option A (`pageSize=24`, max 500 curated items, `?page=N`, invalid 404, stable slot pagination and accessible empty state). [B1 child-spec draft](../docs/specs/core-kit-new-arrivals-curation-v1.md); [owner decision](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md). Review/merge child spec and **separately approve G3 concrete schema/migration** before B01 code. Accepted proposal: [B1 technical review](../docs/specs/core-kit-new-arrivals-curation-v1-technical-review.md) (accepted).
+- [x] **G0** — The 13-capability source/test matrix was recorded in the plan and revalidated under F00 (#28); no duplicate audit.
+- [x] **G1** — F01 child technical contract [approved](../docs/specs/core-kit-benefit-quote-v1-technical-review.md).
+- [x] **G2 (porting evidence only)** — Reuse La.Na's [2026-10-14/15 live create/readback record](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/integrations/pancake-gift-quantity-acceptance.md): two split-line cases PASS on shop `715077776`. Per [La.Na ADR 0016 D-08](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/decisions/0016-gift-quantity-promotions-v1-decisions.md), gifts are 0 VND in the website quote but **1,000 VND in the outbound POS projection**, offset from PAID items. A direct 0-VND POS case was **not** tested and is not part of the port. **No new POS probe.** Core Kit's shop `1635185058` is **not certified by this evidence**; G6 still governs production ON.
+- [x] **G3** — Existing slices have their per-slice schema/SQL and CI evidence. Do not re-review merged migrations; review only a future migration **if A08 actually needs one**.
+- [x] **G4** — [ADR 0010](../docs/decisions/0010-category-taxonomy-vs-collections.md): B09 SKIPPED.
+- [x] **G5 resolved by SKIP** — B10/B11 are out of scope: keep Core Kit's existing trusted media; no new proxy, CDN experiment or image benchmark.
+- [ ] **G6 (release only)** — Before any production enablement: exact-head CI, shop configuration/evidence boundary, security, rollback and explicit owner go/no-go. **Does not block OFF-only code porting.**
+- [x] **GB1** — Approved B1 contract; B01-B03 implemented with recorded CI.
 
-## Execution status — blocked tasks (gates are not waived)
+## Remaining tasks and order
 
-Gate evidence and per-slice records live in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
+1. **A08**: Port the existing La.Na benefit checkout + D-08 Pancake projection to Core Kit's canonical quote, reservation, order and gateway. Flag stays OFF.
+2. **C04**: Port La.Na's current gift choice/repair + one-time checkout reminder into the existing Core Kit checkout after A08; no duplicate form or UI redesign.
+3. **A09 optional**: La.Na now uses a read-only upsell banner linking to `/sale` (OD-01/A). Core Kit has **no `/sale` route**. SKIP unless a matching **existing** destination can be reused; do not create one.
+4. **C03b deferred**: La.Na already supports drawer quantity/remove; transfer only if later chosen, never a dependency for A08/C04.
+5. **A10, B09, B10, B11 SKIPPED**; no inline add, category engine, image proxy or new tests for non-features.
 
-- **G1 satisfied (2026-10-18):** F01, A01 and A05 are unblocked by G1. A06, A07 still need G3 / their own dependencies; A02, A03, A04 need A01 and G3 (A02); A08–A10, C04 also need G2.
-- **BLOCKED on G2 (controlled POS readback):** A08, and transitively A09, A10, C04.
-- **G3 additive drafting direction accepted; concrete migration approval still BLOCKED:** A02, A06, B04, B05, B06 and B01 (also GB1).
-- **GB1 satisfied (2026-10-18); G3 for B01 still BLOCKS:** B01, B02, B03 (B02/B03 also depend on B01).
-- **G4 resolved:** B08 decision complete; B09 SKIPPED by accepted ADR 0010. **G5 remains BLOCKED:** B10 needs real CDN measurements/security review, so B11 is blocked.
-- **Completed (no unmet gate, no schema change):** B07, C01, C02, C03, C05 — all behind default-OFF flags; see the release-readiness section of the slice record.
+**Verification rule:** Reuse La.Na tests and existing Core Kit CI; validate only changed integration seams. Relevant DB/domain tests for order/money/locks; targeted browser/keyboard/axe for changed UI; add a new test only for a port-specific regression. Do not repeat live POS readback, add broad device matrices, invent features or require production release checks for an OFF-only PR. See the [lean plan](./core-kit-reusable-a-b-c-v1-plan.md#remaining-scope--lean-lana-port-2026-10-19).
 
 ## Dependency-ordered task checklist
 
@@ -36,7 +35,7 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
 - [x] **F01 — Approve child contracts and POS evidence matrix** [Foundation; deps: F00; Human / external evidence gate]
   - [x] Acceptance: Owner signs off on stacking/priority, paid/eligible/shipping bases, lineId, role, laq2 compatibility, reservation and rollback constraints.
   - [x] Verification: Human design review plus controlled POS evidence plan; no API mutation in plan-only PR.
-  - Evidence: Owner policy selected 2026-10-18: [approval record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md), [technical F01 draft](../docs/specs/core-kit-benefit-quote-v1.md); **G1 satisfied 2026-10-18** by the owner's approval of the [technical review](../docs/specs/core-kit-benefit-quote-v1-technical-review.md). The controlled POS evidence *plan* is in the child spec §4; the evidence itself (G2) is **not** collected and still blocks A08.
+  - Evidence: Owner policy selected 2026-10-18: [approval record](../docs/approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md), [technical F01 draft](../docs/specs/core-kit-benefit-quote-v1.md); **G1 satisfied 2026-10-18** by the owner's approval of the [technical review](../docs/specs/core-kit-benefit-quote-v1-technical-review.md). The original Core Kit-specific POS proof was not collected; La.Na's actual source evidence is now recorded under the re-scoped G2 portability gate above. Other-shop production verification is not implied.
 
 - [x] **A01 — Design/test v2 role lines and laq2 proof** [A; deps: F01; Approved A contract]
   - [x] Acceptance: PAID X + GIFT X are distinct signed lines; invalid duplicate IDs/roles/prices fail closed.
@@ -73,15 +72,15 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: `pnpm test:domain` gift-choice validation and `pnpm test:db` concurrency/revalidation.
   - Evidence: PR #51; own small G3 review recorded in the [delegated decisions](../docs/approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md) (gifts are alternatives; no quantity or price stored; fresh revalidation; never substituted); migration `20261018220000_add_cart_gift_selection` (one table; composite FK to `BenefitCampaignGift`; `prisma migrate diff` empty). Code: `benefit-gift-selection.ts` (pure `resolveGiftSelection`: `NOT_APPLICABLE` / `NEEDS_CHOICE` / `READY` / `BLOCKED`), `benefit-gift-selection-repository.ts` (`selectCartGift`, `clearCartGift`, `revalidateCartGift` from one RepeatableRead snapshot). Tests: domain 7; `tests/database/cart-gift-selection.test.ts` (7): replace-not-append; refusals for unknown/expired cart, inactive/tier/unknown campaign, an unoffered gift (nothing stored); **the database itself refuses an unoffered gift and a second row per cart+campaign**; a gift that stops being offered removes the choice and the buyer is asked to choose again, never given another; disabling or ending (end exclusive) the campaign blocks a stored choice; choosing never changes `CartItem` rows and cart deletion removes the choice; 12 concurrent choices end with one row. Five mutations of the production code each fail a test. Nothing calls it yet (A08). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [ ] **A08 — Prove POS create/readback parity and complete gated A1** [A; deps: A03, A04, A05, A06, A07; External POS acceptance; default OFF]
-  - [ ] Acceptance: Controlled readback proves all accepted paid+gift rows and money; unsupported formats remain OFF and fail closed.
-  - [ ] Verification: Approved Pancake live/test-environment readback; `pnpm test:db` order/capacity and existing integration tests.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **A08 — Port current La.Na benefit checkout and vendor projection** [A; deps: A03-A07 done; flag OFF]
+  - [ ] Acceptance: Use existing Core Kit cart/quote/proof/stock/order gateway with La.Na D-08 gift projection (0-VND website gift, 1,000-VND Pancake gift offset from PAID). No new POS format or price authority.
+  - [ ] Verification: La.Na [recorded live adapter evidence](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/integrations/pancake-gift-quantity-acceptance.md) + existing affected Core Kit domain/DB/integration tests and exact-head CI; **no new Pancake write**.
+  - Evidence: pending port PR; Core Kit target-shop production activation remains under G6.
 
-- [ ] **A09 — Build bounded read-only promotion upsell evaluator** [A; deps: A05, A08; Optional/default OFF]
-  - [ ] Acceptance: Suggest only a proved increment that does not lose existing grants; no viable candidate/timeout yields no offer.
-  - [ ] Verification: `pnpm test:domain` upsell proof/timeout/bounds and `pnpm test:db` candidate visibility.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **A09 — OPTIONAL / otherwise SKIP: current La.Na read-only upsell banner** [A; deps: A08]
+  - [ ] Acceptance: Existing server-proven opportunity links to an **already supported** relevant destination; no direct checkout add, no new `/sale` route or quote simulator. If no equivalent destination, mark SKIPPED.
+  - [ ] Verification: Only relevant existing checkout/link/quote checks if actually ported; normal CI.
+  - Evidence: La.Na [current banner](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/src/components/commerce/checkout-upsell.tsx); Core Kit currently has no `/sale`.
 
 - [x] **B01 — Persist curated new-arrivals membership and order** [B; deps: F00; BLOCKED: GB1 child spec + G3 migration approval before /build]
   - [x] Acceptance: **GB1 child spec + G3 schema/migration approval linked before any code**; approved finite `pageSize`, durable atomic manual selection/order, empty without created-at backfill and old-writer compatibility.
@@ -128,15 +127,10 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [ ] Verification: not run; no taxonomy feature was implemented.
   - Evidence: [accepted ADR 0010](../docs/decisions/0010-category-taxonomy-vs-collections.md); skip is not implementation completion.
 
-- [ ] **B10 — Measure whether trusted image proxy is justified** [B; deps: F00; Security/performance evidence gate]
-  - [ ] Acceptance: Baseline numbers, alternatives, origin/redirect/SSRF and cache-key/CPU/bandwidth budgets documented.
-  - [ ] Verification: Comparable real-image measurement + security design review.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
-
-- [ ] **B11 — Implement bounded image endpoint only if approved** [B; deps: B10; Conditional: only when B10 approves]
-  - [ ] Acceptance: Malicious/unreviewed redirects, URLs, oversized content and unbounded variants fail safely.
-  - [ ] Verification: `pnpm test:domain` limits; HTTP security smoke; `pnpm build` and browser network check.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **B10 — SKIPPED (no image benchmark)** [B; no implementation]
+  - Evidence: Core Kit already has trusted media; adding an image proxy is outside this port.
+- [ ] **B11 — SKIPPED (no new image endpoint)** [B; no implementation]
+  - Evidence: no new API, tests, CDN measurement or proxy security work is needed when the endpoint is not built.
 
 - [x] **C01 — Extract portable PDP/mobile selection interaction models** [C; deps: F00; Independent]
   - [x] Acceptance: Selection/not chosen/out of stock/loading/preorder use existing business truth without parallel pricing.
@@ -154,55 +148,46 @@ Gate evidence and per-slice records live in the [slice record](../docs/verificat
   - [x] Verification: `pnpm test:domain` cart models and the browser spec `tests/a11y-runtime/cart-drawer.spec.ts` (the existing cart/checkout specs are the OFF regression).
   - Evidence: PR #32 (merged), review follow-up in the fix PR; `src/components/headless/cart-drawer-model.ts` (pure), `use-cart-drawer.ts`, brand `src/components/brand/cart-drawer.tsx`, read model `src/routes/cart-drawer-model.ts` + server action `src/routes/cart-drawer.ts`; flag `CART_DRAWER_ENABLED` default OFF. Exact-head CI and merge SHAs in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [ ] **C03b — Edit quantity / remove a line inside the cart drawer** [C; deps: C03; Optional, not started]
-  - [ ] Acceptance: reuse `useCartLine` and the canonical cart mutation; no money or stock recalculation in the drawer; stale or double mutations do not lose buyer data; focus returns sensibly after a removal.
-  - [ ] Verification: `pnpm test:domain` drawer mutation rules and a browser spec for double click, stale line and removal focus.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **C03b — DEFERRED, optional La.Na drawer behaviour** [C; not a blocker]
+  - [ ] Acceptance: Only if selected later, adapt La.Na's existing `use-cart-drawer` quantity/remove actions to Core Kit's canonical cart mutations; no new business rules.
+  - [ ] Verification: Affected cart mutation and focus regression only if ported; no work now.
 
-- [ ] **A10 — Implement safe upsell add-one and checkout adapter** [A; deps: A09; Canonical cart mutation; no C03]
-  - [ ] Acceptance: Server-validated idempotent add-one and quote refresh use current `storefront-cart-actions`, with optional checkout adapter independent of drawer.
-  - [ ] Verification: `pnpm test:domain` upsell mutation, `pnpm test:db` cart concurrency, checkout a11y regression.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **A10 — SKIPPED: obsolete checkout inline add** [A; not implemented]
+  - Evidence: La.Na owner OD-01/A replaced inline add with a read-only link; do not revive the abandoned UI or action.
 
-- [ ] **C04 — Wire gift reminder and checkout role-lines only after A1** [C; deps: A08; Canonical quote; no C03]
-  - [ ] Acceptance: Existing checkout read model consumes A08-proven paid/gift totals and preserves input across stale-proof recovery; no drawer required.
-  - [ ] Verification: `pnpm test:domain` checkout view model, `tests/a11y-runtime/checkout.spec.ts` keyboard/browser.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **C04 — Port La.Na gift selection/repair and checkout reminder** [C; deps: A08; no drawer dependency]
+  - [ ] Acceptance: Use existing Core Kit checkout form/authoritative paid+gift quote; invalid selection can be repaired, no automatic gift choice, form fields survive re-quote; OFF checkout untouched.
+  - [ ] Verification: Reuse La.Na [picker/reminder implementation evidence](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/verification/storefront-gift-picker-checkout-reminder.md), plus affected Core Kit checkout domain/keyboard/browser checks.
+  - Evidence: pending port PR.
 
 - [x] **C05 — Add optional search overlay after bounded suggestions** [C; deps: B07; Optional/default OFF]
   - [x] Acceptance: Overlay consumes B07's approved bounded suggestions and keyboard/empty/error states, never blocking C02/no-JS search.
   - [x] Verification: `pnpm test:domain` overlay model and `tests/a11y-runtime/discovery.spec.ts` runtime/focus. (Browser evidence is the new `search-overlay.spec.ts`; `discovery.spec.ts` and the editorial/evergreen specs are the OFF regression.)
   - Evidence: PR #33; `src/components/headless/search-overlay-model.ts` (pure), `use-search-overlay.ts`, brand `src/components/brand/search-overlay.tsx`; flag `SEARCH_OVERLAY_ENABLED` default OFF, effective only with `SEARCH_SUGGESTIONS_ENABLED`. Local on base `main@ebe7197`: lint 0 errors, typecheck, `pnpm test`, `search-overlay.spec.ts` 10/10 in Chromium (390×844, 1440×900, axe, keyboard, Tab trap, stale-response case). Exact-head CI and merge SHA in the [slice record](../docs/verification/core-kit-a-b-c-slice-record.md).
 
-- [ ] **R00 — Repeat quality/rollback verification for each enabled slice** [Release; deps: F00; Every implementation PR]
-  - [ ] Acceptance: Each released capability has real tests/build/CI/runtime evidence and a reversible enablement plan.
-  - [ ] Verification: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm test:db`, `pnpm build`, `pnpm release:check` and relevant browser/runtime.
-  - Evidence: PR #___ / head SHA ___ / CI or runtime evidence ___
+- [ ] **R00 — Production release/rollback only** [Release; depends on G6]
+  - [ ] Acceptance: When enabling, record approved shop scope, rollback/flag OFF, exact-head CI, security and owner go/no-go.
+  - [ ] Verification: Existing release checks **at activation**; no extra test suite or live POS write merely to merge an OFF-only port.
 
 ## Batch checkpoints
 
-- [ ] CP0: Plan §2 baseline matrix reviewed now; F00 revalidated at implementation SHA and F01 approved; no unreviewed campaign/Pancake assumptions.
-- [x] CP-A0: A01/A02/A03 role proof/history and locked same-SKU resource correctness. Evidence: A01 #39, A02 #48 (`2a3c68c`), A03 (see slice record); same-SKU PAID+GIFT sums to one reservation row (A03 DB test).
-- [x] CP-A1: A04 OFF-only synthetic laq2/legacy parity plus A05 frozen paid eligibility and mixed-cart shipping; real checkout integration reserved for A08 after A07. Evidence: A04 #49 (`aae270c`) byte parity between the rendered and the database-rebuilt proof; A05 #40. Real checkout stays OFF until A08.
-- [ ] CP-A2: A06/A07/A08 admin/gift/POS acceptance, feature OFF and compatibility.
-- [ ] CP-A3: A09/A10 read-only proof + bounded idempotent upsell (optional).
-- [x] CP-B1: **GB1 approved child spec and G3 migration review BEFORE B01 code; GB1 rechecked at B03**; finite page-size, correct manual order across page boundaries, OFF original editorial, ON + empty editorial frame with accessible empty-list status/zero cards, and ON curated listing.
-- [x] CP-B2: B04/B05/B06/B07 independent merchandising and search gates.
-- [x] CP-B3: B08 owner decision accepted through ADR 0010; B09 SKIPPED (not implemented). No category schema/SEO/route changes.
-- [ ] CP-B4: B10 evidence and B11 optional-only implementation.
-- [x] CP-C: C01–C05 independent headless/a11y gates; C02 PLP filter no B07; C05 optional search overlay depends B07; C03 drawer never blocks A10/C04. (PRs #29–#33; C04 remains blocked on A08 and is tracked above, not here.)
-- [ ] CP-R: R00 per-slice verified release/rollback, not a big-bang flag flip.
+- [x] **CP0:** F00 source/test audit and F01 technical contract already reviewed; La.Na vendor source evidence is now linked under G2.
+- [x] **CP-A0:** A01/A02/A03 (role proof/order history/locked stock) delivered.
+- [x] **CP-A1:** A04/A05 (OFF-only `laq2` adapters and pure eligibility) delivered.
+- [ ] **CP-A2:** A06/A07 delivered, but A08 real checkout port and C04 UI are still open; G2 source evidence is recorded, not target-shop certification.
+- [ ] **CP-A3:** A09 is optional/otherwise SKIP; A10 explicitly SKIPPED and not blocking.
+- [x] **CP-B1:** Curated new arrivals delivered (B01-B03).
+- [x] **CP-B2:** B04-B07 delivered.
+- [x] **CP-B3:** B08 decided, B09 SKIPPED.
+- [x] **CP-B4:** Scope decision: B10/B11 SKIPPED, no proxy built.
+- [x] **CP-C (completed independent slices only):** C01/C02/C03/C05 delivered; C04 remains open under A08, not falsely marked complete.
+- [ ] **CP-R:** G6/R00 release sign-off applies if/when production flags are enabled.
 
-## Verification template for implementation PRs
+## Minimal verification for remaining port PRs
 
-- [ ] One cohesive concern, all related tests, ADR 0005 reviewability, no unrelated refactor.
-- [ ] `pnpm lint`, `pnpm typecheck` and `pnpm test` passed on the exact head.
-- [ ] `pnpm test:db` passed when schemas/locking/orders/admin state touched.
-- [ ] `pnpm build` and `pnpm release:check` passed.
-- [ ] Relevant HTTP/Playwright/axe/keyboard/390×844,768,1440 regression actually run.
-- [ ] Legacy `laq1`/old orders, active `/shop` and editorial `/new-arrivals` unchanged with feature OFF.
-- [ ] POS behavior verified by controlled readback or relevant capability still OFF.
-- [ ] Security/input/shop scope, observability, migration and rollback reviewed.
-- [ ] Approval and final CI state recorded; no checkbox marked merely because docs merged.
+- [ ] Changes correspond to existing merged La.Na behaviour and the smallest Core Kit adapter; no new feature/route/engine/refactor.
+- [ ] Required existing CI on the exact changed head is green (lint/typecheck/build and repository checks); run focused current tests for impacted money/cart/DB or checkout UI. Add regression cases **only for newly exposed port-specific defects**.
+- [ ] Verify default-OFF/legacy behaviour and cart ownership; record any target-shop evidence gap explicitly rather than pretending La.Na tested that shop.
+- [ ] Production activation is separate G6; no live POS probe, new performance project or mandatory full manual-device matrix for an OFF-only port.
 
-**Do not start B09, B11 or production flag enablement without explicit approval of their gates.**
+**B09, A10, B10 and B11 are SKIPPED under this scope.** C03b/A09 are optional and non-blocking. No production flag ON without a separate G6 owner decision.
