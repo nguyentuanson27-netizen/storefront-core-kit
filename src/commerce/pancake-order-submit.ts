@@ -566,6 +566,12 @@ export function createPancakeOrderSubmissionService(
     if (order.pancakeShopId === null || order.pancakeShopId !== safeShopId) {
       return reject("SHOP_SCOPE_UNVERIFIED");
     }
+    // A08 is not connected yet: the legacy submit path assumes one positive-price row per
+    // variation. It must never reinterpret a laq2 PAID/GIFT snapshot as a legacy order
+    // and drop/reprice its gift (or send an unproven vendor representation).
+    if (order.quoteVersion !== null) {
+      return reject("LOCAL_ORDER_INVALID");
+    }
     const persistedShopId = order.pancakeShopId;
 
     if (
