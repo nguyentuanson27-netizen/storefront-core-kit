@@ -1,8 +1,8 @@
 /**
  * Synthetic-fixture adapters between the benefit pieces (A04 of the Core Kit A/B/C programme).
  *
- * Three pure mappings, all OFF-only infrastructure — nothing calls them from checkout, and real
- * buyer benefit checkout stays off until A08 has controlled POS readback:
+ * A04 mappings remain OFF-only infrastructure. A08 additionally projects signed and persisted
+ * laq2 facts to La.Na's proven D-08 Pancake vendor shape; no checkout or submit caller is wired yet.
  *
  * 1. A05's evaluation plus the chosen gifts → the facts the `laq2` proof attests to (A01).
  * 2. Those facts → the rows A02 persists (`OrderLineSnapshot` columns and the order-level frozen
@@ -22,6 +22,7 @@ import {
   type BenefitQuoteProofFacts,
 } from "./benefit-quote-proof.ts";
 import type { BenefitEligibilityResult } from "./benefit-eligibility.ts";
+import { projectBenefitQuoteForVendor, type VendorProjection } from "./pancake-gift-projection.ts";
 
 export type BenefitCampaignIdentity = Readonly<{
   id: string;
@@ -321,4 +322,47 @@ export function benefitQuoteFactsFromPersistedOrder(
     totalVnd: Number(order.totalVnd),
   };
   return areUsableBenefitQuoteFacts(facts) ? facts : null;
+}
+
+/**
+ * A08's pure outbound seam: apply La.Na ADR 0016 D-08 to candidate role lines.
+ * This function does NOT verify a laq2 MAC or current entitlement. A future
+ * submit caller must verify both before using its output in a vendor request.
+ * Only Pancake receives the 1,000-VND offset representation.
+ */
+export function projectBenefitQuoteFactsForPancake(facts: BenefitQuoteProofFacts): VendorProjection {
+  // laq2 is only for an actual granted A1 campaign. A paid-only no-grant
+  // quote must stay on the legacy laq1 checkout path.
+  if (
+    !areUsableBenefitQuoteFacts(facts) ||
+    facts.grants.length !== 1 ||
+    facts.grants[0]!.tierIndex === null
+  ) {
+    return { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
+  }
+  return projectBenefitQuoteForVendor(
+    facts.lines.map((line) => ({
+      lineId: line.lineId,
+      role: line.role,
+      pancakeVariationId: line.variantExternalId,
+      quantity: line.quantity,
+      unitPriceVnd: line.unitPriceVnd,
+    })),
+  );
+}
+
+/**
+ * Restart-safe parity: the vendor payload rebuilt from persisted A02 snapshots
+ * is byte-identical to the one projected from the original laq2 facts.
+ * No cryptographic proof is verified here; the caller must have done so.
+ * A corrupt or legacy snapshot is never reinterpreted as an A1 vendor payload.
+ */
+export function projectPersistedBenefitOrderForPancake(
+  order: PersistedBenefitOrder,
+  rows: readonly PersistedBenefitLine[],
+): VendorProjection {
+  const facts = benefitQuoteFactsFromPersistedOrder(order, rows);
+  return facts
+    ? projectBenefitQuoteFactsForPancake(facts)
+    : { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
 }

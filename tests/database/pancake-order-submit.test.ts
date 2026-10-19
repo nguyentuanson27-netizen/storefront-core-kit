@@ -159,6 +159,71 @@ test("submission rejects mismatched or unproven Pancake shop scope before any ex
   }
 });
 
+test("A08 unhandled v2 order safely returns to DRAFT without an external call", async () => {
+  const key = "benefit-off";
+  const order = await createDraft(key);
+  await prisma.orderMirror.update({
+    where: { id: order.id },
+    data: {
+      quoteVersion: 2,
+      benefitCampaignId: "benefit-test",
+      benefitEligibleQuantity: 2,
+      benefitBasisVnd: BigInt(1_000_000),
+      benefitTierIndex: 0,
+    },
+  });
+  await prisma.orderLineSnapshot.updateMany({
+    where: { orderId: order.id },
+    data: {
+      lineId: "p:local-variant",
+      lineRole: "PAID",
+      benefitCampaignId: "benefit-test",
+      benefitKind: "QUANTITY_TIER",
+      benefitCampaignName: "Existing tier",
+    },
+  });
+
+  let fetchCalls = 0;
+  let postCalls = 0;
+  const service = createPancakeOrderSubmissionService(prisma, {
+    async fetchCompleteCatalog() {
+      fetchCalls += 1;
+      return [liveVariation()];
+    },
+    async createOrder() {
+      postCalls += 1;
+      return { id: 1 };
+    },
+  });
+  assert.deepEqual(await service.submit({ publicCode: order.publicCode, shopId }), {
+    ok: false,
+    state: "DRAFT",
+    reason: "VALIDATION_UNAVAILABLE",
+  });
+  assert.equal((await prisma.orderMirror.findUniqueOrThrow({ where: { id: order.id } })).state, "DRAFT");
+  assert.equal(fetchCalls, 0, "no external read when benefit dispatch is not implemented");
+  assert.equal(postCalls, 0, "must not silently send a laq2 order as a legacy order");
+  await cleanup(key);
+
+  // The database has no cross-table CHECK linking order quoteVersion to its lines.
+  // Retryably block a partial v2 write even when the order header still says legacy.
+  const partialKey = "benefit-line-only";
+  const partial = await createDraft(partialKey);
+  await prisma.orderLineSnapshot.updateMany({
+    where: { orderId: partial.id },
+    data: { lineId: "p:local-variant", lineRole: "PAID" },
+  });
+  assert.deepEqual(await service.submit({ publicCode: partial.publicCode, shopId }), {
+    ok: false,
+    state: "DRAFT",
+    reason: "VALIDATION_UNAVAILABLE",
+  });
+  assert.equal((await prisma.orderMirror.findUniqueOrThrow({ where: { id: partial.id } })).state, "DRAFT");
+  assert.equal(fetchCalls, 0);
+  assert.equal(postCalls, 0);
+  await cleanup(partialKey);
+});
+
 test("stock drift is rejected outright before Pancake order creation", async () => {
   // Unlike a price move, stock is not something the buyer can reconfirm their way past, so this
   // stays terminal. P9b changed only the price half of what used to be one shared assertion.
