@@ -32,21 +32,22 @@ shared environment, and no external POS write is performed by recording a slice.
   merge qualifying PRs. The owner can still contest any row; nothing downstream relies on a gate that this record
   does not grant (see below).
 
-## Gate and blocker status
+## Current gate status (updated 2026-10-19)
 
-A gate is only satisfied by the artifact named in the plan. Merging planning or tracking documents satisfies none.
+The [remaining-work plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md#remaining-scope--lean-lana-port-2026-10-19) and tracker supersede old *blocked* labels for unstarted work. This status does **not** retroactively change the historical PR/CI evidence below, authorize POS calls or certify a different shop.
 
-| Gate | Needed by | Status | What unblocks it |
-| --- | --- | --- | --- |
-| G1 / F01 — benefit quote contract | A01–A10, C04 | **SATISFIED 2026-10-18** (policy and technical review approved) | [Owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md), [F01 draft](../specs/core-kit-benefit-quote-v1.md). **Technical review ACCEPTED by the owner 2026-10-18:** [overlap predicate, `laq2` encoding, vectors](../specs/core-kit-benefit-quote-v1-technical-review.md) |
-| G2 — controlled Pancake readback of 0-VND gift, same-variation PAID+GIFT, differently priced PAID rows | A08 (and so A09, A10, C04) | **BLOCKED — no controlled POS evidence** | Approved test-environment readback evidence per enabled use case |
-| G3 — additive migration and old/new code coexistence | A02, A06, B01, B04, B05, B06; B09 only if reopened | **Per-slice review DONE 2026-10-18 under the owner's delegation** ([record](../approvals/core-kit-a-b-c-delegated-decisions-2026-10-18.md)); applying to a shared/production DB stays a G6 step | [Owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md). Each real schema/SQL diff, rollback, coexistence and tests require separate review. **Drafts for review:** [G3 proposals](../proposals/g3-additive-migration-proposals.md) (nothing applied) |
-| GB1 — curated arrivals contract | B01, B03 | **SATISFIED 2026-10-18** (policy and technical review approved); G3 for B01 still BLOCKED | [B1 draft](../specs/core-kit-new-arrivals-curation-v1.md); **technical review ACCEPTED by the owner 2026-10-18:** [parser bounds, metadata, query budget](../specs/core-kit-new-arrivals-curation-v1-technical-review.md); [owner decision](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md) |
-| G4 — category vs collections | B08 → B09 | **OWNER ACCEPTED 2026-10-18: KEEP collections, B09 SKIPPED** | [ADR 0010](../decisions/0010-category-taxonomy-vs-collections.md); no new taxonomy implementation |
-| G5 — image delivery measurement and security decision | B10 → B11 | **BLOCKED — needs comparable real-image measurement** | Measurements plus security design review |
+| Gate | Status for remaining port | Evidence / limitation |
+| --- | --- | --- |
+| G0 / F00 | **DONE** | Existing 13-capability gap matrix revalidated in F00 above; no new audit |
+| G1 / F01 | **DONE** | [Approved child review](../specs/core-kit-benefit-quote-v1-technical-review.md) |
+| G2 / Pancake source evidence | **SOURCE EVIDENCE RECORDED — no new POS test for this port** | [La.Na's controlled create/readback, 2026-10-14/15](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/integrations/pancake-gift-quantity-acceptance.md): differently priced same-variation PAID rows and PAID+GIFT pass on shop `715077776`. [ADR 0016 D-08](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/decisions/0016-gift-quantity-promotions-v1-decisions.md): gift remains 0 VND in website quote but is 1,000 VND in POS projection, offset from paid items. Direct POS 0-VND gift **not tested and not required** for the chosen projection. This **does not certify Core Kit shop `1635185058`** or authorize ON. |
+| G3 / additive schemas | **COMPLETED for merged slices** | Existing per-slice reviewed migrations and CI stay recorded; a new schema edit only gets relevant review if needed for the future port |
+| GB1 / New Arrivals | **DONE** | B01/B02/B03 implemented; child contract previously accepted |
+| G4 / categories | **DONE / B09 SKIPPED** | [ADR 0010](../decisions/0010-category-taxonomy-vs-collections.md) |
+| G5 / image proxy | **RESOLVED BY SKIP** | B10/B11 excluded; keep current trusted media. No new measurements or endpoint |
+| G6 / production release | **OPEN for any future activation** | Exact-head CI, appropriate shop evidence/operational decision, rollback and owner approval. **Not required to merge an OFF-only code port.** |
 
-Tasks with no unmet gate and no schema change: **B07, C01, C02, C03, C05** (after B07). These are built first.
-A05 pure eligibility now has an **owner-approved v1 stacking direction**, but the precise conflict predicate and the F01 technical child-spec review remain pending. A05 therefore stays gated on G1; policy approval alone is not a verified implementation.
+**Remaining implementation:** A08 checkout/Pancake projection port, then C04 gift UI. A09 only when an existing relevant destination exists (Core Kit has no `/sale`); C03b deferred; A10/B09/B10/B11 SKIPPED. Already merged slices do not need replayed suites.
 
 ## Owner approval record — 2026-10-18
 
