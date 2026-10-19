@@ -12,7 +12,7 @@ import {
   buildBenefitQuoteFacts,
   giftLineId,
   paidLineId,
-  projectSignedBenefitQuoteForPancake,
+  projectBenefitQuoteFactsForPancake,
   projectPersistedBenefitOrderForPancake,
   quoteFormatFor,
   toBenefitOrderRows,
@@ -169,7 +169,7 @@ test("A04 no grant: no campaign facts are stored and the rebuild still matches",
   assert.equal(quoteFormatFor(evaluation), "laq1", "no campaign keeps the legacy format");
   const facts = buildBenefitQuoteFacts({ paidLines: paidInputs, gifts: [], evaluation });
   assert.deepEqual(
-    projectSignedBenefitQuoteForPancake(facts),
+    projectBenefitQuoteFactsForPancake(facts),
     { ok: false, reason: "VENDOR_PROJECTION_INVALID" },
     "a no-grant quote belongs to laq1 and must not enter benefit vendor dispatch",
   );
@@ -260,9 +260,9 @@ test("A04 inconsistent inputs are call-site errors", () => {
   assert.throws(() => toBenefitOrderRows(facts, campaignIdentity, new Map()), RangeError, "undescribed variant");
 });
 
-test("A08 La.Na D-08 projection derives only from the laq2 signed role lines, not extra prices", () => {
+test("A08 La.Na D-08 pure projection derives money only from the laq2 role lines", () => {
   const { facts } = giftScenario();
-  const projected = projectSignedBenefitQuoteForPancake(facts);
+  const projected = projectBenefitQuoteFactsForPancake(facts);
   assert.ok(projected.ok);
   if (!projected.ok) return;
   assert.deepEqual(
@@ -283,7 +283,7 @@ test("A08 a persisted laq2 snapshot reconstructs the exact same Pancake payload 
   const stored = persisted(facts, campaignIdentity);
   assert.deepEqual(
     projectPersistedBenefitOrderForPancake(stored.order, stored.rows),
-    projectSignedBenefitQuoteForPancake(facts),
+    projectBenefitQuoteFactsForPancake(facts),
   );
   assert.deepEqual(
     projectPersistedBenefitOrderForPancake({ ...stored.order, quoteVersion: null }, stored.rows),
