@@ -1,6 +1,6 @@
 # Core Kit benefit quote v1 — F01 child specification
 
-**Status:** OWNER BUSINESS POLICY APPROVED on 2026-10-18; **technical review ACCEPTED 2026-10-18** (see the `-technical-review` document). G1 is not automatically satisfied by this draft. A01–A10 and C04 implementation continue to respect their approval/dependency gates.
+**Status:** OWNER BUSINESS POLICY APPROVED on 2026-10-18; **technical review ACCEPTED 2026-10-18** (G1, see the `-technical-review` document). The [remaining port plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md) records the 2026-10-19 G2 source evidence and scope decision; production remains OFF without G6 approval.
 **Parents:** [A/B/C umbrella spec](./core-kit-reusable-capabilities-a-b-c-v1.md) (`4/A1–A4), [implementation plan](../../tasks/core-kit-reusable-a-b-c-v1-plan.md) (F01, A01–A10), [owner decision record](../approvals/core-kit-a-b-c-owner-decisions-2026-10-18.md).
 
 ## 1. Purpose and boundaries
@@ -30,8 +30,8 @@ Add opt-in `GIFT_ITEM` and `QUANTITY_TIER` benefits without replacing canonical 
 ## 4. Capacity and POS safety
 
 - Aggregate every paid + gift role line by VariantMirror/resource demand **before** existing locked reservation. `PAID X ×1 + GIFT X ×1` reserves one order/variant row for **2** units, not two rows and not one unit. Preserve composite expansion, selling floors, idempotent retry, `SYNC_UNKNOWN` holds and mirror handoff.
-- **G2 is NOT approved.** Before enabling a specific POS shape, a controlled authorized create **and order readback** must prove: (a) 0-VND gift line, (b) paid+gift with the same variation ID, (c) same variation repeated at different PAID prices. Capture request/response/result IDs, expected versus readback quantities and totals, sanitized evidence and the owner-approved test environment. Mock-only success is insufficient.
-- Unproven/unsupported shapes stay OFF or the affected benefit path rejects safely. Never merge/drop distinct gift rows, fake POS acceptance or write corrected stock to the mirror.
+- **G2 source evidence for porting (2026-10-19):** [La.Na live create/readback](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/integrations/pancake-gift-quantity-acceptance.md) passed (b) same-variation PAID+GIFT and (c) repeated PAID variation at different prices on shop `715077776` (2026-10-14/15). Adopt the already-implemented [D-08 projection](https://github.com/nguyentuanson27-netizen/la.na_design_storefront/blob/main/docs/decisions/0016-gift-quantity-promotions-v1-decisions.md): website gift remains 0 VND in quote/proof/snapshot; the outbound Pancake gift is 1,000 VND, offset from PAID goods so the vendor total matches the website total. Case (a) direct POS 0-VND was **not run** and is **not required by this selected vendor shape**. Reuse this recorded evidence without a new POS write to **port** A08.
+- **Activation boundary:** Core Kit's recorded P10 acceptance used another shop (`1635185058`). La.Na's result does **not** certify it or authorize production ON. Keep unproven configurations OFF and fail closed; G6 requires a separate target-shop/owner operational decision. Never merge/drop distinct quote gift rows, fake POS acceptance or write corrected stock to the mirror.
 
 ## 5. Planned implementation split
 
@@ -41,7 +41,7 @@ Add opt-in `GIFT_ITEM` and `QUANTITY_TIER` benefits without replacing canonical 
 - **A04:** OFF-only synthetic v2 quote adapters; NOT real live-benefit checkout.
 - **A05:** frozen eligible paid basis, cross-campaign conflict rule and post-discount shipping.
 - **A07:** server-owned selected gift revalidation; stale gift safely blocks benefit checkout.
-- **A08:** real buyer render/submit and POS parity only after A05/A07 and G2 readback for enabled cases; **A09/A10 and C04** follow their gates.
+- **A08:** adapt La.Na's existing benefit render/submit and D-08 POS projection after A05/A07, using the documented source evidence; keep flag OFF during porting. **C04** follows A08; **A10** is SKIPPED and **A09** is optional/skipped under the remaining plan.
 
 ## 6. Minimum future verification
 
@@ -50,12 +50,12 @@ Add opt-in `GIFT_ITEM` and `QUANTITY_TIER` benefits without replacing canonical 
 - Legacy promo + A1 line overlap, two eligible A1 campaigns, ambiguous campaign priority => no unsupported stacking/benefit; flag OFF preserves legacy money/checkout.
 - `PAID X×1 + GIFT X×1`: unique role lines but reservation quantity 2; stock 2 success, stock 1 rejects atomically, concurrent checkouts and retried/unknown POS calls do not overhold/double-submit.
 - Cross-version `laq1`/`laq2` signature/role/amount tampering, old order snapshots, immutable digest/order/POS parity and stock-only non-material refresh.
-- Admin auth, input bounds/shop ownership, successful OFF rollback, actual DB and controlled POS evidence on exact commits when required.
+- Admin auth, input bounds/shop ownership, successful OFF rollback, affected existing DB tests and exact-head CI for changed code; reuse the La.Na live POS evidence for porting. Production release remains a separate G6 decision.
 
-## 7. Review-required technical decisions (still not cleared)
+## 7. Original technical decisions (since reviewed for implemented slices)
 
 - Specify and test the **exact** campaign-scope overlap predicate and its buyer-facing failure/recovery, including legacy-discounted lines that contribute to an order-wide tier basis. Until then reject ambiguous A1 benefits, keeping legacy checkout unaffected.
 - Review concrete campaign/gift/snapshot schema and rollback under **G3**; decide allowed history/version fields without breaking existing unique constraints.
 - Review `laq2` canonical binary/text encoding and HMAC key separation, grant representation and signature vectors as part of A01. Do not claim an untested wire format is implemented.
 
-**No production feature enabled. No migration design or Pancake readback is approved by this document.**
+**No production feature is enabled by this document. La.Na source POS evidence is recorded for portability, not for certifying another shop or approving production activation.**
