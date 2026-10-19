@@ -22,6 +22,7 @@ import {
   type BenefitQuoteProofFacts,
 } from "./benefit-quote-proof.ts";
 import type { BenefitEligibilityResult } from "./benefit-eligibility.ts";
+import { projectBenefitQuoteForVendor, type VendorProjection } from "./pancake-gift-projection.ts";
 
 export type BenefitCampaignIdentity = Readonly<{
   id: string;
@@ -321,4 +322,38 @@ export function benefitQuoteFactsFromPersistedOrder(
     totalVnd: Number(order.totalVnd),
   };
   return areUsableBenefitQuoteFacts(facts) ? facts : null;
+}
+
+/**
+ * A08's pure outbound seam: apply La.Na ADR 0016 D-08 to the exact role lines
+ * already covered by the laq2 quote proof. This is not an independent quote;
+ * caller must verify the buyer's proof and current entitlement before submitting.
+ * Only Pancake receives the 1,000-VND offset representation.
+ */
+export function projectSignedBenefitQuoteForPancake(facts: BenefitQuoteProofFacts): VendorProjection {
+  if (!areUsableBenefitQuoteFacts(facts)) return { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
+  return projectBenefitQuoteForVendor(
+    facts.lines.map((line) => ({
+      lineId: line.lineId,
+      role: line.role,
+      pancakeVariationId: line.variantExternalId,
+      quantity: line.quantity,
+      unitPriceVnd: line.unitPriceVnd,
+    })),
+  );
+}
+
+/**
+ * Restart-safe parity: the vendor payload rebuilt from persisted A02 snapshots
+ * is byte-identical to the one projected from the originally signed quote.
+ * A corrupt or legacy snapshot is never reinterpreted as an A1 vendor payload.
+ */
+export function projectPersistedBenefitOrderForPancake(
+  order: PersistedBenefitOrder,
+  rows: readonly PersistedBenefitLine[],
+): VendorProjection {
+  const facts = benefitQuoteFactsFromPersistedOrder(order, rows);
+  return facts
+    ? projectSignedBenefitQuoteForPancake(facts)
+    : { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
 }
