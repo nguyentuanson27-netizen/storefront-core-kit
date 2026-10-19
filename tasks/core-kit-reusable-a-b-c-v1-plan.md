@@ -115,6 +115,8 @@ Before production ON only: existing release/rollback/security review and explici
 
 ## 8. Detailed tasks (dependency-ordered)
 
+The table and completed task details below preserve the original PR #27 history; **only the remaining-scope section and the companion unchecked tasks are current instructions**.
+
 | ID | Work item | Dependencies | Gate |
 | --- | --- | --- | --- |
 | F00 | Revalidate audited matrix and ownership at implementation SHA | — | Revalidation gate |
