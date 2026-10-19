@@ -325,12 +325,12 @@ export function benefitQuoteFactsFromPersistedOrder(
 }
 
 /**
- * A08's pure outbound seam: apply La.Na ADR 0016 D-08 to the exact role lines
- * already covered by the laq2 quote proof. This is not an independent quote;
- * caller must verify the buyer's proof and current entitlement before submitting.
+ * A08's pure outbound seam: apply La.Na ADR 0016 D-08 to candidate role lines.
+ * This function does NOT verify a laq2 MAC or current entitlement. A future
+ * submit caller must verify both before using its output in a vendor request.
  * Only Pancake receives the 1,000-VND offset representation.
  */
-export function projectSignedBenefitQuoteForPancake(facts: BenefitQuoteProofFacts): VendorProjection {
+export function projectBenefitQuoteFactsForPancake(facts: BenefitQuoteProofFacts): VendorProjection {
   // laq2 is only for an actual granted A1 campaign. A paid-only no-grant
   // quote must stay on the legacy laq1 checkout path.
   if (!areUsableBenefitQuoteFacts(facts) || facts.grants.length !== 1) {
@@ -349,7 +349,8 @@ export function projectSignedBenefitQuoteForPancake(facts: BenefitQuoteProofFact
 
 /**
  * Restart-safe parity: the vendor payload rebuilt from persisted A02 snapshots
- * is byte-identical to the one projected from the originally signed quote.
+ * is byte-identical to the one projected from the original laq2 facts.
+ * No cryptographic proof is verified here; the caller must have done so.
  * A corrupt or legacy snapshot is never reinterpreted as an A1 vendor payload.
  */
 export function projectPersistedBenefitOrderForPancake(
@@ -358,6 +359,6 @@ export function projectPersistedBenefitOrderForPancake(
 ): VendorProjection {
   const facts = benefitQuoteFactsFromPersistedOrder(order, rows);
   return facts
-    ? projectSignedBenefitQuoteForPancake(facts)
+    ? projectBenefitQuoteFactsForPancake(facts)
     : { ok: false, reason: "VENDOR_PROJECTION_INVALID" };
 }
